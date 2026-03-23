@@ -22,6 +22,8 @@ class GameSurfaceView(
     lateinit var renderer: Renderer
     lateinit var gameState: GameState
 
+    fun isRendererInitialized() = ::renderer.isInitialized
+
     init {
         // Registra este objeto como callback do SurfaceHolder
         holder.addCallback(this)

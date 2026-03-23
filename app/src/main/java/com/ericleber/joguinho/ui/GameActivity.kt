@@ -89,7 +89,6 @@ class GameActivity : AppCompatActivity() {
         val spikeAI = SpikeAI(spike)
         val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
         val gameLoop = GameLoop(
-            surfaceHolder = superficieJogo.holder,
             gameState = viewModel.gameState,
             spikeAI = spikeAI,
             powerManager = powerManager
@@ -149,9 +148,10 @@ class GameActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         viewModel.pararJogo()
-        // Garante liberação dos bitmaps do Renderer caso surfaceDestroyed não tenha sido chamado
-        if (::superficieJogo.isInitialized && superficieJogo::renderer.isInitialized) {
+        try {
             superficieJogo.renderer.release()
+        } catch (e: UninitializedPropertyAccessException) {
+            // renderer ainda não foi inicializado, nada a liberar
         }
     }
 
@@ -163,7 +163,7 @@ class GameActivity : AppCompatActivity() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-            if (::superficieJogo.isInitialized) {
+            if (::superficieJogo.isInitialized && superficieJogo.isRendererInitialized()) {
                 superficieJogo.renderer.evictNonEssentialSprites()
             }
             Logger.error("GameActivity", "onTrimMemory level=$level: evictNonEssential chamado", null)

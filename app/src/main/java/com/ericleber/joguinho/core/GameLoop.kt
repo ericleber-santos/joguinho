@@ -3,7 +3,6 @@ package com.ericleber.joguinho.core
 import android.os.Build
 import android.os.Debug
 import android.os.PowerManager
-import android.view.SurfaceHolder
 import com.ericleber.joguinho.character.SpikeAI
 import com.ericleber.joguinho.character.SpikeAIContext
 
@@ -21,7 +20,6 @@ import com.ericleber.joguinho.character.SpikeAIContext
  * Requisitos: 8.1, 8.6, 18.1, 18.2, 18.5, 21.6
  */
 class GameLoop(
-    private val surfaceHolder: SurfaceHolder,
     private val gameState: GameState,
     private val spikeAI: SpikeAI,
     private val powerManager: PowerManager?
@@ -217,26 +215,12 @@ class GameLoop(
     }
 
     private fun render(alpha: Float) {
-        val holder = surfaceHolder
-        val canvas = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                holder.lockHardwareCanvas()
-            } else {
-                holder.lockCanvas()
-            }
-        } catch (e: Exception) {
-            Logger.error(TAG, "Falha ao obter canvas para renderização", e)
-            return
-        } ?: return
-
+        // O travamento do canvas é responsabilidade do GameSurfaceView.drawFrame().
+        // O GameLoop apenas sinaliza o frame via callback para evitar double-lock.
         try {
             onRender?.invoke(alpha)
-        } finally {
-            try {
-                holder.unlockCanvasAndPost(canvas)
-            } catch (e: Exception) {
-                Logger.error(TAG, "Falha ao postar canvas", e)
-            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "Falha durante renderização do frame", e)
         }
     }
 

@@ -92,7 +92,8 @@ class GameState {
         get() = Biome.entries.first { floorNumber in it.floorRange }
 
     // --- Eventos pendentes para o frame atual ---
-    private val _pendingEvents: MutableList<GameEvent> = mutableListOf()
+    // CopyOnWriteArrayList garante leitura segura de múltiplas threads sem sincronização explícita
+    private val _pendingEvents: MutableList<GameEvent> = java.util.concurrent.CopyOnWriteArrayList()
     val pendingEvents: List<GameEvent> get() = _pendingEvents
 
     fun emitEvent(event: GameEvent) {
@@ -172,6 +173,7 @@ class GameState {
     /** Reseta o ComboStreak ao receber Slowdown. */
     fun resetComboStreak() {
         comboStreak = 0
+        comboBonus = 0f
         currentMapClean = false
         statistics = statistics.copy(
             totalSlowdownsReceived = statistics.totalSlowdownsReceived + 1

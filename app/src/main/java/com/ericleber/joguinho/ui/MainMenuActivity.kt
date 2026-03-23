@@ -1,6 +1,5 @@
 package com.ericleber.joguinho.ui
 
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Canvas
@@ -11,11 +10,16 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.persistence.AppDatabase
 import com.ericleber.joguinho.persistence.PersistenceManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Tela principal do jogo — Menu inicial.
@@ -28,7 +32,7 @@ import com.ericleber.joguinho.persistence.PersistenceManager
  *
  * Requisitos: 1.1, 1.2, 1.3, 1.4, 1.5, 10.1, 10.7
  */
-class MainMenuActivity : Activity() {
+class MainMenuActivity : AppCompatActivity() {
 
     private lateinit var viewModel: GameViewModel
     private lateinit var menuView: MenuView
@@ -74,19 +78,18 @@ class MainMenuActivity : Activity() {
         }
 
         // Carregar recorde pessoal e biomas desbloqueados do save mais recente
-        android.os.Handler(mainLooper).post {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val resultado = gerenciadorPersistencia.restaurar()
-                if (resultado is PersistenceManager.RestoreResult.Sucesso) {
-                    val estado = resultado.estado
-                    // Recorde pessoal = maior floor alcançado (Requisito 10.1)
-                    recordePessoal = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
-                    // Biomas desbloqueados = biomas cujo floor mínimo já foi alcançado (Requisito 10.7)
-                    val maiorFloor = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
-                    biomasDesbloqueados = Biome.entries.filter { it.floorRange.first <= maiorFloor }
-                    withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        menuView.atualizarRecordeEBiomas(recordePessoal, biomasDesbloqueados)
-                    }
+        lifecycleScope.launch(Dispatchers.IO) {
+            val resultado = gerenciadorPersistencia.restaurar()
+            if (resultado is PersistenceManager.RestoreResult.Sucesso) {
+                val estado = resultado.estado
+                // Recorde pessoal = maior floor alcançado (Requisito 10.1)
+                val maiorFloor = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
+                val novoRecorde = maiorFloor
+                val novosBiomas = Biome.entries.filter { it.floorRange.first <= maiorFloor }
+                withContext(Dispatchers.Main) {
+                    recordePessoal = novoRecorde
+                    biomasDesbloqueados = novosBiomas
+                    menuView.atualizarRecordeEBiomas(recordePessoal, biomasDesbloqueados)
                 }
             }
         }
@@ -125,7 +128,7 @@ class MainMenuActivity : Activity() {
      * View que gerencia a animação de introdução e o menu principal.
      * Toda a renderização é feita via Canvas sem XML.
      */
-    inner class MenuView(contexto: Activity) : View(contexto) {
+    inner class MenuView(contexto: AppCompatActivity) : View(contexto) {
 
         // --- Animação de introdução ---
         private val DURACAO_INTRO_MS = 4000L
