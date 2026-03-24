@@ -22,7 +22,8 @@ import com.ericleber.joguinho.character.SpikeAIContext
 class GameLoop(
     private val gameState: GameState,
     private val spikeAI: SpikeAI,
-    private val powerManager: PowerManager?
+    private val powerManager: PowerManager?,
+    private val gameLogic: GameLogic? = null
 ) : Thread("GameLoop") {
 
     companion object {
@@ -33,26 +34,28 @@ class GameLoop(
         private const val NS_PER_SECOND = 1_000_000_000L
     }
 
-    // --- Estado de controle ---
-    @Volatile private var running = false
-    @Volatile private var paused = false
-    @Volatile private var thermalThrottled = false
-
-    // --- Callback de temperatura (API 29+) ---
-    private var thermalListener: Any? = null  // PowerManager.OnThermalStatusChangedListener
-
     // --- Renderer callback (injetado externamente) ---
     var onRender: ((alpha: Float) -> Unit)? = null
-
-    // --- Update callback (lógica de jogo) ---
-    var onUpdate: ((deltaTimeSec: Float) -> Unit)? = null
+    @Volatile private var paused = false
+    @Volatile private var running = false
+    @Volatile private var thermalThrottled = false
 
     // --- Métricas de FPS (para HUD de debug) ---
     @Volatile var currentFps: Int = 0
         private set
 
+    // --- Callback de temperatura (API 29+) ---
+    // Removido: usamos polling em checkThermalStatus() para evitar NoClassDefFoundError em API < 29
+
+    // --- Update callback (lógica de jogo) ---
+    var onUpdate: ((deltaTimeSec: Float) -> Unit)? = null
+
     // --- Contador para monitoramento de heap ---
     private var heapCheckCounter = 0
+
+    // --- InputController para dados de movimento do Hero (injetado externamente) ---
+    var heroMovido: Boolean = false
+    var heroParadoDuracaoSec: Float = 0f
 
     // -------------------------------------------------------------------------
     // Ciclo de vida
@@ -82,7 +85,7 @@ class GameLoop(
      * Pausa o loop — reduz para 5fps e para de processar atualizações de estado.
      * Deve completar em no máximo 100ms (Requisito 18.1).
      */
-    fun pause() {
+    fun pausar() {
         paused = true
     }
 
@@ -90,7 +93,7 @@ class GameLoop(
      * Retoma o loop a partir do estado salvo.
      * Deve completar em no máximo 200ms (Requisito 18.2).
      */
-    fun resume() {
+    fun retomar() {
         paused = false
     }
 
@@ -185,11 +188,17 @@ class GameLoop(
         val spikeContext = buildSpikeAIContext()
         spikeAI.update(deltaTimeSec, spikeContext)
 
-        // Delega lógica adicional (input, colisões, etc.) ao callback externo
+        // Atualiza lógica central: colisões, Traps, movimento de Monsters e Spike, Exit
+        gameLogic?.update(deltaTimeSec)
+
+        // Delega lógica adicional (input) ao callback externo
         onUpdate?.invoke(deltaTimeSec)
 
         // Monitora uso de heap nativo (Requisitos 8.4, 20.5, 20.6)
         checkHeapUsage()
+
+        // Verifica temperatura via polling (Requisito 8.6, 18.5)
+        checkThermalStatus()
 
         // Limpa eventos processados no frame
         gameState.clearEvents()
@@ -229,12 +238,15 @@ class GameLoop(
     // -------------------------------------------------------------------------
 
     private fun buildSpikeAIContext(): SpikeAIContext {
-        // Calcula distância do Hero ao Exit (simplificado — será refinado com MazeData)
         val heroPos = gameState.heroPosition
-        val spikePos = gameState.spikePosition
+        val maze = gameState.mazeData
 
-        // Distância euclidiana em tiles (placeholder até integração com MazeData)
-        val heroDistanceToExit = 999f  // será calculado pelo subsistema de colisão
+        // Distância do Hero ao Exit (Manhattan, se maze disponível)
+        val heroDistanceToExit = if (maze != null) {
+            val exitX = maze.exitIndex % maze.width
+            val exitY = maze.exitIndex / maze.width
+            (Math.abs(heroPos.x - exitX) + Math.abs(heroPos.y - exitY)).toFloat()
+        } else 999f
 
         // Distância ao Monster mais próximo
         val nearestMonsterDist = gameState.monsters
@@ -254,8 +266,8 @@ class GameLoop(
 
         return SpikeAIContext(
             heroPosition = heroPos,
-            heroMoved = false,  // será atualizado pelo InputController
-            heroStoppedDurationSec = 0f,  // será rastreado pelo InputController
+            heroMoved = heroMovido,
+            heroStoppedDurationSec = heroParadoDuracaoSec,
             heroReceivedSlowdown = heroReceivedSlowdown,
             heroDistanceToExitTiles = heroDistanceToExit,
             nearestMonsterDistanceTiles = nearestMonsterDist,
@@ -266,35 +278,39 @@ class GameLoop(
     }
 
     // -------------------------------------------------------------------------
-    // Thermal throttling (API 29+)
+    // Thermal throttling (API 29+) — polling simples, sem listener
     // -------------------------------------------------------------------------
 
     /**
      * Registra listener de temperatura para reduzir FPS em temperatura crítica.
+     * Usa polling via currentThermalStatus (API 29+) para evitar ClassNotFoundException
+     * em dispositivos com API < 29 causado por classes sintéticas do D8.
      * Requisitos: 8.6, 18.5
      */
     private fun registerThermalCallback() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val pm = powerManager ?: return
-            val listener = PowerManager.OnThermalStatusChangedListener { status ->
-                // THERMAL_STATUS_CRITICAL = 5, THERMAL_STATUS_SEVERE = 4
-                thermalThrottled = status >= PowerManager.THERMAL_STATUS_SEVERE
-                if (thermalThrottled) {
-                    Logger.error(TAG, "Temperatura crítica detectada (status=$status) — reduzindo para ${TARGET_FPS_THERMAL}fps")
-                    gameState.emitEvent(GameEvent.HeroReceivedSlowdown) // sinaliza HUD
-                }
-            }
-            pm.addThermalStatusListener(listener)
-            thermalListener = listener
-        }
+        // Nada a registrar — usamos polling em checkThermalStatus() a cada frame
     }
 
     private fun unregisterThermalCallback() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val pm = powerManager ?: return
-            val listener = thermalListener as? PowerManager.OnThermalStatusChangedListener ?: return
-            pm.removeThermalStatusListener(listener)
-            thermalListener = null
+        // Nada a desregistrar
+    }
+
+    /**
+     * Verifica temperatura via polling (chamado a cada ~60 frames = ~1s).
+     * Evita qualquer referência a OnThermalStatusChangedListener que causaria
+     * NoClassDefFoundError em API < 29.
+     */
+    private var thermalCheckCounter = 0
+    private fun checkThermalStatus() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        thermalCheckCounter++
+        if (thermalCheckCounter % 60 != 0) return
+        val pm = powerManager ?: return
+        val status = pm.currentThermalStatus
+        val wasThrottled = thermalThrottled
+        thermalThrottled = status >= 4 // THERMAL_STATUS_SEVERE = 4
+        if (thermalThrottled && !wasThrottled) {
+            Logger.error(TAG, "Temperatura crítica (status=$status) — reduzindo para ${TARGET_FPS_THERMAL}fps")
         }
     }
 }

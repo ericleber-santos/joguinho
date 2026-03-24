@@ -4,10 +4,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ericleber.joguinho.audio.AudioManager
+import com.ericleber.joguinho.core.GameLogic
 import com.ericleber.joguinho.core.GameLoop
 import com.ericleber.joguinho.core.GamePhase
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.Logger
+import com.ericleber.joguinho.core.Position
+import com.ericleber.joguinho.pcg.PCGEngine
 import com.ericleber.joguinho.persistence.PersistenceManager
 import com.ericleber.joguinho.persistence.SaveState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,10 +40,18 @@ class GameViewModel : ViewModel() {
     // --- Referência fraca ao contexto para evitar vazamento de memória ---
     private var contextoRef: WeakReference<Context> = WeakReference(null)
 
+    // --- Estado do jogo (Model) — deve ser declarado antes de gameLogic ---
+    val gameState = GameState()
+
     // --- Dependências injetadas manualmente ---
     private var gameLoop: GameLoop? = null
     private var persistenceManager: PersistenceManager? = null
     private var audioManager: AudioManager? = null
+    private val pcgEngine = PCGEngine()
+    val gameLogic = GameLogic(gameState)
+
+    // Callback para lançar ScoreActivity — injetado pela GameActivity
+    var onHeroReachedExit: (() -> Unit)? = null
 
     // --- Estado do jogo exposto à UI via StateFlow (Requisito 21.1) ---
     private val _faseJogo = MutableStateFlow(GamePhase.MENU)
@@ -51,9 +62,6 @@ class GameViewModel : ViewModel() {
 
     private val _saveStateRestaurado = MutableStateFlow<SaveState?>(null)
     val saveStateRestaurado: StateFlow<SaveState?> = _saveStateRestaurado.asStateFlow()
-
-    // --- Estado do jogo (Model) ---
-    val gameState = GameState()
 
     // =========================================================================
     // Inicialização de dependências
@@ -78,6 +86,21 @@ class GameViewModel : ViewModel() {
         gameLoop = loop
         persistenceManager = gerenciadorPersistencia
         audioManager = gerenciadorAudio
+
+        // Conecta callbacks do GameLogic
+        gameLogic.onMapCompleted = { salvarEstadoAsync() }
+        gameLogic.onHeroReachedExit = {
+            // Regenera mapa para o próximo Map/Floor ou lança ScoreActivity
+            val floorCompleted = gameState.pendingEvents.any {
+                it is com.ericleber.joguinho.core.GameEvent.FloorCompleted
+            }
+            if (floorCompleted) {
+                onHeroReachedExit?.invoke()
+            } else {
+                // Próximo Map do mesmo Floor — regenera labirinto
+                gerarMapa()
+            }
+        }
     }
 
     // =========================================================================
@@ -85,14 +108,37 @@ class GameViewModel : ViewModel() {
     // =========================================================================
 
     /**
+     * Gera o labirinto atual via PCGEngine e posiciona Hero e Spike.
+     * Chamado em iniciarJogo() e ao avançar para o próximo Map.
+     */
+    fun gerarMapa() {
+        val mapaGerado = pcgEngine.generateMap(
+            floorNumber = gameState.floorNumber,
+            mapIndex = gameState.mapIndex,
+            playerSeed = gameState.floorSeed
+        )
+        gameState.mazeData = mapaGerado.maze
+        gameState.monsters = mapaGerado.monsters
+        gameState.traps = mapaGerado.traps
+        gameState.currentMapClean = true
+
+        val maze = mapaGerado.maze
+        val startX = maze.startIndex % maze.width
+        val startY = maze.startIndex / maze.width
+        gameState.heroPosition = Position(startX, startY)
+        gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1), startY)
+    }
+
+    /**
      * Inicia o jogo a partir do estado atual do GameState.
-     * Atualiza a fase para PLAYING e inicia o GameLoop.
+     * Gera o labirinto via PCGEngine, posiciona Hero e Spike, e inicia o GameLoop.
      */
     fun iniciarJogo() {
+        gerarMapa()
         gameState.phase = GamePhase.PLAYING
         _faseJogo.value = GamePhase.PLAYING
         gameLoop?.start()
-        Logger.error(TAG, "Jogo iniciado — Floor ${gameState.floorNumber}, Map ${gameState.mapIndex}")
+        Logger.error(TAG, "Jogo iniciado — Floor ${gameState.floorNumber}, Map ${gameState.mapIndex}, labirinto ${gameState.mazeData?.width}x${gameState.mazeData?.height}")
     }
 
     /**
@@ -102,7 +148,7 @@ class GameViewModel : ViewModel() {
     fun pausarJogo() {
         gameState.phase = GamePhase.PAUSED
         _faseJogo.value = GamePhase.PAUSED
-        gameLoop?.pause()
+        gameLoop?.pausar()
         audioManager?.pausarTudo()
         salvarEstadoAsync()
     }
@@ -114,7 +160,7 @@ class GameViewModel : ViewModel() {
     fun retomarJogo() {
         gameState.phase = GamePhase.PLAYING
         _faseJogo.value = GamePhase.PLAYING
-        gameLoop?.resume()
+        gameLoop?.retomar()
         audioManager?.retomar()
     }
 

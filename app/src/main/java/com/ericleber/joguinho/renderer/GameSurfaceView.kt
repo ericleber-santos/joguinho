@@ -5,6 +5,7 @@ import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.ericleber.joguinho.core.GameState
+import com.ericleber.joguinho.input.InputController
 
 /**
  * SurfaceView principal do jogo.
@@ -21,6 +22,7 @@ class GameSurfaceView(
 
     lateinit var renderer: Renderer
     lateinit var gameState: GameState
+    var inputController: InputController? = null
 
     fun isRendererInitialized() = ::renderer.isInitialized
 
@@ -44,12 +46,13 @@ class GameSurfaceView(
 
     /**
      * Chamado quando a superfície muda de tamanho ou formato.
-     * Atualiza o renderer com as novas dimensões e densidade.
+     * Atualiza o renderer e o InputController com as novas dimensões.
      */
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         if (::renderer.isInitialized) {
             renderer.onSurfaceChanged(width, height, resources.displayMetrics.density)
         }
+        inputController?.onSizeChanged(width.toFloat(), height.toFloat())
     }
 
     /**
@@ -84,6 +87,8 @@ class GameSurfaceView(
 
         try {
             renderer.render(canvas, gameState)
+            // Desenha controles de input por cima do jogo
+            inputController?.draw(canvas)
         } finally {
             try {
                 surfaceHolder.unlockCanvasAndPost(canvas)

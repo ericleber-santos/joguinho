@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.BIOME_PALETTES
-import com.ericleber.joguinho.character.CompanionState
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
 
@@ -75,6 +74,12 @@ class Renderer(
         val bgColor = if (gameState.highContrastMode) Color.BLACK else palette.backgroundColor
         bgPaint.color = bgColor
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), bgPaint)
+
+        // Atualiza câmera para seguir o Hero
+        val heroRawPos = IsometricProjection.worldToScreen(
+            gameState.heroPosition.x, gameState.heroPosition.y, tileW, tileH
+        )
+        updateCamera(heroRawPos.x, heroRawPos.y)
 
         val mazeData = gameState.mazeData ?: return
 
@@ -174,7 +179,7 @@ class Renderer(
         val spikeScreenPos = IsometricProjection.worldToScreen(
             gameState.spikePosition.x, gameState.spikePosition.y, tileW, tileH
         )
-        val spikeState = gameState.spikeCompanionState ?: "SEGUINDO"
+        val spikeState = gameState.spikeCompanionState
         characterRenderer.renderSpike(
             canvas,
             spikeScreenPos.x + cameraX,
@@ -323,23 +328,5 @@ class Renderer(
 
 /**
  * Extensões do GameState para o Renderer.
+ * (Mantidas para compatibilidade — os campos reais estão em GameState)
  */
-
-/** MazeData atual do jogo (pode ser nulo se ainda não gerado). */
-val GameState.mazeData: MazeData?
-    get() = _mazeData
-
-/** Estado comportamental atual do Spike como String. */
-val GameState.spikeCompanionState: String?
-    get() = _spikeCompanionState
-
-/** Modo de alto contraste para acessibilidade. */
-val GameState.highContrastMode: Boolean
-    get() = _highContrastMode
-
-// Campos internos do GameState acessados via extensão
-// Estes campos precisam ser adicionados ao GameState ou acessados de outra forma.
-// Por ora, usamos valores padrão seguros para não quebrar a compilação.
-private val GameState._mazeData: MazeData? get() = null
-private val GameState._spikeCompanionState: String? get() = "SEGUINDO"
-private val GameState._highContrastMode: Boolean get() = false

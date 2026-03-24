@@ -2,6 +2,7 @@ package com.ericleber.joguinho.ui
 
 import android.app.Activity
 import android.content.ComponentCallbacks2
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
@@ -15,8 +16,10 @@ import androidx.work.WorkManager
 import com.ericleber.joguinho.audio.AudioManager
 import com.ericleber.joguinho.character.Spike
 import com.ericleber.joguinho.character.SpikeAI
+import com.ericleber.joguinho.core.GameLogic
 import com.ericleber.joguinho.core.GameLoop
 import com.ericleber.joguinho.core.Logger
+import com.ericleber.joguinho.input.InputController
 import com.ericleber.joguinho.persistence.AppDatabase
 import com.ericleber.joguinho.persistence.PersistenceManager
 import com.ericleber.joguinho.renderer.CharacterRenderer
@@ -52,6 +55,7 @@ class GameActivity : AppCompatActivity() {
     private lateinit var viewModel: GameViewModel
     private lateinit var superficieJogo: GameSurfaceView
     private lateinit var gerenciadorAudio: AudioManager
+    private lateinit var controladorInput: InputController
 
     // =========================================================================
     // Ciclo de vida
@@ -85,20 +89,56 @@ class GameActivity : AppCompatActivity() {
         viewModel = ViewModelProvider(this)[GameViewModel::class.java]
 
         // Instanciar GameLoop
+        // Ler configurações salvas (Requisito 12.1)
+        val prefs = getSharedPreferences(SettingsActivity.PREFS_NOME, Context.MODE_PRIVATE)
+        val hapticEnabled = prefs.getBoolean("feedbackHaptico", true)
+        viewModel.gameState.highContrastMode = prefs.getBoolean("modoAltoContraste", false)
+
         val spike = Spike()
         val spikeAI = SpikeAI(spike)
         val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
         val gameLoop = GameLoop(
             gameState = viewModel.gameState,
             spikeAI = spikeAI,
-            powerManager = powerManager
+            powerManager = powerManager,
+            gameLogic = viewModel.gameLogic
         )
         gameLoop.onRender = { superficieJogo.drawFrame() }
+
+        // Instanciar InputController e conectar ao GameLoop
+        controladorInput = InputController(this, viewModel.gameState)
+        controladorInput.useDPad = prefs.getBoolean("usarDPad", false)
+
+        gameLoop.onUpdate = { deltaTimeSec ->
+            controladorInput.update(
+                deltaTimeSec = deltaTimeSec,
+                mazeData = viewModel.gameState.mazeData,
+                hapticEnabled = hapticEnabled
+            )
+            // Sincroniza dados de movimento do Hero com o GameLoop para o SpikeAI
+            gameLoop.heroMovido = controladorInput.heroMoved
+            gameLoop.heroParadoDuracaoSec = controladorInput.heroStoppedDurationSec
+        }
+
+        // Conectar InputController ao Renderer para desenhar os controles
+        superficieJogo.inputController = controladorInput
 
         viewModel.inicializar(this, gameLoop, gerenciadorPersistencia, gerenciadorAudio)
         superficieJogo.gameState = viewModel.gameState
 
+        // Conecta callback para lançar ScoreActivity ao completar andar (Requisito 6.1)
+        viewModel.onHeroReachedExit = { runOnUiThread { lancarTelaScore() } }
+
+        // Aplica volumes de áudio das configurações (Requisito 12.1)
+        gerenciadorAudio.setVolumeMusicaPercent(prefs.getInt("volumeMusica", 80) / 100f)
+        gerenciadorAudio.setVolumeEfeitosPercent(prefs.getInt("volumeEfeitos", 80) / 100f)
+
         setContentView(superficieJogo)
+
+        // Configurar listener de toque para o InputController
+        superficieJogo.setOnTouchListener { _, event ->
+            controladorInput.onTouchEvent(event)
+        }
 
         // Restaurar estado do Bundle se disponível (rotação de tela, etc.)
         if (savedInstanceState != null) {

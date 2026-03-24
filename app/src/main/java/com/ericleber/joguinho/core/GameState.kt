@@ -1,6 +1,7 @@
 package com.ericleber.joguinho.core
 
 import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.persistence.SaveState
 
 /** Marcos de andar que desbloqueiam conquistas (Requisito 10.2). */
@@ -86,6 +87,15 @@ class GameState {
     // --- Personagem ativo ---
     var activeCharacterId: String = "hero"
     var activeSkinId: String = "default"
+
+    // --- Labirinto atual ---
+    var mazeData: MazeData? = null
+
+    // --- Acessibilidade ---
+    var highContrastMode: Boolean = false
+
+    // --- Estado comportamental do Spike (para o Renderer) ---
+    var spikeCompanionState: String = "SEGUINDO"
 
     // --- Bioma atual ---
     val currentBiome: Biome

@@ -120,12 +120,12 @@ class BSPMazeGenerator(private val random: Random) {
         }
 
         if (splitHorizontal) {
-            if (node.height < minSize * 2) return
+            if (node.height < minSize * 2 + 1) return
             val splitY = random.nextInt(minSize, node.height - minSize)
             node.left = BSPNode(node.x, node.y, node.width, splitY)
             node.right = BSPNode(node.x, node.y + splitY, node.width, node.height - splitY)
         } else {
-            if (node.width < minSize * 2) return
+            if (node.width < minSize * 2 + 1) return
             val splitX = random.nextInt(minSize, node.width - minSize)
             node.left = BSPNode(node.x, node.y, splitX, node.height)
             node.right = BSPNode(node.x + splitX, node.y, node.width - splitX, node.height)
@@ -157,8 +157,10 @@ class BSPMazeGenerator(private val random: Random) {
 
             val roomW = random.nextInt((maxRoomW * minRoomFraction).toInt().coerceAtLeast(3), maxRoomW + 1)
             val roomH = random.nextInt((maxRoomH * minRoomFraction).toInt().coerceAtLeast(3), maxRoomH + 1)
-            val roomX = node.x + margin + random.nextInt(maxRoomW - roomW + 1)
-            val roomY = node.y + margin + random.nextInt(maxRoomH - roomH + 1)
+            val offsetW = maxRoomW - roomW
+            val offsetH = maxRoomH - roomH
+            val roomX = node.x + margin + if (offsetW > 0) random.nextInt(offsetW) else 0
+            val roomY = node.y + margin + if (offsetH > 0) random.nextInt(offsetH) else 0
 
             node.roomX = roomX
             node.roomY = roomY
