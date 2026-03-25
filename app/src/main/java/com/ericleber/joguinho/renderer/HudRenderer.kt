@@ -115,56 +115,53 @@ class HudRenderer {
      * Slowdown aparece como texto pequeno acima da barra quando ativo.
      */
     fun renderCompact(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
-        val barH = 36f
-        val padding = 8f
-        val barY = h - barH - padding
+        // Altura da barra baseada na altura da tela (aprox 8%)
+        val barH = h * 0.08f
+        val padding = w * 0.02f
+        val barY = h - barH
 
         // Fundo semi-transparente na parte inferior
-        bgPaint.color = Color.argb(160, 0, 0, 0)
-        canvas.drawRect(0f, barY - padding, w.toFloat(), h.toFloat(), bgPaint)
+        bgPaint.color = Color.argb(180, 0, 0, 0)
+        canvas.drawRect(0f, barY, w.toFloat(), h.toFloat(), bgPaint)
 
-        val baselineY = barY + barH * 0.72f
+        val baselineY = barY + barH * 0.65f
 
-        // Score — esquerda (Aumentado 50%)
-        textPaint.textSize = 27f
+        // Score — esquerda
+        textPaint.textSize = barH * 0.5f
         textPaint.color = Color.rgb(220, 220, 200)
         textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding * 2, baselineY, textPaint)
+        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, baselineY, textPaint)
 
-        // Combo — centro (só se ativo) (Aumentado 50%)
+        // Combo — centro (só se ativo)
         if (gameState.comboStreak > 0) {
             val comboColor = when {
                 gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = 27f
+            textPaint.textSize = barH * 0.5f
             textPaint.color = comboColor
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
         }
 
-        // Andar e mapa — direita (Aumentado mais 50%)
-        textPaint.textSize = 36f
+        // Andar e mapa — direita
+        textPaint.textSize = barH * 0.6f
         textPaint.color = Color.rgb(180, 180, 160)
         textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("A${gameState.floorNumber}  M${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
+        canvas.drawText("A${gameState.floorNumber} M${gameState.mapIndex + 1}/3", w - padding, baselineY, textPaint)
 
-        // Slowdown — centralizado, na mesma reta do mapa (baselineY)
+        // Slowdown — centralizado, gigante
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = 60f
-            textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
+            textPaint.textSize = barH * 1.2f
+            textPaint.color = Color.argb(255, 150, 150, 255)
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
-
-        // Banner de andar/mapa (texto pequeno no canto superior direito)
         renderBannerMapaAtual(canvas, gameState, w, h)
-
-        // Mini-HUD permanente no canto superior esquerdo
         renderInfoMapaEsquerda(canvas, gameState)
     }
 
@@ -172,49 +169,52 @@ class HudRenderer {
      * HUD expandido para tablets — mesma estrutura, tamanhos maiores.
      */
     fun renderExpanded(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
-        val barH = 32f
-        val padding = 8f
-        val barY = h - barH - padding
+        // Em tablets, a barra pode ser um pouco menor proporcionalmente (6%)
+        val barH = h * 0.06f
+        val padding = w * 0.03f
+        val barY = h - barH
 
-        bgPaint.color = Color.argb(160, 0, 0, 0)
-        canvas.drawRect(0f, barY - padding, w.toFloat(), h.toFloat(), bgPaint)
+        bgPaint.color = Color.argb(180, 0, 0, 0)
+        canvas.drawRect(0f, barY, w.toFloat(), h.toFloat(), bgPaint)
 
-        val baselineY = barY + barH * 0.72f
+        val baselineY = barY + barH * 0.65f
 
-        textPaint.textSize = 16f
+        // Score
+        textPaint.textSize = barH * 0.5f
         textPaint.color = Color.rgb(220, 220, 200)
         textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding * 2, baselineY, textPaint)
+        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, baselineY, textPaint)
 
+        // Combo
         if (gameState.comboStreak > 0) {
             val comboColor = when {
                 gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = 16f
+            textPaint.textSize = barH * 0.5f
             textPaint.color = comboColor
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
         }
 
-        textPaint.textSize = 14f
+        // Andar e mapa
+        textPaint.textSize = barH * 0.6f
         textPaint.color = Color.rgb(180, 180, 160)
         textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
+        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", w - padding, baselineY, textPaint)
 
+        // Slowdown
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = 13f
-            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textSize = barH * 1.2f
+            textPaint.color = Color.argb(255, 150, 150, 255)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 0.5f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
         renderBannerMapaAtual(canvas, gameState, w, h)
-
-        // Mini-HUD permanente no canto superior esquerdo
         renderInfoMapaEsquerda(canvas, gameState)
     }
 

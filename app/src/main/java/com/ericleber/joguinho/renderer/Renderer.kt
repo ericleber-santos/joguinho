@@ -64,23 +64,11 @@ class Renderer(
     private val fracaoAreaJogo = 0.80f
 
     /**
-     * Recalcula o tile e a câmera para que o mapa preencha exatamente o retângulo A.
-     *
-     * Em projeção isométrica 2:1, os 4 extremos do mapa W×H são:
-     *   Topo    = tile(0,0)         → screenX=0,          screenY=0
-     *   Direita = tile(W-1,0)       → screenX=(W-1)*tileW/2, screenY=(W-1)*tileH/2
-     *   Esquerda= tile(0,H-1)       → screenX=-(H-1)*tileW/2, screenY=(H-1)*tileH/2
-     *   Fundo   = tile(W-1,H-1)     → screenX=0,          screenY=(W+H-2)*tileH/2
-     *
-     * Largura total do mapa na tela = (W+H-2)*tileW/2  ≈ (W+H)*tileW/2
-     * Altura total do mapa na tela  = (W+H-2)*tileH/2  ≈ (W+H)*tileW/4
-     *
-     * Para preencher screenWidth:  tileW = screenWidth*2/(W+H)
-     * Para preencher alturaA:      tileW = alturaA*4/(W+H)
-     * Usa o MENOR para que o mapa caiba nos dois eixos sem cortar.
+     * Recalcula o tile e a câmera para que o mapa preencha a tela de forma responsiva.
+     * Ajusta o zoom dependendo se é celular ou tablet.
      */
-    // Tamanho mínimo do tile em px para o personagem ser visível
-    private val tileSizeMinimo = 78f
+    // Tamanho mínimo do tile em px para o personagem ser visível (ajustado pela densidade)
+    private var tileSizeMinimo = 31f // Reduzido mais 20% para afastar a câmera
 
     // Posição do hero para scroll da câmera
     private var heroWorldX: Int = 0
@@ -88,31 +76,43 @@ class Renderer(
 
     fun recalcularTile(mapWidth: Int, mapHeight: Int) {
         if (screenWidth <= 0 || screenHeight <= 0) return
+        
+        // Ajusta o tamanho mínimo baseado na densidade da tela (reduzido para afastar a câmera)
+        tileSizeMinimo = 24f * density 
+        
         val alturaA = screenHeight * fracaoAreaJogo
 
-        // Calcula tile para caber o mapa inteiro
-        val tileWPorLargura = screenWidth.toFloat() / mapWidth
-        val tileHPorAltura  = alturaA / mapHeight
-        val tileFit = minOf(tileWPorLargura, tileHPorAltura)
+        // Em tablets (largura > 600dp), mostramos muito mais do mapa
+        val isTablet = (screenWidth / density) >= 600f
+        // Aumentamos mais 20% a quantidade de tiles visíveis para remover o zoom
+        val tilesVisiveisDesejados = if (isTablet) 36f else 24f
 
-        // Garante zoom mínimo para o personagem ser visível
-        val tileSize = tileFit.coerceAtLeast(tileSizeMinimo)
+        // Calcula tile para que caibam X tiles na menor dimensão da tela
+        val tileBase = minOf(screenWidth.toFloat(), alturaA) / tilesVisiveisDesejados
+        
+        // Garante que o tile não seja menor que o mínimo para visibilidade
+        val tileSize = tileBase.coerceAtLeast(tileSizeMinimo)
+        
         tileWDinamico = tileSize
         tileHDinamico = tileSize
 
         val larguraMapa = mapWidth * tileSize
         val alturaMapa  = mapHeight * tileSize
 
-        if (larguraMapa <= screenWidth && alturaMapa <= alturaA) {
-            // Mapa cabe inteiro — centraliza
+        // Câmera segue o herói com interpolação suave (opcional, aqui mantemos direto)
+        val heroSx = heroWorldX * tileSize + tileSize / 2f
+        val heroSy = heroWorldY * tileSize + tileSize / 2f
+        
+        // Centraliza o herói na tela, mas respeita os limites do mapa
+        cameraX = (screenWidth / 2f - heroSx).coerceIn(screenWidth - larguraMapa, 0f)
+        cameraY = (alturaA / 2f - heroSy).coerceIn(alturaA - alturaMapa, 0f)
+        
+        // Se o mapa for menor que a tela, centraliza o mapa
+        if (larguraMapa < screenWidth) {
             cameraX = (screenWidth - larguraMapa) / 2f
+        }
+        if (alturaMapa < alturaA) {
             cameraY = (alturaA - alturaMapa) / 2f
-        } else {
-            // Mapa maior que a tela — câmera segue o hero
-            val heroSx = heroWorldX * tileSize
-            val heroSy = heroWorldY * tileSize
-            cameraX = (screenWidth / 2f - heroSx).coerceIn(screenWidth - larguraMapa, 0f)
-            cameraY = (alturaA / 2f - heroSy).coerceIn(alturaA - alturaMapa, 0f)
         }
     }
 
