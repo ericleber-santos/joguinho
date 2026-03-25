@@ -161,7 +161,8 @@ class PCGEngine {
             startIndex = startIndex,
             exitIndex = exitIndex,
             floorNumber = floorNumber,
-            seed = seed
+            seed = seed,
+            exitWallDirection = com.ericleber.joguinho.core.Direction.EAST // No fallback, a saída é à direita
         )
 
         val criticalPath = computeCriticalPath(maze)

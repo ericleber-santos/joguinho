@@ -71,9 +71,34 @@ class GameLogic(private val gameState: GameState) {
         if (gameState.phase != GamePhase.PLAYING) return
         val maze = gameState.mazeData ?: return
 
+        // Atualiza timers de Slowdown
+        if (gameState.heroIsSlowedDown) {
+            gameState.heroSlowdownRemainingMs -= (deltaTimeSec * 1000).toLong()
+            if (gameState.heroSlowdownRemainingMs <= 0) {
+                gameState.heroIsSlowedDown = false
+                gameState.heroSlowdownRemainingMs = 0
+            }
+        }
+        if (gameState.spikeIsSlowedDown) {
+            gameState.spikeSlowdownRemainingMs -= (deltaTimeSec * 1000).toLong()
+            if (gameState.spikeSlowdownRemainingMs <= 0) {
+                gameState.spikeIsSlowedDown = false
+                gameState.spikeSlowdownRemainingMs = 0
+            }
+        }
+
+        // Se estiver em animação de saída, processa o timer e a transição
+        if (gameState.isExiting) {
+            gameState.exitAnimationTimerMs += (deltaTimeSec * 1000).toLong()
+            if (gameState.exitAnimationTimerMs >= 800) { // 800ms de animação
+                processarTransicaoNivel(maze)
+            }
+            return
+        }
+
         atualizarMovimentoMonsters(deltaTimeSec, maze)
-        verificarColisaoHeroMonster()
-        verificarAtivacaoTraps()
+        verificarColisaoHeroMonster(maze)
+        verificarAtivacaoTraps(maze)
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
     }
@@ -178,11 +203,10 @@ class GameLogic(private val gameState: GameState) {
      * Verifica se o Hero está na mesma posição de algum Monster ativo.
      * Aplica Slowdown ao Hero (3s) e ao Spike (2s), e recua o Monster 2 tiles.
      */
-    private fun verificarColisaoHeroMonster() {
+    private fun verificarColisaoHeroMonster(maze: MazeData) {
         if (gameState.heroIsSlowedDown) return // já em Slowdown, ignora nova colisão
 
         val heroPos = gameState.heroPosition
-        val maze = gameState.mazeData ?: return
 
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
@@ -192,6 +216,20 @@ class GameLogic(private val gameState: GameState) {
             gameState.heroIsSlowedDown = true
             gameState.heroSlowdownRemainingMs = SLOWDOWN_MONSTER_MS
             gameState.currentMapClean = false
+            
+            // Incrementa contador de lentidões no mapa
+            gameState.mapSlowdownCount++
+            
+            // Se ficou lento 3x, reinicia no início do mapa
+            if (gameState.mapSlowdownCount >= 3) {
+                gameState.mapSlowdownCount = 0
+                gameState.heroPosition = Position(
+                    maze.startIndex % maze.width,
+                    maze.startIndex / maze.width
+                )
+                gameState.heroIsSlowedDown = false
+                gameState.heroSlowdownRemainingMs = 0
+            }
 
             // Aplica Slowdown ao Spike
             gameState.spikeIsSlowedDown = true
@@ -225,7 +263,7 @@ class GameLogic(private val gameState: GameState) {
      * Verifica se o Hero está dentro do raio de ativação de alguma Trap inativa.
      * Ativa a Trap e aplica Slowdown ao Hero por 2 segundos.
      */
-    private fun verificarAtivacaoTraps() {
+    private fun verificarAtivacaoTraps(maze: MazeData) {
         if (gameState.heroIsSlowedDown) return
 
         val heroPos = gameState.heroPosition
@@ -240,6 +278,21 @@ class GameLogic(private val gameState: GameState) {
             gameState.heroIsSlowedDown = true
             gameState.heroSlowdownRemainingMs = SLOWDOWN_TRAP_MS
             gameState.currentMapClean = false
+            
+            // Incrementa contador de lentidões no mapa
+            gameState.mapSlowdownCount++
+            
+            // Se ficou lento 3x, reinicia no início do mapa
+            if (gameState.mapSlowdownCount >= 3) {
+                gameState.mapSlowdownCount = 0
+                gameState.heroPosition = Position(
+                    maze.startIndex % maze.width,
+                    maze.startIndex / maze.width
+                )
+                gameState.heroIsSlowedDown = false
+                gameState.heroSlowdownRemainingMs = 0
+            }
+            
             gameState.emitEvent(GameEvent.HeroReceivedSlowdown)
             gameState.resetComboStreak()
 
@@ -327,20 +380,38 @@ class GameLogic(private val gameState: GameState) {
         val exitX = maze.exitIndex % maze.width
         val exitY = maze.exitIndex / maze.width
 
-        // Distância exata: o herói deve estar no tile da saída
-        if (heroX != exitX || heroY != exitY) return
+        // O herói deve estar próximo ao tile da saída (placa + escada).
+        // Usamos distância Euclidiana (raio de 0.8 tiles) para que qualquer toque
+        // na placa ou na escada (frente, trás, lados) ative a animação.
+        val dx = (heroX - exitX).toFloat()
+        val dy = (heroY - exitY).toFloat()
+        val distSq = dx * dx + dy * dy
+        if (distSq > 0.64f) return // Raio de 0.8 tiles (0.8 * 0.8 = 0.64)
 
-        // Evita loop de transição: se já estamos carregando ou em transição, ignora
-        if (gameState.phase != GamePhase.PLAYING) return
+        // Inicia animação de saída em vez de transição imediata
+        gameState.isExiting = true
+        gameState.exitAnimationTimerMs = 0L
+        gameState.emitEvent(GameEvent.HeroReachedExit)
+    }
+
+    /**
+     * Processa a transição real de nível após a animação da escada.
+     */
+    private fun processarTransicaoNivel(maze: MazeData) {
+        gameState.isExiting = false
+        gameState.exitAnimationTimerMs = 0L
 
         // Incrementa ComboStreak se completou sem Slowdown (Requisito 5.7)
         if (gameState.currentMapClean) {
             gameState.incrementComboStreak()
             gameState.emitEvent(GameEvent.HeroSurpassedObstacle)
         }
+        
+        // Reseta contador de lentidões para o próximo mapa
+        gameState.mapSlowdownCount = 0
 
+        // Emite evento de conclusão de mapa
         gameState.emitEvent(GameEvent.MapCompleted)
-        gameState.emitEvent(GameEvent.HeroReachedExit)
 
         // Muda a fase para evitar processamento repetido da saída no mesmo frame
         gameState.phase = GamePhase.LOADING
@@ -348,12 +419,25 @@ class GameLogic(private val gameState: GameState) {
         // Verifica se é o último Map do Floor (3 Maps por Floor)
         val totalMapsNoFloor = 3
         if (gameState.mapIndex >= totalMapsNoFloor - 1) {
-            // Completou o Floor — vai para ScoreActivity
-            gameState.completarAndar(gameState.floorTimerMs)
-            gameState.emitEvent(GameEvent.FloorCompleted)
-            gameState.phase = GamePhase.SCORE_SCREEN  // sinaliza ao ViewModel
-            onMapCompleted?.invoke()
-            onHeroReachedExit?.invoke()
+            // Completou o Floor — Avança para o próximo Floor automaticamente (até o 120)
+            if (gameState.floorNumber < 120) {
+                gameState.floorNumber++
+                gameState.mapIndex = 0
+                gameState.currentMapClean = true
+                // Emite eventos de conclusão de andar
+                gameState.completarAndar(gameState.floorTimerMs)
+                gameState.floorTimerMs = 0 // Reseta o timer para o novo andar
+                
+                // Notifica o ViewModel para regenerar o mapa para o novo Floor
+                onMapCompleted?.invoke()
+                onHeroReachedExit?.invoke()
+            } else {
+                // Chegou ao fim do jogo (Piso 120)
+                gameState.completarAndar(gameState.floorTimerMs)
+                gameState.phase = GamePhase.SCORE_SCREEN
+                onMapCompleted?.invoke()
+                onHeroReachedExit?.invoke()
+            }
         } else {
             // Avança para o próximo Map do mesmo Floor
             gameState.mapIndex++

@@ -235,14 +235,22 @@ class Renderer(
 
         characterRenderer.renderSpike(canvas, spikeSx, spikeSy, gameState.spikeCompanionState, spikeAnimFrame, tileW, tileH)
 
+        // Se estiver em animação de saída, sobe o herói
+        var drawHeroSy = heroSy
+        if (gameState.isExiting) {
+            val progress = (gameState.exitAnimationTimerMs.toFloat() / 800f).coerceIn(0f, 1f)
+            drawHeroSy -= progress * tileH * 1.2f // Sobe até o teto
+        }
+
         val heroDirection = mapDirectionToHeroDirection(gameState.heroDirection)
         val heroAnimState = when {
+            gameState.isExiting -> HeroAnimState.WALK // Usa animação de andar para simular escalada
             gameState.heroIsSlowedDown -> HeroAnimState.SLOWDOWN
             gameState.heroStoppedDurationSec > 0.05f -> HeroAnimState.IDLE
             else -> HeroAnimState.WALK
         }
         val currentFrame = if (heroAnimState == HeroAnimState.IDLE) 0 else heroAnimFrame
-        characterRenderer.renderHero(canvas, heroSx, heroSy, heroDirection, heroAnimState, currentFrame, tileW, tileH)
+        characterRenderer.renderHero(canvas, heroSx, drawHeroSy, heroDirection, heroAnimState, currentFrame, tileW, tileH)
 
         // Passo 4: Paredes (por cima de tudo)
         for (ty in minY..maxY) {
@@ -256,8 +264,10 @@ class Renderer(
             }
         }
 
-        // Placa de saída
-        renderizarPlacaSaida(canvas, mazeData, saidaTx, saidaTy, tileW, tileH)
+        // Passo 5: Placa de Saída e Escada
+        if (saidaTx in minX..maxX && saidaTy in minY..maxY) {
+            renderizarPlacaSaida(canvas, mazeData, saidaTx, saidaTy, tileW, tileH)
+        }
 
         // Partículas
         particleSystem.render(canvas)
@@ -376,34 +386,100 @@ class Renderer(
         val cx = screenPos.x + cameraX + tileW / 2f
         val baseSy = screenPos.y + cameraY + tileH / 2f
 
-        val placaBaseY = baseSy - tileH * 1.5f
-        val placaLargura = tileW * 0.9f
-        val placaAltura = tileH * 0.7f
-        val alturaPosto = tileH * 0.8f
+        // Placa centralizada no tile
+        val placaCx = cx
+        val placaBaseY = baseSy - tileH * 0.8f
+        val placaLargura = tileW * 0.8f
+        val placaAltura = tileH * 0.6f
+        val alturaPosto = tileH * 0.4f
 
-        // Poste
+        // Renderizar Escada CENTRALIZADA ACIMA da placa
+        // Ela desce do teto e para logo atrás do topo da placa
+        renderizarEscadaSaida(canvas, placaCx, placaBaseY - placaAltura, tileW, tileH, maze.exitWallDirection ?: com.ericleber.joguinho.core.Direction.NORTH)
+
+        // Poste da placa
         placaPaint.style = Paint.Style.FILL
         placaPaint.color = Color.rgb(80, 50, 20)
-        canvas.drawRect(cx - tileW * 0.04f, placaBaseY, cx + tileW * 0.04f, placaBaseY + alturaPosto, placaPaint)
+        canvas.drawRect(placaCx - tileW * 0.03f, placaBaseY, placaCx + tileW * 0.03f, placaBaseY + alturaPosto, placaPaint)
 
-        // Tabuleta — borda escura
-        val placaLeft = cx - placaLargura / 2f
+        // Tabuleta
+        val placaLeft = placaCx - placaLargura / 2f
         val placaTop = placaBaseY - placaAltura
-        val placaRight = cx + placaLargura / 2f
+        val placaRight = placaCx + placaLargura / 2f
         val placaBottom = placaBaseY
+        
         placaPaint.color = Color.rgb(50, 30, 10)
         canvas.drawRect(placaLeft - 2f, placaTop - 2f, placaRight + 2f, placaBottom + 2f, placaPaint)
-
-        // Madeira
         placaPaint.color = Color.rgb(160, 110, 50)
         canvas.drawRect(placaLeft, placaTop, placaRight, placaBottom, placaPaint)
 
-        // Texto "SAÍDA"
+        // Texto "SAÍDA" centralizado
         placaPaint.color = Color.WHITE
-        placaPaint.textSize = (tileH * 0.28f).coerceAtLeast(8f)
+        placaPaint.textSize = (tileH * 0.24f).coerceAtLeast(10f)
         placaPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText("SAÍDA", cx, placaTop + placaAltura * 0.65f, placaPaint)
+        canvas.drawText("SAÍDA", placaCx, placaTop + placaAltura * 0.65f, placaPaint)
+        
+        // Marcador no chão (Círculo de luz/checkpoint)
+        // Indica exatamente onde o herói deve ficar para subir
+        placaPaint.style = Paint.Style.FILL
+        placaPaint.color = Color.argb(100, 255, 255, 255) // Branco translúcido
+        canvas.drawOval(
+            placaCx - tileW * 0.3f, 
+            baseSy - tileH * 0.15f, 
+            placaCx + tileW * 0.3f, 
+            baseSy + tileH * 0.15f, 
+            placaPaint
+        )
+        
+        // Borda do marcador
+        placaPaint.style = Paint.Style.STROKE
+        placaPaint.strokeWidth = 3f
+        placaPaint.color = Color.WHITE
+        canvas.drawOval(
+            placaCx - tileW * 0.3f, 
+            baseSy - tileH * 0.15f, 
+            placaCx + tileW * 0.3f, 
+            baseSy + tileH * 0.15f, 
+            placaPaint
+        )
+        
+        placaPaint.strokeWidth = 0f
+        placaPaint.style = Paint.Style.FILL
         placaPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
+     * Desenha uma escada ou túnel na parede adjacente ao tile de saída.
+     */
+    private fun renderizarEscadaSaida(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        tileW: Float,
+        tileH: Float,
+        direcao: com.ericleber.joguinho.core.Direction
+    ) {
+        placaPaint.style = Paint.Style.STROKE
+        placaPaint.strokeWidth = 6f
+        placaPaint.color = Color.WHITE // Escada branca
+        
+        val ladderW = tileW * 0.35f
+        val ladderTop = cy - tileH * 3.0f // Vem do teto (bem alto)
+        val ladderBottom = cy + tileH * 0.1f // Termina logo atrás da placa
+        
+        // Desenha as duas hastes verticais da escada
+        canvas.drawLine(cx - ladderW/2, ladderTop, cx - ladderW/2, ladderBottom, placaPaint)
+        canvas.drawLine(cx + ladderW/2, ladderTop, cx + ladderW/2, ladderBottom, placaPaint)
+        
+        // Desenha os degraus
+        val numDegraus = 10
+        for (i in 0 until numDegraus) {
+            val stepY = ladderTop + (ladderBottom - ladderTop) * (i.toFloat() / (numDegraus - 1))
+            canvas.drawLine(cx - ladderW/2, stepY, cx + ladderW/2, stepY, placaPaint)
+        }
+        
+        placaPaint.strokeWidth = 0f
+        placaPaint.style = Paint.Style.FILL
     }
 
     // -------------------------------------------------------------------------

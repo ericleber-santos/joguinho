@@ -45,6 +45,8 @@ class GameState {
 
     // --- Fase e fluxo ---
     var phase: GamePhase = GamePhase.MENU
+    var exitAnimationTimerMs: Long = 0L // Timer para a animação de subida na escada
+    var isExiting: Boolean = false      // Flag para travar movimento durante a animação
 
     // --- Identificação do Floor/Map ---
     var floorNumber: Int = 1
@@ -60,6 +62,7 @@ class GameState {
     // --- Estado do Hero ---
     var heroIsSlowedDown: Boolean = false
     var heroSlowdownRemainingMs: Long = 0L
+    var mapSlowdownCount: Int = 0 // Contador de lentidões no mapa atual
 
     // --- Estado do Spike ---
     var spikeIsSlowedDown: Boolean = false

@@ -73,44 +73,95 @@ class BSPMazeGenerator(private val random: Random) {
 
         val leaves = mutableListOf<BSPNode>()
         collectLeaves(root, leaves)
+        
+        // Embaralha as folhas para que o início não seja sempre na "primeira" sala
+        val shuffledLeaves = leaves.shuffled(random)
 
-        // Entrada: posição aleatória dentro da primeira sala (não o centro)
-        val startLeaf = leaves.first()
+        // Entrada: posição aleatória dentro de uma das salas iniciais
+        val startLeaf = shuffledLeaves.first()
         val startX = startLeaf.roomX + 1 + (random.nextInt((startLeaf.roomW - 2).coerceAtLeast(1)))
         val startY = startLeaf.roomY + 1 + (random.nextInt((startLeaf.roomH - 2).coerceAtLeast(1)))
         val startIndex = startY * width + startX
 
-        // Saída: sala mais distante da entrada (via índice de folha), posição aleatória
-        // Nunca na mesma sala que a entrada e com distância mínima garantida
+        // Saída: Procuramos a sala mais distante possível do ponto de início
         var exitX = 0
         var exitY = 0
         var exitIndex = 0
-        var attempts = 0
-        val minDistance = (width + height) / 4 // Distância mínima de 25% do perímetro
-
-        val potentialExitLeaves = if (leaves.size > 1) {
-            leaves.drop((leaves.size * 0.5f).toInt()).filter { it != startLeaf }.shuffled(random)
-        } else leaves
+        
+        // Distância mínima alvo: 60% da diagonal do mapa para garantir que o jogador explore
+        val targetMinDistance = (Math.sqrt((width * width + height * height).toDouble()) * 0.6).toInt()
 
         var found = false
-        for (leaf in potentialExitLeaves) {
-            repeat(5) { // Tenta 5 posições dentro da folha
-                exitX = leaf.roomX + 1 + (random.nextInt((leaf.roomW - 2).coerceAtLeast(1)))
-                exitY = leaf.roomY + 1 + (random.nextInt((leaf.roomH - 2).coerceAtLeast(1)))
-                val dist = Math.abs(exitX - startX) + Math.abs(exitY - startY)
-                if (dist >= minDistance) {
+        var exitWallDir: com.ericleber.joguinho.core.Direction? = null
+        
+        // Ordena as folhas pela distância do centro delas até o ponto de início (descendente)
+        val sortedExitLeaves = shuffledLeaves.filter { it != startLeaf }.sortedByDescending { leaf ->
+            Math.abs(leaf.roomCenterX - startX) + Math.abs(leaf.roomCenterY - startY)
+        }
+
+        for (leaf in sortedExitLeaves) {
+            // Tenta as 4 paredes da sala da folha em ordem aleatória
+            val wallOptions = listOf(
+                com.ericleber.joguinho.core.Direction.NORTH,
+                com.ericleber.joguinho.core.Direction.SOUTH,
+                com.ericleber.joguinho.core.Direction.WEST,
+                com.ericleber.joguinho.core.Direction.EAST
+            ).shuffled(random)
+
+            for (dir in wallOptions) {
+                val tx: Int
+                val ty: Int
+                when (dir) {
+                    com.ericleber.joguinho.core.Direction.NORTH -> { tx = leaf.roomX + leaf.roomW / 2; ty = leaf.roomY }
+                    com.ericleber.joguinho.core.Direction.SOUTH -> { tx = leaf.roomX + leaf.roomW / 2; ty = leaf.roomY + leaf.roomH - 1 }
+                    com.ericleber.joguinho.core.Direction.WEST -> { tx = leaf.roomX; ty = leaf.roomY + leaf.roomH / 2 }
+                    com.ericleber.joguinho.core.Direction.EAST -> { tx = leaf.roomX + leaf.roomW - 1; ty = leaf.roomY + leaf.roomH / 2 }
+                    else -> continue
+                }
+
+                val dist = Math.abs(tx - startX) + Math.abs(ty - startY)
+                // Se a distância for maior ou igual ao alvo, aceitamos
+                if (dist >= targetMinDistance) {
+                    exitX = tx
+                    exitY = ty
+                    exitWallDir = dir
                     found = true
-                    return@repeat
+                    break
                 }
             }
             if (found) break
         }
 
-        // Fallback se não encontrar com distância mínima
+        // Fallback: Se não achou com a distância alvo, pega a parede mais distante possível entre todas as salas
         if (!found) {
-            val lastLeaf = leaves.last()
-            exitX = lastLeaf.roomX + 1 + (random.nextInt((lastLeaf.roomW - 2).coerceAtLeast(1)))
-            exitY = lastLeaf.roomY + 1 + (random.nextInt((lastLeaf.roomH - 2).coerceAtLeast(1)))
+            var maxDist = -1
+            for (leaf in sortedExitLeaves) {
+                val wallOptions = listOf(
+                    com.ericleber.joguinho.core.Direction.NORTH,
+                    com.ericleber.joguinho.core.Direction.SOUTH,
+                    com.ericleber.joguinho.core.Direction.WEST,
+                    com.ericleber.joguinho.core.Direction.EAST
+                )
+                for (dir in wallOptions) {
+                    val tx: Int
+                    val ty: Int
+                    when (dir) {
+                        com.ericleber.joguinho.core.Direction.NORTH -> { tx = leaf.roomX + leaf.roomW / 2; ty = leaf.roomY }
+                        com.ericleber.joguinho.core.Direction.SOUTH -> { tx = leaf.roomX + leaf.roomW / 2; ty = leaf.roomY + leaf.roomH - 1 }
+                        com.ericleber.joguinho.core.Direction.WEST -> { tx = leaf.roomX; ty = leaf.roomY + leaf.roomH / 2 }
+                        com.ericleber.joguinho.core.Direction.EAST -> { tx = leaf.roomX + leaf.roomW - 1; ty = leaf.roomY + leaf.roomH / 2 }
+                        else -> continue
+                    }
+                    val dist = Math.abs(tx - startX) + Math.abs(ty - startY)
+                    if (dist > maxDist) {
+                        maxDist = dist
+                        exitX = tx
+                        exitY = ty
+                        exitWallDir = dir
+                        found = true
+                    }
+                }
+            }
         }
         exitIndex = exitY * width + exitX
 
@@ -124,7 +175,8 @@ class BSPMazeGenerator(private val random: Random) {
             startIndex = startIndex,
             exitIndex = exitIndex,
             floorNumber = floorNumber,
-            seed = seed
+            seed = seed,
+            exitWallDirection = exitWallDir
         )
     }
 

@@ -22,7 +22,8 @@ data class MazeData(
     val startIndex: Int,
     val exitIndex: Int,
     val floorNumber: Int,
-    val seed: Long
+    val seed: Long,
+    val exitWallDirection: Direction? = null // Direção da parede onde a escada será desenhada
 )
 
 @Serializable

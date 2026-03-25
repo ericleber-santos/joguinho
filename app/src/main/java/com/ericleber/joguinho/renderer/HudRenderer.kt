@@ -56,38 +56,38 @@ class HudRenderer {
         val centroY = alturaA + alturaB * 0.6f
         val padding = 12f
 
-        // Score — esquerda
-        textPaint.textSize = (alturaB * 0.45f).coerceIn(14f, 22f)
+        // Score — esquerda (Aumentado 50%)
+        textPaint.textSize = (alturaB * 0.67f).coerceIn(21f, 33f)
         textPaint.color = Color.rgb(220, 220, 200)
         textPaint.textAlign = Paint.Align.LEFT
         canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, centroY, textPaint)
 
-        // Combo — centro (só se ativo)
+        // Combo — centro (só se ativo) (Aumentado 50%)
         if (gameState.comboStreak > 0) {
             val corCombo = when {
                 gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = (alturaB * 0.45f).coerceIn(14f, 22f)
+            textPaint.textSize = (alturaB * 0.67f).coerceIn(21f, 33f)
             textPaint.color = corCombo
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("x${gameState.comboStreak}", largura / 2f, centroY, textPaint)
         }
 
-        // Andar e mapa — direita
-        textPaint.textSize = (alturaB * 0.38f).coerceIn(12f, 18f)
+        // Andar e mapa — direita (Aumentado mais 50%)
+        textPaint.textSize = (alturaB * 0.85f).coerceIn(27f, 40f)
         textPaint.color = Color.rgb(180, 180, 160)
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", largura - padding, centroY, textPaint)
 
-        // Slowdown — acima do centro, centralizado
+        // Slowdown — acima do centro, centralizado (Aumentado mais 100%)
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = (alturaB * 0.32f).coerceIn(10f, 16f)
-            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textSize = (alturaB * 1.28f).coerceIn(40f, 64f)
+            textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, alturaA + alturaB * 0.25f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, alturaA + alturaB * 0.15f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -125,38 +125,38 @@ class HudRenderer {
 
         val baselineY = barY + barH * 0.72f
 
-        // Score — esquerda
-        textPaint.textSize = 18f
+        // Score — esquerda (Aumentado 50%)
+        textPaint.textSize = 27f
         textPaint.color = Color.rgb(220, 220, 200)
         textPaint.textAlign = Paint.Align.LEFT
         canvas.drawText("${gameState.accumulatedScore.toInt()}", padding * 2, baselineY, textPaint)
 
-        // Combo — centro (só se ativo)
+        // Combo — centro (só se ativo) (Aumentado 50%)
         if (gameState.comboStreak > 0) {
             val comboColor = when {
                 gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = 18f
+            textPaint.textSize = 27f
             textPaint.color = comboColor
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
         }
 
-        // Andar e mapa — direita
-        textPaint.textSize = 16f
+        // Andar e mapa — direita (Aumentado mais 50%)
+        textPaint.textSize = 36f
         textPaint.color = Color.rgb(180, 180, 160)
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("A${gameState.floorNumber}  M${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
 
-        // Slowdown — texto pequeno acima da barra, centralizado
+        // Slowdown — texto acima da barra, centralizado (Aumentado mais 100%)
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = 15f
-            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textSize = 60f
+            textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 0.5f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 2.5f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
