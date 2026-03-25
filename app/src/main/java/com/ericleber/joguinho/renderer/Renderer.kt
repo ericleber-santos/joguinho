@@ -79,23 +79,41 @@ class Renderer(
      * Para preencher alturaA:      tileW = alturaA*4/(W+H)
      * Usa o MENOR para que o mapa caiba nos dois eixos sem cortar.
      */
+    // Tamanho mínimo do tile em px para o personagem ser visível
+    private val tileSizeMinimo = 78f
+
+    // Posição do hero para scroll da câmera
+    private var heroWorldX: Int = 0
+    private var heroWorldY: Int = 0
+
     fun recalcularTile(mapWidth: Int, mapHeight: Int) {
         if (screenWidth <= 0 || screenHeight <= 0) return
         val alturaA = screenHeight * fracaoAreaJogo
-        // Top-down: tile quadrado, mapa preenche o retângulo A
-        // tileW = screenWidth / mapWidth  ou  tileH = alturaA / mapHeight
-        // Usa o MENOR para que o mapa inteiro caiba na tela
+
+        // Calcula tile para caber o mapa inteiro
         val tileWPorLargura = screenWidth.toFloat() / mapWidth
         val tileHPorAltura  = alturaA / mapHeight
-        val tileSize = minOf(tileWPorLargura, tileHPorAltura).coerceAtLeast(4f)
+        val tileFit = minOf(tileWPorLargura, tileHPorAltura)
+
+        // Garante zoom mínimo para o personagem ser visível
+        val tileSize = tileFit.coerceAtLeast(tileSizeMinimo)
         tileWDinamico = tileSize
         tileHDinamico = tileSize
 
-        // Câmera: centraliza o mapa no retângulo A
         val larguraMapa = mapWidth * tileSize
         val alturaMapa  = mapHeight * tileSize
-        cameraX = (screenWidth - larguraMapa) / 2f
-        cameraY = (alturaA - alturaMapa) / 2f
+
+        if (larguraMapa <= screenWidth && alturaMapa <= alturaA) {
+            // Mapa cabe inteiro — centraliza
+            cameraX = (screenWidth - larguraMapa) / 2f
+            cameraY = (alturaA - alturaMapa) / 2f
+        } else {
+            // Mapa maior que a tela — câmera segue o hero
+            val heroSx = heroWorldX * tileSize
+            val heroSy = heroWorldY * tileSize
+            cameraX = (screenWidth / 2f - heroSx).coerceIn(screenWidth - larguraMapa, 0f)
+            cameraY = (alturaA / 2f - heroSy).coerceIn(alturaA - alturaMapa, 0f)
+        }
     }
 
     // Frames de animação atuais
@@ -113,7 +131,11 @@ class Renderer(
      * @param gameState estado atual do jogo
      */
     fun render(canvas: Canvas, gameState: GameState) {
-        // Recalcula tile e câmera se o mapa mudou
+        // Atualiza posição do hero para scroll da câmera
+        heroWorldX = gameState.heroPosition.x
+        heroWorldY = gameState.heroPosition.y
+
+        // Recalcula tile e câmera
         val mazeAtual = gameState.mazeData
         if (mazeAtual != null) recalcularTile(mazeAtual.width, mazeAtual.height)
 
