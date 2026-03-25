@@ -148,8 +148,10 @@ class GameLoop(
             // Dorme o tempo restante para não queimar CPU
             val frameElapsedNs = System.nanoTime() - nowNs
             val sleepNs = targetFrameNs - frameElapsedNs
-            if (sleepNs > 1_000_000L) { // só dorme se > 1ms
+            if (sleepNs > 2_000_000L) { // Aumentado para 2ms para dar mais folga ao sistema
                 sleep(sleepNs / 1_000_000L, (sleepNs % 1_000_000L).toInt())
+            } else if (sleepNs > 0) {
+                Thread.yield() // Cede CPU se o tempo for muito curto para sleep
             }
         }
     }
@@ -211,14 +213,14 @@ class GameLoop(
      */
     private fun checkHeapUsage() {
         heapCheckCounter++
-        if (heapCheckCounter % 300 != 0) return
+        if (heapCheckCounter % 600 != 0) return // Reduzido frequência de checagem (10s a 60fps)
 
         val allocated = Debug.getNativeHeapAllocatedSize()
         val total = Debug.getNativeHeapSize()
         if (total > 0) {
             val usagePercent = (allocated * 100L / total).toInt()
-            if (usagePercent > 80) {
-                Logger.error(TAG, "Heap nativo acima de 80%: $usagePercent% ($allocated / $total bytes)", null)
+            if (usagePercent > 85) { // Aumentado threshold para evitar logs excessivos
+                Logger.error(TAG, "Heap nativo acima de 85%: $usagePercent% ($allocated / $total bytes)", null)
             }
         }
     }

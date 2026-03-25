@@ -81,16 +81,38 @@ class BSPMazeGenerator(private val random: Random) {
         val startIndex = startY * width + startX
 
         // Saída: sala mais distante da entrada (via índice de folha), posição aleatória
-        // Nunca na mesma sala que a entrada
-        val exitLeaf = if (leaves.size > 1) {
-            // Escolhe a sala mais distante — usa a última folha ou uma aleatória entre as últimas 30%
-            val candidatas = leaves.drop((leaves.size * 0.6f).toInt()).filter { it != startLeaf }
-            if (candidatas.isNotEmpty()) candidatas[random.nextInt(candidatas.size)] else leaves.last()
-        } else leaves.last()
+        // Nunca na mesma sala que a entrada e com distância mínima garantida
+        var exitX = 0
+        var exitY = 0
+        var exitIndex = 0
+        var attempts = 0
+        val minDistance = (width + height) / 4 // Distância mínima de 25% do perímetro
 
-        val exitX = exitLeaf.roomX + 1 + (random.nextInt((exitLeaf.roomW - 2).coerceAtLeast(1)))
-        val exitY = exitLeaf.roomY + 1 + (random.nextInt((exitLeaf.roomH - 2).coerceAtLeast(1)))
-        val exitIndex = exitY * width + exitX
+        val potentialExitLeaves = if (leaves.size > 1) {
+            leaves.drop((leaves.size * 0.5f).toInt()).filter { it != startLeaf }.shuffled(random)
+        } else leaves
+
+        var found = false
+        for (leaf in potentialExitLeaves) {
+            repeat(5) { // Tenta 5 posições dentro da folha
+                exitX = leaf.roomX + 1 + (random.nextInt((leaf.roomW - 2).coerceAtLeast(1)))
+                exitY = leaf.roomY + 1 + (random.nextInt((leaf.roomH - 2).coerceAtLeast(1)))
+                val dist = Math.abs(exitX - startX) + Math.abs(exitY - startY)
+                if (dist >= minDistance) {
+                    found = true
+                    return@repeat
+                }
+            }
+            if (found) break
+        }
+
+        // Fallback se não encontrar com distância mínima
+        if (!found) {
+            val lastLeaf = leaves.last()
+            exitX = lastLeaf.roomX + 1 + (random.nextInt((lastLeaf.roomW - 2).coerceAtLeast(1)))
+            exitY = lastLeaf.roomY + 1 + (random.nextInt((lastLeaf.roomH - 2).coerceAtLeast(1)))
+        }
+        exitIndex = exitY * width + exitX
 
         tiles[startIndex] = TILE_FLOOR
         tiles[exitIndex] = TILE_FLOOR

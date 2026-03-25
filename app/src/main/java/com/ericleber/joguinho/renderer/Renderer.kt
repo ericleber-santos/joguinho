@@ -149,7 +149,7 @@ class Renderer(
 
         frameCounter++
         frameTotal++
-        if (frameCounter % 6 == 0) {
+        if (frameCounter % 8 == 0) { // Reduzido frequência de atualização de animação (mais leve)
             heroAnimFrame = (heroAnimFrame + 1) % 8
             spikeAnimFrame = (spikeAnimFrame + 1) % 12
             monsterAnimFrame = (monsterAnimFrame + 1) % 8
@@ -188,14 +188,14 @@ class Renderer(
             }
         }
 
-        // Passo 2: Decorativos
+        // Passo 2: Decorativos (Otimizado: renderiza apenas 1 a cada 12 tiles)
         for (ty in minY..maxY) {
             for (tx in minX..maxX) {
                 val idx = ty * mazeData.width + tx
                 if (idx < 0 || idx >= mazeData.tiles.size) continue
                 if (mazeData.tiles[idx] != 0) continue
                 if ((tx == entradaTx && ty == entradaTy) || (tx == saidaTx && ty == saidaTy)) continue
-                val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 9
+                val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 12
                 if (decorSeed != 0) continue
                 val variant = (tx + ty) % 4
                 val sx = tx * tileW + cameraX

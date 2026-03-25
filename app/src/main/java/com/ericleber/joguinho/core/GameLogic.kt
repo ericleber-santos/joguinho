@@ -319,8 +319,7 @@ class GameLogic(private val gameState: GameState) {
 
     /**
      * Verifica se o Hero chegou ao tile de saída do labirinto.
-     * Usa raio de 1 tile para facilitar a detecção — o Hero não precisa
-     * estar exatamente no centro do tile de saída.
+     * Usa raio de 0 tiles (exato) para evitar término imediato ao nascer perto da saída.
      */
     private fun verificarHeroNoExit(maze: MazeData) {
         val heroX = gameState.heroPosition.x
@@ -328,9 +327,11 @@ class GameLogic(private val gameState: GameState) {
         val exitX = maze.exitIndex % maze.width
         val exitY = maze.exitIndex / maze.width
 
-        // Raio de 1 tile: qualquer tile adjacente ao Exit conta como chegada
-        val distancia = Math.abs(heroX - exitX) + Math.abs(heroY - exitY)
-        if (distancia > 1) return
+        // Distância exata: o herói deve estar no tile da saída
+        if (heroX != exitX || heroY != exitY) return
+
+        // Evita loop de transição: se já estamos carregando ou em transição, ignora
+        if (gameState.phase != GamePhase.PLAYING) return
 
         // Incrementa ComboStreak se completou sem Slowdown (Requisito 5.7)
         if (gameState.currentMapClean) {
@@ -340,6 +341,9 @@ class GameLogic(private val gameState: GameState) {
 
         gameState.emitEvent(GameEvent.MapCompleted)
         gameState.emitEvent(GameEvent.HeroReachedExit)
+
+        // Muda a fase para evitar processamento repetido da saída no mesmo frame
+        gameState.phase = GamePhase.LOADING
 
         // Verifica se é o último Map do Floor (3 Maps por Floor)
         val totalMapsNoFloor = 3
