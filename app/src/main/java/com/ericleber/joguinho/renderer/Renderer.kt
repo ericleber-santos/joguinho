@@ -236,8 +236,13 @@ class Renderer(
         characterRenderer.renderSpike(canvas, spikeSx, spikeSy, gameState.spikeCompanionState, spikeAnimFrame, tileW, tileH)
 
         val heroDirection = mapDirectionToHeroDirection(gameState.heroDirection)
-        val heroAnimState = if (gameState.heroIsSlowedDown) HeroAnimState.SLOWDOWN else HeroAnimState.WALK
-        characterRenderer.renderHero(canvas, heroSx, heroSy, heroDirection, heroAnimState, heroAnimFrame, tileW, tileH)
+        val heroAnimState = when {
+            gameState.heroIsSlowedDown -> HeroAnimState.SLOWDOWN
+            gameState.heroStoppedDurationSec > 0.05f -> HeroAnimState.IDLE
+            else -> HeroAnimState.WALK
+        }
+        val currentFrame = if (heroAnimState == HeroAnimState.IDLE) 0 else heroAnimFrame
+        characterRenderer.renderHero(canvas, heroSx, heroSy, heroDirection, heroAnimState, currentFrame, tileW, tileH)
 
         // Passo 4: Paredes (por cima de tudo)
         for (ty in minY..maxY) {
@@ -261,7 +266,6 @@ class Renderer(
         val alturaA = screenHeight * fracaoAreaJogo
         val alturaB = screenHeight - alturaA
         hudRenderer.renderRetanguloB(canvas, gameState, screenWidth.toFloat(), alturaA, alturaB)
-        hudRenderer.renderInfoMapaEsquerda(canvas, gameState)
     }
 
     /**

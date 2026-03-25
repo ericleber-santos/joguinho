@@ -182,18 +182,33 @@ class InputController(
      */
     fun update(deltaTimeSec: Float, mazeData: MazeData?, hapticEnabled: Boolean = true) {
         val direction = getActiveDirection()
+        val movementVector = if (useDPad) {
+            direction?.let { dir ->
+                val (vx, vy) = directionToVector(dir)
+                // Normaliza diagonais para D-Pad
+                if (vx != 0f && vy != 0f) {
+                    val invSqrt2 = 0.7071f
+                    android.graphics.PointF(vx * invSqrt2, vy * invSqrt2)
+                } else {
+                    android.graphics.PointF(vx, vy)
+                }
+            }
+        } else {
+            joystick.getMovementVector()
+        }
 
-        if (direction == null) {
+        if (movementVector == null || (movementVector.x == 0f && movementVector.y == 0f)) {
             // Hero parado
             heroMoved = false
             heroStoppedDurationSec += deltaTimeSec
-            moveAccumX = 0f
-            moveAccumY = 0f
+            gameState.heroStoppedDurationSec = heroStoppedDurationSec
+            // Não zeramos moveAccumX/Y para manter o progresso sub-tile ao parar e voltar a andar
             return
         }
 
         heroMoved = true
         heroStoppedDurationSec = 0f
+        gameState.heroStoppedDurationSec = 0f
 
         // Calcula velocidade efetiva
         val baseSpeed = BASE_SPEED_TILES_PER_SEC
@@ -204,10 +219,9 @@ class InputController(
         }
         val effectiveSpeed = baseSpeed * speedMultiplier
 
-        // Vetor de movimento por frame
-        val (dx, dy) = directionToVector(direction)
-        moveAccumX += dx * effectiveSpeed * deltaTimeSec
-        moveAccumY += dy * effectiveSpeed * deltaTimeSec
+        // Vetor de movimento por frame usando entrada analógica/normalizada
+        moveAccumX += movementVector.x * effectiveSpeed * deltaTimeSec
+        moveAccumY += movementVector.y * effectiveSpeed * deltaTimeSec
 
         // Aplica movimento em tiles inteiros quando o acumulador ultrapassa 1
         val tileDx = moveAccumX.toInt()
@@ -227,12 +241,12 @@ class InputController(
             when {
                 mazeData == null -> {
                     gameState.heroPosition = posCompleta
-                    gameState.heroDirection = direction
+                    if (direction != null) gameState.heroDirection = direction
                 }
                 !isWallComMargem(posCompleta, tileDx, tileDy, mazeData) -> {
                     // Movimento diagonal livre (com verificação de margem lateral)
                     gameState.heroPosition = posCompleta
-                    gameState.heroDirection = direction
+                    if (direction != null) gameState.heroDirection = direction
                 }
                 tileDx != 0 && tileDy != 0 -> {
                     // Diagonal bloqueada — tenta slide em cada eixo
@@ -242,17 +256,17 @@ class InputController(
                         moveX && moveY -> {
                             gameState.heroPosition = if (kotlin.math.abs(moveAccumX) >= kotlin.math.abs(moveAccumY))
                                 posApenasX else posApenasY
-                            gameState.heroDirection = direction
+                            if (direction != null) gameState.heroDirection = direction
                         }
-                        moveX -> { gameState.heroPosition = posApenasX; gameState.heroDirection = direction }
-                        moveY -> { gameState.heroPosition = posApenasY; gameState.heroDirection = direction }
+                        moveX -> { gameState.heroPosition = posApenasX; if (direction != null) gameState.heroDirection = direction }
+                        moveY -> { gameState.heroPosition = posApenasY; if (direction != null) gameState.heroDirection = direction }
                         else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
                     }
                 }
                 else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
             }
         } else {
-            gameState.heroDirection = direction
+            if (direction != null) gameState.heroDirection = direction
         }
     }
 

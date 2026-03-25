@@ -54,6 +54,7 @@ class GameState {
     // --- Posições ---
     var heroPosition: Position = Position(0, 0)
     var heroDirection: Direction = Direction.SOUTH
+    var heroStoppedDurationSec: Float = 0f
     var spikePosition: Position = Position(0, 0)
 
     // --- Estado do Hero ---
