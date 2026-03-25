@@ -38,20 +38,20 @@ object BiomeParametersProvider {
         in 1..20   -> BiomeParameters(
             wallDensityMin = 0.40f,
             wallDensityMax = 0.55f,
-            mapWidth  = 40,   // maior para acomodar 3+ salas com corredores largos
-            mapHeight = 30
+            mapWidth  = 55,
+            mapHeight = 35
         )
         in 21..60  -> BiomeParameters(
             wallDensityMin = 0.55f,
             wallDensityMax = 0.70f,
-            mapWidth  = 45,
-            mapHeight = 35
+            mapWidth  = 60,
+            mapHeight = 38
         )
         else       -> BiomeParameters(  // 61–120
             wallDensityMin = 0.70f,
             wallDensityMax = 0.85f,
-            mapWidth  = 50,
-            mapHeight = 40
+            mapWidth  = 65,
+            mapHeight = 42
         )
     }
 

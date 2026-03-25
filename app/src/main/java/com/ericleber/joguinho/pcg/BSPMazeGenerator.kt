@@ -149,11 +149,11 @@ class BSPMazeGenerator(private val random: Random) {
             // Tamanho mínimo da sala: 3x3
             if (maxRoomW < 3 || maxRoomH < 3) return
 
-            // Salas menores em densidades maiores (mais paredes ao redor)
+            // Salas maiores para preencher mais a tela
             val minRoomFraction = when {
-                densityTarget < 0.5f -> 0.6f
-                densityTarget < 0.7f -> 0.5f
-                else -> 0.4f
+                densityTarget < 0.5f -> 0.75f
+                densityTarget < 0.7f -> 0.65f
+                else -> 0.55f
             }
 
             val roomW = random.nextInt((maxRoomW * minRoomFraction).toInt().coerceAtLeast(3), maxRoomW + 1)
@@ -223,9 +223,9 @@ class BSPMazeGenerator(private val random: Random) {
     private fun carveHorizontalCorridor(tiles: IntArray, mapWidth: Int, x1: Int, x2: Int, y: Int) {
         val from = minOf(x1, x2)
         val to = maxOf(x1, x2)
-        // Corredor com 3 tiles de largura para garantir passagem confortável
+        // Corredor com 5 tiles de largura para preencher mais a tela
         for (x in from..to) {
-            for (dy in -1..1) {
+            for (dy in -2..2) {
                 val ty = y + dy
                 if (ty >= 0 && ty < tiles.size / mapWidth) {
                     tiles[ty * mapWidth + x] = TILE_FLOOR
@@ -237,9 +237,9 @@ class BSPMazeGenerator(private val random: Random) {
     private fun carveVerticalCorridor(tiles: IntArray, mapWidth: Int, y1: Int, y2: Int, x: Int) {
         val from = minOf(y1, y2)
         val to = maxOf(y1, y2)
-        // Corredor com 3 tiles de largura para garantir passagem confortável
+        // Corredor com 5 tiles de largura para preencher mais a tela
         for (y in from..to) {
-            for (dx in -1..1) {
+            for (dx in -2..2) {
                 val tx = x + dx
                 if (tx >= 0 && tx < mapWidth) {
                     tiles[y * mapWidth + tx] = TILE_FLOOR

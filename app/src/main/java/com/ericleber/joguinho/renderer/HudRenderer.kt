@@ -37,6 +37,63 @@ class HudRenderer {
     }
 
     /**
+     * Renderiza o HUD no retângulo B (faixa inferior da tela).
+     * @param alturaA Y onde começa o retângulo B (= altura do retângulo A)
+     * @param alturaB altura do retângulo B em pixels
+     */
+    fun renderRetanguloB(canvas: Canvas, gameState: GameState, largura: Float, alturaA: Float, alturaB: Float) {
+        // Fundo do retângulo B
+        bgPaint.color = Color.argb(220, 0, 0, 0)
+        canvas.drawRect(0f, alturaA, largura, alturaA + alturaB, bgPaint)
+
+        // Linha separadora sutil
+        bgPaint.color = Color.argb(80, 255, 255, 255)
+        bgPaint.style = Paint.Style.STROKE
+        bgPaint.strokeWidth = 1f
+        canvas.drawLine(0f, alturaA, largura, alturaA, bgPaint)
+        bgPaint.style = Paint.Style.FILL
+
+        val centroY = alturaA + alturaB * 0.6f
+        val padding = 12f
+
+        // Score — esquerda
+        textPaint.textSize = (alturaB * 0.45f).coerceIn(14f, 22f)
+        textPaint.color = Color.rgb(220, 220, 200)
+        textPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, centroY, textPaint)
+
+        // Combo — centro (só se ativo)
+        if (gameState.comboStreak > 0) {
+            val corCombo = when {
+                gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
+                gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
+                else -> Color.rgb(255, 220, 80)
+            }
+            textPaint.textSize = (alturaB * 0.45f).coerceIn(14f, 22f)
+            textPaint.color = corCombo
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("x${gameState.comboStreak}", largura / 2f, centroY, textPaint)
+        }
+
+        // Andar e mapa — direita
+        textPaint.textSize = (alturaB * 0.38f).coerceIn(12f, 18f)
+        textPaint.color = Color.rgb(180, 180, 160)
+        textPaint.textAlign = Paint.Align.RIGHT
+        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", largura - padding, centroY, textPaint)
+
+        // Slowdown — acima do centro, centralizado
+        if (gameState.heroIsSlowedDown) {
+            val seg = gameState.heroSlowdownRemainingMs / 1000f
+            textPaint.textSize = (alturaB * 0.32f).coerceIn(10f, 16f)
+            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, alturaA + alturaB * 0.25f, textPaint)
+        }
+
+        textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
      * Método principal de renderização — seleciona automaticamente compacto ou expandido.
      * @param canvas canvas de destino
      * @param gameState estado atual do jogo

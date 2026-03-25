@@ -303,7 +303,7 @@ class MainMenuActivity : AppCompatActivity() {
             val alphaTexto = (progressoIntro * 255).toInt().coerceIn(0, 255)
             tintaTexto.color = Color.argb(alphaTexto, 212, 160, 23)
             tintaTexto.textSize = altura * 0.10f
-            canvas.drawText("Caverna do Spike", centroX, altura * 0.18f, tintaTexto)
+            canvas.drawText("Spike na Caverna", centroX, altura * 0.18f, tintaTexto)
 
             // Dica de skip
             tintaTexto.color = Color.argb((alphaTexto * 0.6f).toInt(), 255, 255, 255)
@@ -376,12 +376,12 @@ class MainMenuActivity : AppCompatActivity() {
             // Título
             tintaTexto.color = 0xFFD4A017.toInt()
             tintaTexto.textSize = altura * 0.11f
-            canvas.drawText("Caverna do Spike", largura / 2f, altura * 0.18f, tintaTexto)
+            canvas.drawText("Spike na Caverna", largura / 2f, altura * 0.18f, tintaTexto)
 
             // Subtítulo decorativo
             tintaTexto.color = 0xFF8B6914.toInt()
             tintaTexto.textSize = altura * 0.04f
-            canvas.drawText("~ Aventura nas Profundezas ~", largura / 2f, altura * 0.26f, tintaTexto)
+            canvas.drawText("~ Explorando a Caverna ~", largura / 2f, altura * 0.26f, tintaTexto)
 
             // Recorde pessoal no canto superior direito (Requisito 10.1)
             tintaTexto.color = 0xFFFFD700.toInt()

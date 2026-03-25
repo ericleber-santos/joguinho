@@ -48,21 +48,22 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = mapOf(
 
     // -------------------------------------------------------------------------
     // Andares 1–20: Mina Abandonada
-    // Tons: marrom-pedra quente, tocha âmbar, veios de ouro
+    // Chão: areia/bege claro — MAIS CLARO que a parede
+    // Parede: pedra escura irregular estilo Spelunky
     // -------------------------------------------------------------------------
     Biome.MINA_ABANDONADA to BiomePalette(
-        // Parede — pedra marrom-acinzentada com blocos visíveis
-        wallColor       = 0xFF7A6050.toInt(),  // face frontal: marrom-pedra médio
-        wallTopColor    = 0xFFB09070.toInt(),  // topo: marrom claro — contraste forte com chão
-        wallShadowColor = 0xFF3A2818.toInt(),  // sombra lateral: marrom muito escuro
+        // Parede — pedra ESCURA, irregular, estilo Spelunky
+        wallColor       = 0xFF3A3028.toInt(),  // face frontal: pedra escura marrom-cinza
+        wallTopColor    = 0xFF524438.toInt(),  // topo: ligeiramente mais claro
+        wallShadowColor = 0xFF1E1408.toInt(),  // sombra lateral: quase preta
         wallDetailColor = 0xFFD97706.toInt(),  // veio de ouro âmbar
 
-        // Chão — terra ESCURA, bem mais escura que a parede
-        floorColor      = 0xFF2A1E14.toInt(),  // terra muito escura — quase preta com tom marrom
-        floorVariant1   = 0xFF251A10.toInt(),  // rachadura — ainda mais escura
-        floorVariant2   = 0xFF28221A.toInt(),  // musgo — tom levemente esverdeado
-        floorVariant3   = 0xFF2E2018.toInt(),  // umidade — levemente mais clara
-        floorEdgeColor  = 0xFF1A100A.toInt(),  // borda sutil
+        // Chão — areia/bege CLARO, bem mais claro que a parede
+        floorColor      = 0xFFC4A882.toInt(),  // areia clara base
+        floorVariant1   = 0xFFA8845A.toInt(),  // rachadura — tom mais escuro
+        floorVariant2   = 0xFF9A8C6A.toInt(),  // musgo — tom acinzentado
+        floorVariant3   = 0xFFD4B896.toInt(),  // área clara — levemente mais clara
+        floorEdgeColor  = 0xFF8A6A48.toInt(),  // borda sutil
 
         // Acento e luz — tocha âmbar quente
         accentColor     = 0xFFF59E0B.toInt(),
@@ -74,7 +75,7 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = mapOf(
         mushroomColor   = 0xFF92400E.toInt(),
         mushroomCapColor= 0xFFB45309.toInt(),
         crystalColor    = 0xFFED8936.toInt(),
-        mossColor       = 0xFF3D5A2A.toInt(),
+        mossColor       = 0xFF2D4A1E.toInt(),  // musgo escuro nas frestas
 
         backgroundColor = 0xFF0F0806.toInt()   // fundo quase preto
     ),
