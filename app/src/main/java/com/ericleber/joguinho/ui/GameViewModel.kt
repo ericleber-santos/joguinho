@@ -90,14 +90,10 @@ class GameViewModel : ViewModel() {
         // Conecta callbacks do GameLogic
         gameLogic.onMapCompleted = { salvarEstadoAsync() }
         gameLogic.onHeroReachedExit = {
-            // Regenera mapa para o próximo Map/Floor ou lança ScoreActivity
-            val floorCompleted = gameState.pendingEvents.any {
-                it is com.ericleber.joguinho.core.GameEvent.FloorCompleted
-            }
-            if (floorCompleted) {
+            // Se o floor foi completado, lança ScoreActivity; senão regenera mapa
+            if (gameState.phase == GamePhase.SCORE_SCREEN) {
                 onHeroReachedExit?.invoke()
             } else {
-                // Próximo Map do mesmo Floor — regenera labirinto
                 gerarMapa()
             }
         }

@@ -33,8 +33,8 @@ class InputController(
 ) {
 
     companion object {
-        /** Velocidade base do Hero em tiles/segundo. */
-        private const val BASE_SPEED_TILES_PER_SEC = 5f
+        /** Velocidade base do Hero em tiles/segundo — 3.5 tiles/s para movimento contemplativo. */
+        private const val BASE_SPEED_TILES_PER_SEC = 3.5f
 
         /** Multiplicador de corrida (Requisito 4.4 — 80% mais rápido). */
         private const val RUN_MULTIPLIER = 1.8f
@@ -218,19 +218,40 @@ class InputController(
             moveAccumY -= tileDy
 
             val currentPos = gameState.heroPosition
-            val newPos = Position(currentPos.x + tileDx, currentPos.y + tileDy)
 
-            if (mazeData != null && isWall(newPos, mazeData)) {
-                // Colisão com parede — feedback háptico de 20ms (Requisito 4.6)
-                if (hapticEnabled) vibrate(WALL_HAPTIC_MS)
-                // Hero não se move
-            } else {
-                // Move o Hero
-                gameState.heroPosition = newPos
-                gameState.heroDirection = direction
+            // Tenta mover na diagonal primeiro; se colidir, tenta cada eixo separado (slide)
+            val posCompleta = Position(currentPos.x + tileDx, currentPos.y + tileDy)
+            val posApenasX  = Position(currentPos.x + tileDx, currentPos.y)
+            val posApenasY  = Position(currentPos.x, currentPos.y + tileDy)
+
+            when {
+                mazeData == null -> {
+                    gameState.heroPosition = posCompleta
+                    gameState.heroDirection = direction
+                }
+                !isWallComMargem(posCompleta, tileDx, tileDy, mazeData) -> {
+                    // Movimento diagonal livre (com verificação de margem lateral)
+                    gameState.heroPosition = posCompleta
+                    gameState.heroDirection = direction
+                }
+                tileDx != 0 && tileDy != 0 -> {
+                    // Diagonal bloqueada — tenta slide em cada eixo
+                    val moveX = !isWallComMargem(posApenasX, tileDx, 0, mazeData)
+                    val moveY = !isWallComMargem(posApenasY, 0, tileDy, mazeData)
+                    when {
+                        moveX && moveY -> {
+                            gameState.heroPosition = if (kotlin.math.abs(moveAccumX) >= kotlin.math.abs(moveAccumY))
+                                posApenasX else posApenasY
+                            gameState.heroDirection = direction
+                        }
+                        moveX -> { gameState.heroPosition = posApenasX; gameState.heroDirection = direction }
+                        moveY -> { gameState.heroPosition = posApenasY; gameState.heroDirection = direction }
+                        else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
+                    }
+                }
+                else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
             }
         } else {
-            // Atualiza direção mesmo sem mover (para animação)
             gameState.heroDirection = direction
         }
     }
@@ -264,6 +285,14 @@ class InputController(
     private fun isWall(pos: Position, maze: MazeData): Boolean {
         if (pos.x < 0 || pos.y < 0 || pos.x >= maze.width || pos.y >= maze.height) return true
         return maze.tiles[pos.y * maze.width + pos.x] == 1
+    }
+
+    /**
+     * Verifica colisão simples: apenas o tile destino.
+     * Sem margem lateral — corredores de 3 tiles devem ser navegáveis livremente.
+     */
+    private fun isWallComMargem(pos: Position, dx: Int, dy: Int, maze: MazeData): Boolean {
+        return isWall(pos, maze)
     }
 
     /**

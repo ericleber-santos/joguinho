@@ -3,10 +3,12 @@ package com.ericleber.joguinho.renderer
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
+import kotlin.math.sin
 
 /**
  * Orquestrador de renderização isométrica.
@@ -26,6 +28,8 @@ class Renderer(
     private val hudRenderer: HudRenderer
 ) {
 
+    private val lightingSystem = LightingSystem()
+
     var cameraX: Float = 0f
     var cameraY: Float = 0f
     var screenWidth: Int = 0
@@ -38,14 +42,25 @@ class Renderer(
         style = Paint.Style.FILL
     }
 
-    // Tamanho base do tile em dp
-    private val baseTileSize = 32
+    // Paint para a placa de saída animada
+    private val placaPaint = Paint().apply {
+        isAntiAlias = false
+        isFilterBitmap = false
+        style = Paint.Style.FILL
+    }
+
+    // Tamanho base do tile em dp — calibrado para ASUS X00TDB (density~2.0)
+    // 40dp * 2.0 = 80px por tile → ~9 tiles visíveis na horizontal (720px) — zoom +25%
+    private val baseTileSize = 40
 
     // Frames de animação atuais
     private var heroAnimFrame: Int = 0
     private var spikeAnimFrame: Int = 0
     private var monsterAnimFrame: Int = 0
     private var frameCounter: Int = 0
+
+    // Contador global de frames para animações independentes (placa, etc.)
+    private var frameTotal: Long = 0L
 
     /**
      * Renderiza um frame completo do jogo.
@@ -64,6 +79,7 @@ class Renderer(
 
         // Avança frames de animação a cada 6 frames de render (~10fps de animação a 60fps)
         frameCounter++
+        frameTotal++
         if (frameCounter % 6 == 0) {
             heroAnimFrame = (heroAnimFrame + 1) % 8
             spikeAnimFrame = (spikeAnimFrame + 1) % 12
@@ -85,112 +101,19 @@ class Renderer(
 
         val visibleTiles = getVisibleTiles(mazeData, tileW, tileH)
 
-        // 1. Renderiza tiles de chão
-        for ((tx, ty) in visibleTiles) {
-            val tileIndex = ty * mazeData.width + tx
-            if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
-            if (mazeData.tiles[tileIndex] == 1) continue  // pula paredes nesta passagem
+        // Calcula posições de entrada e saída a partir dos índices do MazeData
+        val entradaTx = mazeData.startIndex % mazeData.width
+        val entradaTy = mazeData.startIndex / mazeData.width
+        val saidaTx = mazeData.exitIndex % mazeData.width
+        val saidaTy = mazeData.exitIndex / mazeData.width
 
-            val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
-            val sx = screenPos.x + cameraX
-            val sy = screenPos.y + cameraY
+        // Posição isométrica dos personagens (em tiles inteiros para ordenação)
+        val heroTx = gameState.heroPosition.x.toInt()
+        val heroTy = gameState.heroPosition.y.toInt()
+        val spikeTx = gameState.spikePosition.x.toInt()
+        val spikeTy = gameState.spikePosition.y.toInt()
 
-            val floorKey = "biome_${gameState.currentBiome.name}_floor"
-            val floorBitmap = spriteCache.getOrCreate(floorKey) {
-                tileRenderer.createTileBitmap(TileType.FLOOR, tileW.toInt(), tileH.toInt(), palette)
-            }
-            canvas.drawBitmap(floorBitmap, sx, sy, null)
-        }
-
-        // 2. Renderiza tiles de parede
-        for ((tx, ty) in visibleTiles) {
-            val tileIndex = ty * mazeData.width + tx
-            if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
-            if (mazeData.tiles[tileIndex] != 1) continue  // pula chão nesta passagem
-
-            val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
-            val sx = screenPos.x + cameraX
-            val sy = screenPos.y + cameraY
-
-            val wallKey = "biome_${gameState.currentBiome.name}_wall"
-            val wallBitmap = spriteCache.getOrCreate(wallKey) {
-                tileRenderer.createTileBitmap(TileType.WALL, tileW.toInt(), (tileH * 1.8f).toInt(), palette)
-            }
-            canvas.drawBitmap(wallBitmap, sx, sy, null)
-        }
-
-        // 3. Renderiza tiles decorativos (a cada 7 tiles de chão, baseado em seed)
-        for ((tx, ty) in visibleTiles) {
-            val tileIndex = ty * mazeData.width + tx
-            if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
-            if (mazeData.tiles[tileIndex] != 0) continue
-            // Decoração determinística baseada na posição
-            val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 7
-            if (decorSeed != 0) continue
-
-            val variant = (tx + ty) % 4
-            val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
-            val sx = screenPos.x + cameraX
-            val sy = screenPos.y + cameraY
-
-            val decorKey = "biome_${gameState.currentBiome.name}_decor_$variant"
-            val decorBitmap = spriteCache.getOrCreate(decorKey) {
-                tileRenderer.createTileBitmap(
-                    when (variant) {
-                        0 -> TileType.DECORATIVE_0
-                        1 -> TileType.DECORATIVE_1
-                        2 -> TileType.DECORATIVE_2
-                        else -> TileType.DECORATIVE_3
-                    },
-                    tileW.toInt(), tileH.toInt(), palette
-                )
-            }
-            canvas.drawBitmap(decorBitmap, sx, sy, null)
-        }
-
-        // 4. Renderiza monsters
-        for (monster in gameState.monsters) {
-            if (!monster.isActive) continue
-            val screenPos = IsometricProjection.worldToScreen(
-                monster.position.x, monster.position.y, tileW, tileH
-            )
-            val sx = screenPos.x + cameraX
-            val sy = screenPos.y + cameraY
-
-            // Aparência procedural baseada no ID do monster
-            val seed = monster.id.hashCode()
-            val appearance = MonsterAppearance(
-                bodyColor = if (gameState.highContrastMode) Color.rgb(255, 50, 50)
-                            else Color.rgb(
-                                150 + (seed and 0xFF) % 100,
-                                50 + (seed shr 8 and 0xFF) % 80,
-                                50 + (seed shr 16 and 0xFF) % 80
-                            ),
-                eyeColor = if (gameState.highContrastMode) Color.YELLOW
-                           else Color.rgb(255, 200 + (seed and 0x3F), 0),
-                size = 0.7f + ((seed and 0xF) / 15f) * 0.6f,
-                shapeVariant = (seed and 0x3),
-                animVariant = (seed shr 4 and 0x3)
-            )
-            characterRenderer.renderMonster(canvas, sx, sy, appearance, monsterAnimFrame, tileW, tileH)
-        }
-
-        // 5. Renderiza Spike
-        val spikeScreenPos = IsometricProjection.worldToScreen(
-            gameState.spikePosition.x, gameState.spikePosition.y, tileW, tileH
-        )
-        val spikeState = gameState.spikeCompanionState
-        characterRenderer.renderSpike(
-            canvas,
-            spikeScreenPos.x + cameraX,
-            spikeScreenPos.y + cameraY,
-            spikeState,
-            spikeAnimFrame,
-            tileW,
-            tileH
-        )
-
-        // 6. Renderiza Hero
+        // Pré-calcula dados do Hero para renderização
         val heroScreenPos = IsometricProjection.worldToScreen(
             gameState.heroPosition.x, gameState.heroPosition.y, tileW, tileH
         )
@@ -199,16 +122,189 @@ class Renderer(
             gameState.heroIsSlowedDown -> HeroAnimState.SLOWDOWN
             else -> HeroAnimState.WALK
         }
-        characterRenderer.renderHero(
-            canvas,
-            heroScreenPos.x + cameraX,
-            heroScreenPos.y + cameraY,
-            heroDirection,
-            heroAnimState,
-            heroAnimFrame,
-            tileW,
-            tileH
+
+        // Pré-calcula dados do Spike
+        val spikeScreenPos = IsometricProjection.worldToScreen(
+            gameState.spikePosition.x, gameState.spikePosition.y, tileW, tileH
         )
+        val spikeState = gameState.spikeCompanionState
+
+        // Pré-calcula dados dos monsters
+        data class MonsterRenderData(
+            val tx: Int, val ty: Int,
+            val sx: Float, val sy: Float,
+            val appearance: MonsterAppearance
+        )
+        val monstersData = gameState.monsters.filter { it.isActive }.map { monster ->
+            val sp = IsometricProjection.worldToScreen(
+                monster.position.x, monster.position.y, tileW, tileH
+            )
+            val seed = monster.id.hashCode()
+            MonsterRenderData(
+                tx = monster.position.x.toInt(),
+                ty = monster.position.y.toInt(),
+                sx = sp.x + cameraX + tileW / 2f,
+                sy = sp.y + cameraY,
+                appearance = MonsterAppearance(
+                    bodyColor = if (gameState.highContrastMode) Color.rgb(255, 50, 50)
+                                else Color.rgb(
+                                    150 + (seed and 0xFF) % 100,
+                                    50 + (seed shr 8 and 0xFF) % 80,
+                                    50 + (seed shr 16 and 0xFF) % 80
+                                ),
+                    eyeColor = if (gameState.highContrastMode) Color.YELLOW
+                               else Color.rgb(255, 200 + (seed and 0x3F), 0),
+                    size = 0.7f + ((seed and 0xF) / 15f) * 0.6f,
+                    shapeVariant = (seed and 0x3),
+                    animVariant = (seed shr 4 and 0x3)
+                )
+            )
+        }
+
+        // =====================================================================
+        // PIPELINE ISOMÉTRICO UNIFICADO
+        //
+        // Para cada diagonal sum = tx + ty (ordem crescente = frente para trás):
+        //   1. Chão de todos os tiles nessa diagonal
+        //   2. Paredes de todos os tiles nessa diagonal
+        //   3. Decorativos de todos os tiles nessa diagonal
+        //   4. Personagens cujo sum == heroTx+heroTy (entre paredes da mesma linha)
+        //
+        // Isso garante que paredes com ty > heroTy sejam desenhadas DEPOIS do
+        // personagem, cobrindo-o corretamente na perspectiva isométrica.
+        // =====================================================================
+
+        // Agrupa tiles visíveis por diagonal sum
+        val tilesPorDiagonal = mutableMapOf<Int, MutableList<Pair<Int, Int>>>()
+        for ((tx, ty) in visibleTiles) {
+            val sum = tx + ty
+            tilesPorDiagonal.getOrPut(sum) { mutableListOf() }.add(Pair(tx, ty))
+        }
+
+        val heroSum = heroTx + heroTy
+        val spikeSum = spikeTx + spikeTy
+
+        // Conjunto de sums de monsters para renderização intercalada
+        val monsterSumMap = mutableMapOf<Int, MutableList<MonsterRenderData>>()
+        for (m in monstersData) {
+            val s = m.tx + m.ty
+            monsterSumMap.getOrPut(s) { mutableListOf() }.add(m)
+        }
+
+        val minSum = tilesPorDiagonal.keys.minOrNull() ?: 0
+        val maxSum = tilesPorDiagonal.keys.maxOrNull() ?: 0
+
+        for (sum in minSum..maxSum) {
+            val tilesNaLinha = tilesPorDiagonal[sum] ?: emptyList()
+
+            // --- Passo 1: Chão de todos os tiles nessa diagonal ---
+            for ((tx, ty) in tilesNaLinha) {
+                val tileIndex = ty * mazeData.width + tx
+                if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
+                if (mazeData.tiles[tileIndex] == 1) continue
+
+                val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
+                val sx = screenPos.x + cameraX
+                val sy = screenPos.y + cameraY
+
+                if (tx == entradaTx && ty == entradaTy) {
+                    val entradaBitmap = spriteCache.getOrCreate("entrada") {
+                        tileRenderer.createTileBitmap(TileType.ENTRADA, tileW.toInt(), tileH.toInt(), palette)
+                    }
+                    canvas.drawBitmap(entradaBitmap, sx, sy, null)
+                } else {
+                    tileRenderer.renderFloorTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
+                }
+            }
+
+            // --- Passo 2: Decorativos nessa diagonal ---
+            for ((tx, ty) in tilesNaLinha) {
+                val tileIndex = ty * mazeData.width + tx
+                if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
+                if (mazeData.tiles[tileIndex] != 0) continue
+                if ((tx == entradaTx && ty == entradaTy) || (tx == saidaTx && ty == saidaTy)) continue
+                val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 7
+                if (decorSeed != 0) continue
+
+                val temParedeAdjacente = listOf(
+                    Pair(tx - 1, ty), Pair(tx + 1, ty),
+                    Pair(tx, ty - 1), Pair(tx, ty + 1)
+                ).any { (nx, ny) ->
+                    val ni = ny * mazeData.width + nx
+                    ni >= 0 && ni < mazeData.tiles.size && mazeData.tiles[ni] == 1
+                }
+                if (temParedeAdjacente) continue
+
+                val variant = (tx + ty) % 4
+                val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
+                val sx = screenPos.x + cameraX
+                val sy = screenPos.y + cameraY
+
+                val decorKey = "biome_${gameState.currentBiome.name}_decor_$variant"
+                val decorBitmap = spriteCache.getOrCreate(decorKey) {
+                    tileRenderer.createTileBitmap(
+                        when (variant) {
+                            0 -> TileType.DECORATIVE_0
+                            1 -> TileType.DECORATIVE_1
+                            2 -> TileType.DECORATIVE_2
+                            else -> TileType.DECORATIVE_3
+                        },
+                        tileW.toInt(), tileH.toInt(), palette,
+                        biome = gameState.currentBiome
+                    )
+                }
+                canvas.drawBitmap(decorBitmap, sx, sy, null)
+            }
+
+            // --- Passo 3: Personagens nessa diagonal (antes das paredes da mesma linha) ---
+            // O Y passado é o topo do tile (sy). O personagem deve ter seus pés
+            // no centro vertical do tile (sy + tileH/2), então o centro do sprite
+            // fica em sy + tileH/2 - alturaSprite/2. Para o Hero (s=tileW/48),
+            // a altura total é ~36s ≈ 36*(tileW/48) = 0.75*tileW = 1.5*tileH.
+            // Queremos que os pés (cy + 24s) fiquem em sy + tileH/2:
+            //   cy = sy + tileH/2 - 24s = sy + tileH/2 - 24*(tileW/48) = sy + tileH/2 - tileW/2
+            // Como tileH = tileW/2: cy = sy + tileH/2 - tileH = sy - tileH/2
+            val charOffsetY = -tileH * 0.5f
+
+            // Monsters
+            monsterSumMap[sum]?.forEach { m ->
+                characterRenderer.renderMonster(canvas, m.sx, m.sy + charOffsetY, m.appearance, monsterAnimFrame, tileW, tileH)
+            }
+            // Spike
+            if (sum == spikeSum) {
+                characterRenderer.renderSpike(
+                    canvas,
+                    spikeScreenPos.x + cameraX + tileW / 2f,
+                    spikeScreenPos.y + cameraY + charOffsetY,
+                    spikeState, spikeAnimFrame, tileW, tileH
+                )
+            }
+            // Hero
+            if (sum == heroSum) {
+                characterRenderer.renderHero(
+                    canvas,
+                    heroScreenPos.x + cameraX + tileW / 2f,
+                    heroScreenPos.y + cameraY + charOffsetY,
+                    heroDirection, heroAnimState, heroAnimFrame, tileW, tileH
+                )
+            }
+            // --- Passo 4: Paredes nessa diagonal (por cima dos personagens da mesma linha) ---
+            for ((tx, ty) in tilesNaLinha) {
+                val tileIndex = ty * mazeData.width + tx
+                if (tileIndex < 0 || tileIndex >= mazeData.tiles.size) continue
+                if (mazeData.tiles[tileIndex] != 1) continue
+
+                val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
+                val sx = screenPos.x + cameraX
+                val sy = screenPos.y + cameraY
+
+                val wallOffsetY = sy - tileH * 1.4f
+                tileRenderer.renderWallTile(canvas, sx, wallOffsetY, tileW, tileH, palette, tx, ty)
+            }
+        }
+
+        // Placa de saída animada (sempre por cima de tudo)
+        renderizarPlacaSaida(canvas, mazeData, saidaTx, saidaTy, tileW, tileH)
 
         // 7. Renderiza partículas
         particleSystem.render(canvas)
@@ -252,7 +348,7 @@ class Renderer(
                 val ty = sum - tx
                 if (ty < minY || ty > maxY) continue
                 result.add(Pair(tx, ty))
-                if (result.size >= 200) return result  // culling: máximo 200 tiles
+                if (result.size >= 400) return result  // culling: máximo 400 tiles
             }
         }
 
@@ -261,14 +357,16 @@ class Renderer(
 
     /**
      * Atualiza a posição da câmera para seguir o Hero.
-     * Centraliza o Hero na tela.
+     * Centraliza o Hero levemente abaixo do centro da tela para mostrar
+     * mais do labirinto à frente (direção de exploração).
      *
      * @param heroScreenX posição X do Hero na tela (antes do offset de câmera)
      * @param heroScreenY posição Y do Hero na tela (antes do offset de câmera)
      */
     fun updateCamera(heroScreenX: Float, heroScreenY: Float) {
         cameraX = screenWidth / 2f - heroScreenX
-        cameraY = screenHeight / 2f - heroScreenY
+        // Offset vertical: hero fica 35% do topo — mostra mais labirinto à frente
+        cameraY = screenHeight * 0.45f - heroScreenY
     }
 
     /**
@@ -306,6 +404,173 @@ class Renderer(
     fun release() {
         spriteCache.clear()
         particleSystem.clear()
+        lightingSystem.release()
+    }
+
+    // -------------------------------------------------------------------------
+    // Placa de saída animada
+    // -------------------------------------------------------------------------
+
+    /**
+     * Renderiza uma placa pixel art animada flutuando acima do tile de saída.
+     * A placa tem um poste, uma tabuleta de madeira com texto "SAÍDA" e uma seta
+     * apontando para o corredor de saída. A placa sobe e desce suavemente (bob).
+     *
+     * Requisito: imersão — substituição do losango dourado por sinalização diegética.
+     */
+    private fun renderizarPlacaSaida(
+        canvas: Canvas,
+        maze: MazeData,
+        saidaTx: Int,
+        saidaTy: Int,
+        tileW: Float,
+        tileH: Float
+    ) {
+        val screenPos = IsometricProjection.worldToScreen(saidaTx, saidaTy, tileW, tileH)
+        val cx = screenPos.x + cameraX + tileW / 2f
+        val baseSy = screenPos.y + cameraY + tileH / 2f
+
+        // Animação de bob: sobe e desce suavemente
+        val pulsacao = sin(frameTotal * 0.08f).toFloat()
+        val bobY = pulsacao * tileH * 0.3f
+
+        // Posição vertical da base da placa (1.5 tileH acima do centro do tile)
+        val placaBaseY = baseSy - tileH * 1.5f + bobY
+
+        // Dimensões da placa (em pixels, relativas ao tileW)
+        val placaLargura = tileW * 0.9f
+        val placaAltura = tileH * 0.7f
+        val alturaPosto = tileH * 0.8f
+
+        // --- Poste ---
+        placaPaint.style = Paint.Style.FILL
+        placaPaint.color = Color.rgb(80, 50, 20)  // marrom escuro
+        val postoLeft = cx - tileW * 0.04f
+        val postoRight = cx + tileW * 0.04f
+        canvas.drawRect(postoLeft, placaBaseY, postoRight, placaBaseY + alturaPosto, placaPaint)
+
+        // --- Tabuleta de madeira (fundo) ---
+        val placaLeft = cx - placaLargura / 2f
+        val placaTop = placaBaseY - placaAltura
+        val placaRight = cx + placaLargura / 2f
+        val placaBottom = placaBaseY
+
+        // Sombra/borda escura
+        placaPaint.color = Color.rgb(50, 30, 10)
+        canvas.drawRect(placaLeft - 2f, placaTop - 2f, placaRight + 2f, placaBottom + 2f, placaPaint)
+
+        // Madeira
+        placaPaint.color = Color.rgb(160, 110, 50)
+        canvas.drawRect(placaLeft, placaTop, placaRight, placaBottom, placaPaint)
+
+        // Detalhe de madeira (veio horizontal)
+        placaPaint.color = Color.rgb(140, 95, 40)
+        val veioY = placaTop + placaAltura * 0.45f
+        canvas.drawRect(placaLeft + 2f, veioY, placaRight - 2f, veioY + 2f, placaPaint)
+
+        // --- Texto "SAÍDA" ---
+        placaPaint.style = Paint.Style.FILL
+        placaPaint.color = Color.WHITE
+        placaPaint.textSize = (tileH * 0.28f).coerceAtLeast(8f)
+        placaPaint.textAlign = Paint.Align.CENTER
+        val textoY = placaTop + placaAltura * 0.42f
+        canvas.drawText("SAÍDA", cx, textoY, placaPaint)
+        placaPaint.textAlign = Paint.Align.LEFT  // reset
+
+        // --- Seta apontando para o corredor de saída ---
+        val (setaDx, setaDy) = detectarDirecaoSaida(maze, saidaTx, saidaTy)
+        desenharSetaIsometrica(canvas, cx, placaTop + placaAltura * 0.78f, setaDx, setaDy, tileW, tileH, placaAltura)
+    }
+
+    /**
+     * Detecta qual vizinho ortogonal do tile de saída é chão livre e está
+     * mais próximo da borda do mapa — esse é o corredor de saída.
+     * Retorna (dx, dy) onde dx/dy ∈ {-1, 0, 1}.
+     */
+    private fun detectarDirecaoSaida(maze: MazeData, saidaTx: Int, saidaTy: Int): Pair<Int, Int> {
+        val vizinhos = listOf(
+            Pair(1, 0), Pair(-1, 0), Pair(0, 1), Pair(0, -1)
+        )
+
+        var melhorDir = Pair(1, 0)
+        var menorDistBorda = Int.MAX_VALUE
+
+        for ((dx, dy) in vizinhos) {
+            val nx = saidaTx + dx
+            val ny = saidaTy + dy
+            if (nx < 0 || ny < 0 || nx >= maze.width || ny >= maze.height) continue
+            val idx = ny * maze.width + nx
+            if (maze.tiles[idx] != 0) continue  // só chão livre
+
+            // Distância até a borda mais próxima do mapa
+            val distBorda = minOf(nx, ny, maze.width - 1 - nx, maze.height - 1 - ny)
+            if (distBorda < menorDistBorda) {
+                menorDistBorda = distBorda
+                melhorDir = Pair(dx, dy)
+            }
+        }
+
+        return melhorDir
+    }
+
+    /**
+     * Desenha uma seta triangular na placa apontando na direção isométrica correta.
+     * No espaço isométrico:
+     *   dx=1, dy=0  → direita-baixo na tela
+     *   dx=-1, dy=0 → esquerda-cima
+     *   dx=0, dy=1  → direita-cima (sul no grid = baixo-direita isométrico)
+     *   dx=0, dy=-1 → esquerda-baixo
+     */
+    private fun desenharSetaIsometrica(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        dx: Int,
+        dy: Int,
+        tileW: Float,
+        tileH: Float,
+        placaAltura: Float
+    ) {
+        val tamanho = placaAltura * 0.28f
+
+        // Converte direção do grid para vetor de tela isométrico (normalizado)
+        // Isométrico: screenX = (worldX - worldY) * tileW/2, screenY = (worldX + worldY) * tileH/2
+        val telaX = (dx - dy).toFloat()
+        val telaY = (dx + dy).toFloat() * 0.5f
+        val comprimento = kotlin.math.sqrt(telaX * telaX + telaY * telaY).coerceAtLeast(0.01f)
+        val normX = telaX / comprimento
+        val normY = telaY / comprimento
+
+        // Perpendicular à direção da seta
+        val perpX = -normY
+        val perpY = normX
+
+        // Triângulo: ponta na frente, base atrás
+        val path = Path()
+        path.moveTo(cx + normX * tamanho, cy + normY * tamanho)           // ponta
+        path.lineTo(cx - normX * tamanho + perpX * tamanho * 0.6f,
+                    cy - normY * tamanho + perpY * tamanho * 0.6f)         // base esquerda
+        path.lineTo(cx - normX * tamanho - perpX * tamanho * 0.6f,
+                    cy - normY * tamanho - perpY * tamanho * 0.6f)         // base direita
+        path.close()
+
+        // Borda escura
+        placaPaint.style = Paint.Style.FILL
+        placaPaint.color = Color.rgb(80, 60, 0)
+        canvas.drawPath(path, placaPaint)
+
+        // Seta amarela/dourada
+        val pathInner = Path()
+        val s = 0.75f
+        pathInner.moveTo(cx + normX * tamanho * s, cy + normY * tamanho * s)
+        pathInner.lineTo(cx - normX * tamanho * s + perpX * tamanho * 0.45f,
+                         cy - normY * tamanho * s + perpY * tamanho * 0.45f)
+        pathInner.lineTo(cx - normX * tamanho * s - perpX * tamanho * 0.45f,
+                         cy - normY * tamanho * s - perpY * tamanho * 0.45f)
+        pathInner.close()
+
+        placaPaint.color = Color.rgb(255, 210, 50)
+        canvas.drawPath(pathInner, placaPaint)
     }
 
     // -------------------------------------------------------------------------

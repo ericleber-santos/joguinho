@@ -53,88 +53,116 @@ class HudRenderer {
     }
 
     /**
-     * HUD compacto para smartphones.
-     * Score no topo-esquerda, slowdown no topo-direita, combo no centro-topo.
+     * HUD compacto para smartphones — barra discreta na parte inferior.
+     * Score à esquerda, combo no centro, andar/mapa à direita.
+     * Slowdown aparece como texto pequeno acima da barra quando ativo.
      */
     fun renderCompact(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
+        val barH = 36f
         val padding = 8f
-        val barH = 32f
+        val barY = h - barH - padding
 
-        // Fundo semi-transparente no topo
-        bgPaint.color = Color.argb(140, 0, 0, 0)
-        canvas.drawRect(0f, 0f, w.toFloat(), barH + padding * 2, bgPaint)
+        // Fundo semi-transparente na parte inferior
+        bgPaint.color = Color.argb(160, 0, 0, 0)
+        canvas.drawRect(0f, barY - padding, w.toFloat(), h.toFloat(), bgPaint)
 
-        // Score
-        renderScore(canvas, gameState.accumulatedScore, padding, padding + 20f)
+        val baselineY = barY + barH * 0.72f
 
-        // Combo streak
+        // Score — esquerda
+        textPaint.textSize = 18f
+        textPaint.color = Color.rgb(220, 220, 200)
+        textPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding * 2, baselineY, textPaint)
+
+        // Combo — centro (só se ativo)
         if (gameState.comboStreak > 0) {
-            renderComboStreak(canvas, gameState.comboStreak, w / 2f, padding + 20f)
+            val comboColor = when {
+                gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
+                gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
+                else -> Color.rgb(255, 220, 80)
+            }
+            textPaint.textSize = 18f
+            textPaint.color = comboColor
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
         }
 
-        // Slowdown indicator
+        // Andar e mapa — direita
+        textPaint.textSize = 16f
+        textPaint.color = Color.rgb(180, 180, 160)
+        textPaint.textAlign = Paint.Align.RIGHT
+        canvas.drawText("A${gameState.floorNumber}  M${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
+
+        // Slowdown — texto pequeno acima da barra, centralizado
         if (gameState.heroIsSlowedDown) {
-            renderSlowdownIndicator(
-                canvas,
-                gameState.heroSlowdownRemainingMs,
-                w - 120f,
-                padding,
-                compact = true
-            )
+            val seg = gameState.heroSlowdownRemainingMs / 1000f
+            textPaint.textSize = 15f
+            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 0.5f, textPaint)
         }
 
-        // Aviso de temperatura
-        if (gameState.isThermalThrottling) {
-            renderTemperatureWarning(canvas, w - 40f, barH + padding * 2 + 8f)
-        }
+        textPaint.textAlign = Paint.Align.LEFT
+
+        // Banner de andar/mapa (texto pequeno no canto superior direito)
+        renderBannerMapaAtual(canvas, gameState, w, h)
+
+        // Mini-HUD permanente no canto superior esquerdo
+        renderInfoMapaEsquerda(canvas, gameState)
     }
 
     /**
-     * HUD expandido para tablets.
-     * Mais espaço para informações adicionais.
+     * HUD expandido para tablets — mesma estrutura, tamanhos maiores.
      */
     fun renderExpanded(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
-        val padding = 12f
-        val barH = 48f
+        val barH = 32f
+        val padding = 8f
+        val barY = h - barH - padding
 
-        // Fundo semi-transparente no topo
-        bgPaint.color = Color.argb(140, 0, 0, 0)
-        canvas.drawRect(0f, 0f, w.toFloat(), barH + padding * 2, bgPaint)
+        bgPaint.color = Color.argb(160, 0, 0, 0)
+        canvas.drawRect(0f, barY - padding, w.toFloat(), h.toFloat(), bgPaint)
 
-        // Score (maior)
-        textPaint.textSize = 22f
-        renderScore(canvas, gameState.accumulatedScore, padding, padding + 28f)
+        val baselineY = barY + barH * 0.72f
 
-        // Combo streak (centro)
+        textPaint.textSize = 16f
+        textPaint.color = Color.rgb(220, 220, 200)
+        textPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding * 2, baselineY, textPaint)
+
         if (gameState.comboStreak > 0) {
-            renderComboStreak(canvas, gameState.comboStreak, w / 2f, padding + 28f)
+            val comboColor = when {
+                gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
+                gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
+                else -> Color.rgb(255, 220, 80)
+            }
+            textPaint.textSize = 16f
+            textPaint.color = comboColor
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
         }
 
-        // Slowdown indicator (direita)
-        if (gameState.heroIsSlowedDown) {
-            renderSlowdownIndicator(
-                canvas,
-                gameState.heroSlowdownRemainingMs,
-                w - 180f,
-                padding,
-                compact = false
-            )
-        }
-
-        // Aviso de temperatura
-        if (gameState.isThermalThrottling) {
-            renderTemperatureWarning(canvas, w - 60f, barH + padding * 2 + 12f)
-        }
-
-        // Andar atual
         textPaint.textSize = 14f
-        textPaint.color = Color.rgb(200, 200, 200)
-        canvas.drawText("Andar ${gameState.floorNumber}", padding, barH + padding * 2 + 20f, textPaint)
-        textPaint.color = Color.WHITE
+        textPaint.color = Color.rgb(180, 180, 160)
+        textPaint.textAlign = Paint.Align.RIGHT
+        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
+
+        if (gameState.heroIsSlowedDown) {
+            val seg = gameState.heroSlowdownRemainingMs / 1000f
+            textPaint.textSize = 13f
+            textPaint.color = Color.argb(220, 120, 120, 255)
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 0.5f, textPaint)
+        }
+
+        textPaint.textAlign = Paint.Align.LEFT
+        renderBannerMapaAtual(canvas, gameState, w, h)
+
+        // Mini-HUD permanente no canto superior esquerdo
+        renderInfoMapaEsquerda(canvas, gameState)
     }
 
     /**
-     * Barra de contagem regressiva do Slowdown com segundos restantes.
+     * Mini-HUD no canto superior esquerdo com segundos restantes.
      * @param remainingMs milissegundos restantes do Slowdown
      * @param x posição X
      * @param y posição Y
@@ -204,6 +232,137 @@ class HudRenderer {
         canvas.drawText(label, x, y, textPaint)
 
         textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
+     * Mini-HUD no canto superior esquerdo com informações permanentes do mapa atual.
+     * Exibe: andar, mapa, bioma e timer do floor.
+     * Fundo semi-transparente arredondado, texto monoespaçado pequeno.
+     */
+    fun renderInfoMapaEsquerda(canvas: Canvas, gameState: GameState) {
+        val margem = 10f
+        val padH = 14f
+        val padV = 10f
+        val espacoLinha = 30f
+        val tamanhoTexto = 22f
+
+        val andar = gameState.floorNumber
+        val mapa = gameState.mapIndex + 1
+        val nomeBiomaTexto = nomeBioma(gameState.currentBiome)
+        val timerSeg = gameState.floorTimerMs / 1000
+        val timerTexto = "%d:%02d".format(timerSeg / 60, timerSeg % 60)
+
+        val linhas = listOf(
+            "Andar $andar",
+            "Mapa  $mapa/3",
+            nomeBiomaTexto,
+            timerTexto
+        )
+
+        // Mede largura máxima para dimensionar o painel
+        textPaint.textSize = tamanhoTexto
+        val larguraMax = linhas.maxOf { textPaint.measureText(it) }
+        val painelW = larguraMax + padH * 2
+        val painelH = linhas.size * espacoLinha + padV * 2
+
+        // Fundo semi-transparente
+        bgPaint.color = Color.argb(170, 0, 0, 0)
+        canvas.drawRoundRect(
+            android.graphics.RectF(margem, margem, margem + painelW, margem + painelH),
+            8f, 8f, bgPaint
+        )
+
+        // Borda sutil
+        bgPaint.color = Color.argb(90, 255, 255, 255)
+        bgPaint.style = Paint.Style.STROKE
+        bgPaint.strokeWidth = 1f
+        canvas.drawRoundRect(
+            android.graphics.RectF(margem, margem, margem + painelW, margem + painelH),
+            8f, 8f, bgPaint
+        )
+        bgPaint.style = Paint.Style.FILL
+
+        // Textos
+        textPaint.textSize = tamanhoTexto
+        textPaint.textAlign = Paint.Align.LEFT
+        val corBioma = com.ericleber.joguinho.biome.BIOME_PALETTES[gameState.currentBiome]?.accentColor
+            ?: 0xFFFFCC00.toInt()
+
+        val cores = listOf(
+            Color.rgb(230, 230, 210),   // andar — branco suave
+            Color.rgb(190, 190, 170),   // mapa — cinza
+            Color.argb(255, Color.red(corBioma), Color.green(corBioma), Color.blue(corBioma)), // bioma — cor do acento
+            Color.rgb(160, 210, 160)    // timer — verde suave
+        )
+
+        linhas.forEachIndexed { i, linha ->
+            val tx = margem + padH
+            val ty = margem + padV + espacoLinha * (i + 1) - 3f
+            // Sombra
+            textPaint.color = Color.argb(140, 0, 0, 0)
+            canvas.drawText(linha, tx + 1f, ty + 1f, textPaint)
+            // Texto
+            textPaint.color = cores[i]
+            canvas.drawText(linha, tx, ty, textPaint)
+        }
+
+        textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
+     * Texto discreto no canto superior direito exibido ao entrar em novo mapa.
+     * Aparece por ~2s com fade-in e fade-out. Sem painel, sem fundo — só texto com sombra.
+     */
+    fun renderBannerMapaAtual(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
+        val tempoMs = gameState.floorTimerMs
+        if (tempoMs > 2000L) return
+
+        val progresso = tempoMs / 2000f
+        val alpha = when {
+            progresso < 0.12f -> (progresso / 0.12f * 255).toInt()
+            progresso > 0.75f -> ((1f - (progresso - 0.75f) / 0.25f) * 255).toInt()
+            else -> 255
+        }.coerceIn(0, 255)
+
+        if (alpha <= 0) return
+
+        val nomeBioma = nomeBioma(gameState.currentBiome)
+        val andar = gameState.floorNumber
+        val mapa = gameState.mapIndex + 1
+        val corBioma = com.ericleber.joguinho.biome.BIOME_PALETTES[gameState.currentBiome]?.accentColor
+            ?: 0xFFFFCC00.toInt()
+
+        val margem = 12f
+        val tx = w - margem
+
+        // Linha 1: "A12 · M2/3" — pequena, cinza
+        textPaint.textSize = 11f
+        textPaint.textAlign = Paint.Align.RIGHT
+        textPaint.color = Color.argb((alpha * 0.6f).toInt(), 200, 200, 180)
+        canvas.drawText("A$andar · M$mapa/3", tx + 1f, 21f, textPaint)
+        textPaint.color = Color.argb(alpha, 200, 200, 180)
+        canvas.drawText("A$andar · M$mapa/3", tx, 20f, textPaint)
+
+        // Linha 2: nome do bioma — cor do acento
+        textPaint.textSize = 13f
+        textPaint.color = Color.argb((alpha * 0.5f).toInt(), 0, 0, 0)
+        canvas.drawText(nomeBioma, tx + 1f, 37f, textPaint)
+        textPaint.color = Color.argb(alpha, Color.red(corBioma), Color.green(corBioma), Color.blue(corBioma))
+        canvas.drawText(nomeBioma, tx, 36f, textPaint)
+
+        textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
+     * Retorna o nome legível do bioma em português.
+     */
+    private fun nomeBioma(biome: com.ericleber.joguinho.biome.Biome): String = when (biome) {
+        com.ericleber.joguinho.biome.Biome.MINA_ABANDONADA      -> "Mina Abandonada"
+        com.ericleber.joguinho.biome.Biome.RIACHOS_SUBTERRANEOS -> "Riachos Subterrâneos"
+        com.ericleber.joguinho.biome.Biome.PLANTACOES_ABRIGOS   -> "Plantações e Abrigos"
+        com.ericleber.joguinho.biome.Biome.CONSTRUCOES_ROCHOSAS -> "Construções Rochosas"
+        com.ericleber.joguinho.biome.Biome.POMARES_ABERTURAS    -> "Pomares e Aberturas"
+        com.ericleber.joguinho.biome.Biome.ERA_DINOSSAUROS      -> "Era dos Dinossauros"
     }
 
     /**

@@ -319,11 +319,18 @@ class GameLogic(private val gameState: GameState) {
 
     /**
      * Verifica se o Hero chegou ao tile de saída do labirinto.
-     * Emite evento, incrementa ComboStreak se Map foi limpo, e notifica o callback.
+     * Usa raio de 1 tile para facilitar a detecção — o Hero não precisa
+     * estar exatamente no centro do tile de saída.
      */
     private fun verificarHeroNoExit(maze: MazeData) {
-        val heroIndex = gameState.heroPosition.y * maze.width + gameState.heroPosition.x
-        if (heroIndex != maze.exitIndex) return
+        val heroX = gameState.heroPosition.x
+        val heroY = gameState.heroPosition.y
+        val exitX = maze.exitIndex % maze.width
+        val exitY = maze.exitIndex / maze.width
+
+        // Raio de 1 tile: qualquer tile adjacente ao Exit conta como chegada
+        val distancia = Math.abs(heroX - exitX) + Math.abs(heroY - exitY)
+        if (distancia > 1) return
 
         // Incrementa ComboStreak se completou sem Slowdown (Requisito 5.7)
         if (gameState.currentMapClean) {
@@ -334,20 +341,20 @@ class GameLogic(private val gameState: GameState) {
         gameState.emitEvent(GameEvent.MapCompleted)
         gameState.emitEvent(GameEvent.HeroReachedExit)
 
-        // Verifica se é o último Map do Floor (mapIndex 0-based, considera 3 Maps por Floor)
+        // Verifica se é o último Map do Floor (3 Maps por Floor)
         val totalMapsNoFloor = 3
         if (gameState.mapIndex >= totalMapsNoFloor - 1) {
-            // Completou o Floor
+            // Completou o Floor — vai para ScoreActivity
             gameState.completarAndar(gameState.floorTimerMs)
             gameState.emitEvent(GameEvent.FloorCompleted)
+            gameState.phase = GamePhase.SCORE_SCREEN  // sinaliza ao ViewModel
             onMapCompleted?.invoke()
             onHeroReachedExit?.invoke()
         } else {
             // Avança para o próximo Map do mesmo Floor
             gameState.mapIndex++
             gameState.currentMapClean = true
-            onMapCompleted?.invoke() // salva estado
-            // Regenera o mapa — sinaliza ao ViewModel via evento
+            onMapCompleted?.invoke()
             onHeroReachedExit?.invoke()
         }
     }

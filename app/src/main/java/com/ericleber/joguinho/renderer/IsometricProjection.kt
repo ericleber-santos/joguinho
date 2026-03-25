@@ -57,12 +57,17 @@ object IsometricProjection {
 
     /**
      * Calcula a largura do tile escalada pela densidade da tela.
+     *
+     * Fator 1.0f (sem multiplicador extra) para que o tile base em dp
+     * corresponda diretamente a pixels — evita tiles gigantes em telas
+     * de alta densidade (ex: ASUS X00TDB density=2.0 → 32dp = 64px, não 128px).
+     *
      * @param baseTileSize tamanho base do tile em dp (ex: 32)
      * @param density densidade da tela (DisplayMetrics.density)
      * @return largura do tile em pixels
      */
     fun getTileWidth(baseTileSize: Int, density: Float): Float {
-        return baseTileSize * density * 2f  // largura isométrica = 2x o tamanho base
+        return baseTileSize * density  // 1:1 dp→px, sem multiplicador extra
     }
 
     /**

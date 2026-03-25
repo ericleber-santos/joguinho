@@ -57,15 +57,24 @@ class FloatingJoystick {
     // ID do ponteiro de toque associado a este joystick
     private var pointerId: Int = -1
 
-    // Paints para renderização
+    // Paints para renderização — estética cave: anel translúcido âmbar/branco
     private val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(80, 255, 255, 255)
+        color = Color.argb(70, 220, 180, 100)   // anel externo: âmbar translúcido (tocha)
         style = Paint.Style.STROKE
         strokeWidth = 3f
     }
-    private val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(120, 255, 255, 255)
+    private val outerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(25, 200, 160, 80)    // preenchimento muito sutil
         style = Paint.Style.FILL
+    }
+    private val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(160, 240, 200, 120)  // knob: âmbar mais opaco
+        style = Paint.Style.FILL
+    }
+    private val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(100, 255, 230, 150)
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
     }
 
     // -------------------------------------------------------------------------
@@ -179,10 +188,13 @@ class FloatingJoystick {
     fun draw(canvas: Canvas) {
         if (!isActive) return
 
-        // Anel externo
+        // Preenchimento sutil do anel externo
+        canvas.drawCircle(centerX, centerY, radiusPx, outerFillPaint)
+        // Borda do anel externo (âmbar translúcido — estética tocha)
         canvas.drawCircle(centerX, centerY, radiusPx, outerPaint)
 
-        // Knob interno
+        // Knob: preenchimento âmbar + borda
         canvas.drawCircle(knobX, knobY, radiusPx * KNOB_RATIO, innerPaint)
+        canvas.drawCircle(knobX, knobY, radiusPx * KNOB_RATIO, innerBorderPaint)
     }
 }

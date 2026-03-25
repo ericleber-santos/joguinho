@@ -18,8 +18,9 @@ class BSPMazeGenerator(private val random: Random) {
         const val TILE_FLOOR = 0
         const val TILE_WALL = 1
 
-        // Tamanho mínimo de uma folha BSP (sala + margem)
-        private const val MIN_LEAF_SIZE = 7
+        // Tamanho mínimo de uma folha BSP — menor = mais salas geradas
+        // Com mapa 40x30 e MIN_LEAF_SIZE=8, o BSP gera 4-6 salas por Map
+        private const val MIN_LEAF_SIZE = 8
     }
 
     /**
@@ -75,13 +76,13 @@ class BSPMazeGenerator(private val random: Random) {
         val leaves = mutableListOf<BSPNode>()
         collectLeaves(root, leaves)
 
-        // Entrada no canto superior-esquerdo da primeira sala,
-        // saída no canto inferior-direito da última sala
+        // Entrada no centro da primeira sala, saída no centro da última sala
+        // Centro garante acesso independente de como o corredor conecta
         val startLeaf = leaves.first()
         val exitLeaf = leaves.last()
 
-        val startIndex = (startLeaf.roomY + 1) * width + (startLeaf.roomX + 1)
-        val exitIndex = (exitLeaf.roomY + exitLeaf.roomH - 2) * width + (exitLeaf.roomX + exitLeaf.roomW - 2)
+        val startIndex = startLeaf.roomCenterY * width + startLeaf.roomCenterX
+        val exitIndex = exitLeaf.roomCenterY * width + exitLeaf.roomCenterX
 
         // Garante que entrada e saída são tiles de chão
         tiles[startIndex] = TILE_FLOOR
@@ -222,16 +223,28 @@ class BSPMazeGenerator(private val random: Random) {
     private fun carveHorizontalCorridor(tiles: IntArray, mapWidth: Int, x1: Int, x2: Int, y: Int) {
         val from = minOf(x1, x2)
         val to = maxOf(x1, x2)
+        // Corredor com 3 tiles de largura para garantir passagem confortável
         for (x in from..to) {
-            tiles[y * mapWidth + x] = TILE_FLOOR
+            for (dy in -1..1) {
+                val ty = y + dy
+                if (ty >= 0 && ty < tiles.size / mapWidth) {
+                    tiles[ty * mapWidth + x] = TILE_FLOOR
+                }
+            }
         }
     }
 
     private fun carveVerticalCorridor(tiles: IntArray, mapWidth: Int, y1: Int, y2: Int, x: Int) {
         val from = minOf(y1, y2)
         val to = maxOf(y1, y2)
+        // Corredor com 3 tiles de largura para garantir passagem confortável
         for (y in from..to) {
-            tiles[y * mapWidth + x] = TILE_FLOOR
+            for (dx in -1..1) {
+                val tx = x + dx
+                if (tx >= 0 && tx < mapWidth) {
+                    tiles[y * mapWidth + tx] = TILE_FLOOR
+                }
+            }
         }
     }
 
