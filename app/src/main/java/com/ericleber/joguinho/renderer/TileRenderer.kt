@@ -166,13 +166,20 @@ class TileRenderer {
         renderFloorTile(canvas, x, y, tileW, tileH, palette, tileX, tileY)
         val cx = x + tileW / 2f
         val cy = y + tileH / 2f
-        when (biome) {
-            Biome.MINA_ABANDONADA      -> decorativoMina(canvas, cx, cy, tileW, tileH, palette, variant)
-            Biome.RIACHOS_SUBTERRANEOS -> decorativoRiacho(canvas, cx, cy, tileW, tileH, palette, variant)
-            Biome.PLANTACOES_ABRIGOS   -> decorativoPlantacao(canvas, cx, cy, tileW, tileH, palette, variant)
-            Biome.CONSTRUCOES_ROCHOSAS -> decorativoRocha(canvas, cx, cy, tileW, tileH, palette, variant)
-            Biome.POMARES_ABERTURAS    -> decorativoPomar(canvas, cx, cy, tileW, tileH, palette, variant)
-            Biome.ERA_DINOSSAUROS      -> decorativoDinossauro(canvas, cx, cy, tileW, tileH, palette, variant)
+        // Seleciona o estilo decorativo baseado no nome ou categoria do bioma
+        val nome = biome.name
+        when {
+            nome.contains("MINA") || nome.contains("CAVERNA") || nome.contains("TUNEIS") -> 
+                decorativoMina(canvas, cx, cy, tileW, tileH, palette, variant)
+            nome.contains("RIACHO") || nome.contains("LAGO") || nome.contains("AQUATICO") || nome.contains("ABISMO") -> 
+                decorativoRiacho(canvas, cx, cy, tileW, tileH, palette, variant)
+            nome.contains("JARDIM") || nome.contains("FLORESTA") || nome.contains("PLANTACAO") || nome.contains("RAIZES") || nome.contains("POMAR") -> 
+                decorativoPlantacao(canvas, cx, cy, tileW, tileH, palette, variant)
+            nome.contains("CONSTRUCAO") || nome.contains("RUINA") || nome.contains("TEMPLO") || nome.contains("SALOES") || nome.contains("TUMULO") -> 
+                decorativoRocha(canvas, cx, cy, tileW, tileH, palette, variant)
+            nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") -> 
+                decorativoDinossauro(canvas, cx, cy, tileW, tileH, palette, variant)
+            else -> decorativoMina(canvas, cx, cy, tileW, tileH, palette, variant)
         }
     }
 

@@ -1,227 +1,164 @@
 package com.ericleber.joguinho.biome
 
+import android.graphics.Color
+
 /**
  * Paleta visual completa por bioma — estilo Stardew Valley cave.
- *
- * Princípios:
- * - Tons terrosos quentes para chão/paredes (marrons profundos)
- * - Pedras com cinza-azulado para variação
- * - Iluminação âmbar/dourada para tochas e cristais
- * - Sombras em roxo-escuro ou marrom-escuro (nunca preto puro)
- * - Flora subterrânea: azuis, roxos, cianos vibrantes
  */
 data class BiomePalette(
-    // --- Parede ---
-    val wallColor: Int,         // face frontal (cor base da pedra)
-    val wallTopColor: Int,      // topo (mais claro — luz de cima)
-    val wallShadowColor: Int,   // face lateral direita (sombra profunda)
-    val wallDetailColor: Int,   // veios/cristais embutidos na parede
-
-    // --- Chão ---
-    val floorColor: Int,        // tile base
-    val floorVariant1: Int,     // variante com rachadura
-    val floorVariant2: Int,     // variante com musgo/umidade
-    val floorVariant3: Int,     // variante mais escura (depressão)
-    val floorEdgeColor: Int,    // borda sutil entre tiles
-
-    // --- Acento e luz ---
-    val accentColor: Int,       // cristal/tocha/mineral brilhante
-    val ambientLight: Int,      // cor da luz ambiente do bioma
-    val glowColor: Int,         // halo de luz (cogumelos, cristais)
-    val particleColor: Int,     // partículas (poeira, faíscas)
-
-    // --- Flora ---
-    val mushroomColor: Int,     // cogumelos do bioma
-    val mushroomCapColor: Int,  // chapéu do cogumelo
-    val crystalColor: Int,      // cristais decorativos
-    val mossColor: Int,         // musgo/líquen nas paredes
-
-    // --- Fundo ---
-    val backgroundColor: Int    // fundo — roxo-escuro ou marrom-escuro (nunca preto puro)
+    val wallColor: Int,
+    val wallTopColor: Int,
+    val wallShadowColor: Int,
+    val wallDetailColor: Int,
+    val floorColor: Int,
+    val floorVariant1: Int,
+    val floorVariant2: Int,
+    val floorVariant3: Int,
+    val floorEdgeColor: Int,
+    val accentColor: Int,
+    val ambientLight: Int,
+    val glowColor: Int,
+    val particleColor: Int,
+    val mushroomColor: Int,
+    val mushroomCapColor: Int,
+    val crystalColor: Int,
+    val mossColor: Int,
+    val backgroundColor: Int
 )
 
 /**
- * Paletas por bioma — estética "caverna encantada com segredos a descobrir".
- * Referência: ConcernedApe (Stardew Valley) adaptado para roguelike dark/fantasia.
+ * Função utilitária para gerar paletas dinamicamente baseadas em cores base.
  */
-val BIOME_PALETTES: Map<Biome, BiomePalette> = mapOf(
-
-    // -------------------------------------------------------------------------
-    // Andares 1–20: Mina Abandonada
-    // Chão: areia/bege claro — MAIS CLARO que a parede
-    // Parede: pedra escura irregular estilo Spelunky
-    // -------------------------------------------------------------------------
-    Biome.MINA_ABANDONADA to BiomePalette(
-        // Parede — pedra ESCURA, irregular, estilo Spelunky
-        wallColor       = 0xFF3A3028.toInt(),  // face frontal: pedra escura marrom-cinza
-        wallTopColor    = 0xFF524438.toInt(),  // topo: ligeiramente mais claro
-        wallShadowColor = 0xFF1E1408.toInt(),  // sombra lateral: quase preta
-        wallDetailColor = 0xFFD97706.toInt(),  // veio de ouro âmbar
-
-        // Chão — areia/bege CLARO, bem mais claro que a parede
-        floorColor      = 0xFFC4A882.toInt(),  // areia clara base
-        floorVariant1   = 0xFFA8845A.toInt(),  // rachadura — tom mais escuro
-        floorVariant2   = 0xFF9A8C6A.toInt(),  // musgo — tom acinzentado
-        floorVariant3   = 0xFFD4B896.toInt(),  // área clara — levemente mais clara
-        floorEdgeColor  = 0xFF8A6A48.toInt(),  // borda sutil
-
-        // Acento e luz — tocha âmbar quente
-        accentColor     = 0xFFF59E0B.toInt(),
-        ambientLight    = 0xFFD97706.toInt(),
-        glowColor       = 0xFFFCD34D.toInt(),
-        particleColor   = 0xFFFBBF24.toInt(),
-
-        // Flora
-        mushroomColor   = 0xFF92400E.toInt(),
-        mushroomCapColor= 0xFFB45309.toInt(),
-        crystalColor    = 0xFFED8936.toInt(),
-        mossColor       = 0xFF2D4A1E.toInt(),  // musgo escuro nas frestas
-
-        backgroundColor = 0xFF0F0806.toInt()   // fundo quase preto
-    ),
-
-    // -------------------------------------------------------------------------
-    // Andares 21–40: Riachos Subterrâneos
-    // Tons: pedra azul-fria, água ciano, cogumelos azuis luminescentes
-    // -------------------------------------------------------------------------
-    Biome.RIACHOS_SUBTERRANEOS to BiomePalette(
-        wallColor       = 0xFF4A4E5A.toInt(),  // pedra cinza-azulada
-        wallTopColor    = 0xFF6B7280.toInt(),  // topo: cinza médio
-        wallShadowColor = 0xFF2D3142.toInt(),  // sombra: azul-escuro
-        wallDetailColor = 0xFF06B6D4.toInt(),  // veio de água ciano
-
-        floorColor      = 0xFF374151.toInt(),  // pedra úmida azul-escura
-        floorVariant1   = 0xFF2D3748.toInt(),  // rachadura — mais escura
-        floorVariant2   = 0xFF2A4A4A.toInt(),  // poça d'água — ciano escuro
-        floorVariant3   = 0xFF3D4A5A.toInt(),  // umidade — azul médio
-        floorEdgeColor  = 0xFF1E2A38.toInt(),
-
-        accentColor     = 0xFF06B6D4.toInt(),  // água ciano brilhante
-        ambientLight    = 0xFF0891B2.toInt(),
-        glowColor       = 0xFF67E8F9.toInt(),  // halo ciano claro
-        particleColor   = 0xFF7DD3FC.toInt(),  // gotículas azuis
-
-        mushroomColor   = 0xFF1D4ED8.toInt(),  // haste azul-escura
-        mushroomCapColor= 0xFF3B82F6.toInt(),  // chapéu azul luminescente
-        crystalColor    = 0xFF06B6D4.toInt(),  // cristal ciano
-        mossColor       = 0xFF164E63.toInt(),  // líquen azul-escuro
-
-        backgroundColor = 0xFF0F172A.toInt()   // azul-marinho profundo
-    ),
-
-    // -------------------------------------------------------------------------
-    // Andares 41–60: Plantações e Abrigos
-    // Tons: terra verde, fungos roxos, raízes expostas
-    // -------------------------------------------------------------------------
-    Biome.PLANTACOES_ABRIGOS to BiomePalette(
-        wallColor       = 0xFF3D4A2E.toInt(),  // pedra com musgo verde
-        wallTopColor    = 0xFF526640.toInt(),  // topo: verde-médio
-        wallShadowColor = 0xFF252E1C.toInt(),  // sombra: verde muito escuro
-        wallDetailColor = 0xFF8B5CF6.toInt(),  // raiz roxa brilhante
-
-        floorColor      = 0xFF3A4228.toInt(),  // terra com musgo
-        floorVariant1   = 0xFF2E3820.toInt(),  // rachadura escura
-        floorVariant2   = 0xFF4A5A30.toInt(),  // musgo denso — mais verde
-        floorVariant3   = 0xFF3D4A38.toInt(),  // umidade esverdeada
-        floorEdgeColor  = 0xFF1E2814.toInt(),
-
-        accentColor     = 0xFF7C3AED.toInt(),  // roxo vibrante (fungos)
-        ambientLight    = 0xFF6D28D9.toInt(),
-        glowColor       = 0xFFA78BFA.toInt(),  // halo lilás
-        particleColor   = 0xFF8B5CF6.toInt(),  // esporos roxos
-
-        mushroomColor   = 0xFF5B21B6.toInt(),  // haste roxa escura
-        mushroomCapColor= 0xFFA855F7.toInt(),  // chapéu roxo luminescente
-        crystalColor    = 0xFF7C3AED.toInt(),  // cristal roxo
-        mossColor       = 0xFF365314.toInt(),  // musgo verde-escuro
-
-        backgroundColor = 0xFF1A1A2E.toInt()   // roxo-escuro profundo
-    ),
-
-    // -------------------------------------------------------------------------
-    // Andares 61–80: Construções Rochosas
-    // Tons: pedra cinza fria, cristais brancos/azuis, poeira
-    // -------------------------------------------------------------------------
-    Biome.CONSTRUCOES_ROCHOSAS to BiomePalette(
-        wallColor       = 0xFF4A4E5A.toInt(),  // pedra cinza-azulada
-        wallTopColor    = 0xFF6B7280.toInt(),  // topo: cinza claro
-        wallShadowColor = 0xFF1F2937.toInt(),  // sombra: cinza muito escuro
-        wallDetailColor = 0xFF9CA3AF.toInt(),  // veio de quartzo claro
-
-        floorColor      = 0xFF374151.toInt(),  // pedra cinza escura
-        floorVariant1   = 0xFF2D3748.toInt(),  // rachadura profunda
-        floorVariant2   = 0xFF3D4A5A.toInt(),  // pedra polida
-        floorVariant3   = 0xFF424A58.toInt(),  // pedra com poeira
-        floorEdgeColor  = 0xFF1F2937.toInt(),
-
-        accentColor     = 0xFF9CA3AF.toInt(),  // cristal quartzo
-        ambientLight    = 0xFF6B7280.toInt(),
-        glowColor       = 0xFFE5E7EB.toInt(),  // halo branco-frio
-        particleColor   = 0xFFD1D5DB.toInt(),  // poeira cinza
-
-        mushroomColor   = 0xFF4B5563.toInt(),  // haste cinza
-        mushroomCapColor= 0xFF9CA3AF.toInt(),  // chapéu cinza-claro
-        crystalColor    = 0xFFBAC8D3.toInt(),  // cristal azul-frio
-        mossColor       = 0xFF374151.toInt(),  // líquen cinza
-
-        backgroundColor = 0xFF111827.toInt()   // cinza-azulado muito escuro
-    ),
-
-    // -------------------------------------------------------------------------
-    // Andares 81–100: Pomares e Aberturas
-    // Tons: terra dourada, cogumelos ciano, cristais verdes
-    // -------------------------------------------------------------------------
-    Biome.POMARES_ABERTURAS to BiomePalette(
-        wallColor       = 0xFF4A3728.toInt(),  // pedra marrom-quente
-        wallTopColor    = 0xFF6B5040.toInt(),  // topo: marrom médio
-        wallShadowColor = 0xFF2E1E14.toInt(),  // sombra: marrom escuro
-        wallDetailColor = 0xFF10B981.toInt(),  // veio esmeralda
-
-        floorColor      = 0xFF3D3020.toInt(),  // terra dourada escura
-        floorVariant1   = 0xFF2E2418.toInt(),  // rachadura
-        floorVariant2   = 0xFF3A4028.toInt(),  // musgo dourado
-        floorVariant3   = 0xFF4A3C28.toInt(),  // terra clara
-        floorEdgeColor  = 0xFF1E1810.toInt(),
-
-        accentColor     = 0xFF10B981.toInt(),  // esmeralda brilhante
-        ambientLight    = 0xFF059669.toInt(),
-        glowColor       = 0xFF6EE7B7.toInt(),  // halo verde-claro
-        particleColor   = 0xFF34D399.toInt(),  // partículas verdes
-
-        mushroomColor   = 0xFF065F46.toInt(),  // haste verde-escura
-        mushroomCapColor= 0xFF06B6D4.toInt(),  // chapéu ciano luminescente
-        crystalColor    = 0xFF10B981.toInt(),  // cristal esmeralda
-        mossColor       = 0xFF14532D.toInt(),  // musgo verde profundo
-
-        backgroundColor = 0xFF0D1F17.toInt()   // verde-escuro profundo
-    ),
-
-    // -------------------------------------------------------------------------
-    // Andares 101–120: Era dos Dinossauros
-    // Tons: pedra vulcânica, lava vermelha, cristais âmbar
-    // -------------------------------------------------------------------------
-    Biome.ERA_DINOSSAUROS to BiomePalette(
-        wallColor       = 0xFF4A2018.toInt(),  // pedra vulcânica marrom-vermelha
-        wallTopColor    = 0xFF6B3020.toInt(),  // topo: vermelho-escuro
-        wallShadowColor = 0xFF2E0E08.toInt(),  // sombra: quase preta com tom vermelho
-        wallDetailColor = 0xFFEF4444.toInt(),  // veio de lava vermelho
-
-        floorColor      = 0xFF3D1E10.toInt(),  // terra vulcânica escura
-        floorVariant1   = 0xFF2E1408.toInt(),  // rachadura com brilho de lava
-        floorVariant2   = 0xFF4A2818.toInt(),  // pedra avermelhada
-        floorVariant3   = 0xFF3A2010.toInt(),  // cinza vulcânico
-        floorEdgeColor  = 0xFF1E0C06.toInt(),
-
-        accentColor     = 0xFFEF4444.toInt(),  // lava vermelha
-        ambientLight    = 0xFFDC2626.toInt(),
-        glowColor       = 0xFFFCA5A5.toInt(),  // halo vermelho-claro
-        particleColor   = 0xFFF97316.toInt(),  // faíscas laranja
-
-        mushroomColor   = 0xFF7F1D1D.toInt(),  // haste vermelho-escura
-        mushroomCapColor= 0xFFEF4444.toInt(),  // chapéu vermelho brilhante
-        crystalColor    = 0xFFF59E0B.toInt(),  // cristal âmbar
-        mossColor       = 0xFF451A03.toInt(),  // líquen marrom-escuro
-
-        backgroundColor = 0xFF1C0505.toInt()   // vermelho-escuro profundo
+private fun createPalette(
+    baseWall: Int,
+    baseFloor: Int,
+    accent: Int,
+    flora: Int,
+    bg: Int
+): BiomePalette {
+    return BiomePalette(
+        wallColor = baseWall,
+        wallTopColor = clarear(baseWall, 0.2f),
+        wallShadowColor = escurecer(baseWall, 0.4f),
+        wallDetailColor = accent,
+        floorColor = baseFloor,
+        floorVariant1 = escurecer(baseFloor, 0.15f),
+        floorVariant2 = clarear(baseFloor, 0.1f),
+        floorVariant3 = escurecer(baseFloor, 0.1f),
+        floorEdgeColor = escurecer(baseFloor, 0.3f),
+        accentColor = accent,
+        ambientLight = accent,
+        glowColor = clarear(accent, 0.4f),
+        particleColor = accent,
+        mushroomColor = escurecer(flora, 0.3f),
+        mushroomCapColor = flora,
+        crystalColor = accent,
+        mossColor = escurecer(baseWall, 0.2f),
+        backgroundColor = bg
     )
-)
+}
+
+private fun clarear(cor: Int, percent: Float): Int {
+    val hsv = FloatArray(3)
+    Color.colorToHSV(cor, hsv)
+    hsv[2] = (hsv[2] + percent).coerceIn(0f, 1f)
+    return Color.HSVToColor(hsv)
+}
+
+private fun escurecer(cor: Int, percent: Float): Int {
+    val hsv = FloatArray(3)
+    Color.colorToHSV(cor, hsv)
+    hsv[2] = (hsv[2] - percent).coerceIn(0f, 1f)
+    return Color.HSVToColor(hsv)
+}
+
+/**
+ * Paletas por bioma — Geradas dinamicamente para os 60 biomas.
+ */
+val BIOME_PALETTES: Map<Biome, BiomePalette> = Biome.entries.associateWith { biome ->
+    when (biome) {
+        // 1-10: Minas e Cavernas Iniciais (Marrons e Cinzas)
+        Biome.MINA_ABANDONADA -> createPalette(0xFF3A3028.toInt(), 0xFFC4A882.toInt(), 0xFFF59E0B.toInt(), 0xFFB45309.toInt(), 0xFF0F0806.toInt())
+        Biome.CAVERNA_UMIDA -> createPalette(0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFF63B3ED.toInt(), 0xFF4299E1.toInt(), 0xFF1A202C.toInt())
+        Biome.TUNEIS_DE_TERRA -> createPalette(0xFF4A3728.toInt(), 0xFF8B4513.toInt(), 0xFFCD853F.toInt(), 0xFFD2691E.toInt(), 0xFF1E1408.toInt())
+        Biome.MINA_DE_CARVAO -> createPalette(0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF718096.toInt(), 0xFF4A5568.toInt(), 0xFF000000.toInt())
+        Biome.CAVERNA_DE_CALCARIO -> createPalette(0xFF718096.toInt(), 0xFFE2E8F0.toInt(), 0xFFCBD5E0.toInt(), 0xFFA0AEC0.toInt(), 0xFF2D3748.toInt())
+
+        // 11-20: Cristais e Cogumelos (Azuis e Roxos)
+        Biome.JARDIM_DE_FUNGOS -> createPalette(0xFF44337A.toInt(), 0xFF6B46C1.toInt(), 0xFFD6BCFA.toInt(), 0xFF9F7AEA.toInt(), 0xFF2D1B4E.toInt())
+        Biome.CAVERNA_DE_CRISTAL_AZUL -> createPalette(0xFF2A4365.toInt(), 0xFF3182CE.toInt(), 0xFF90CDF4.toInt(), 0xFF63B3ED.toInt(), 0xFF1A365D.toInt())
+        Biome.TUNEIS_LUMINESCENTES -> createPalette(0xFF234E52.toInt(), 0xFF319795.toInt(), 0xFF81E6D9.toInt(), 0xFF4FD1C5.toInt(), 0xFF1D3131.toInt())
+        Biome.GRUTA_DOS_COGUMELOS -> createPalette(0xFF702459.toInt(), 0xFFB83280.toInt(), 0xFFF687B3.toInt(), 0xFFED64A6.toInt(), 0xFF4A1239.toInt())
+        Biome.MINA_DE_QUARTZO -> createPalette(0xFF4A5568.toInt(), 0xFFEDF2F7.toInt(), 0xFFFFFFFF.toInt(), 0xFFE2E8F0.toInt(), 0xFF1A202C.toInt())
+
+        // 21-30: Água e Gelo (Cianos e Brancos)
+        Biome.RIACHOS_SUBTERRANEOS -> createPalette(0xFF2C5282.toInt(), 0xFF4299E1.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF1A365D.toInt())
+        Biome.LAGO_CONGELADO -> createPalette(0xFF2A4365.toInt(), 0xFFEBF8FF.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF1A365D.toInt())
+        Biome.CAVERNA_DE_GELO -> createPalette(0xFFEBF8FF.toInt(), 0xFFFFFFFF.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF2A4365.toInt())
+        Biome.TUNEIS_AQUATICOS -> createPalette(0xFF2B6CB0.toInt(), 0xFF3182CE.toInt(), 0xFF63B3ED.toInt(), 0xFF4299E1.toInt(), 0xFF1A365D.toInt())
+        Biome.ABISMO_AZUL -> createPalette(0xFF1A365D.toInt(), 0xFF2A4365.toInt(), 0xFF3182CE.toInt(), 0xFF2B6CB0.toInt(), 0xFF000000.toInt())
+
+        // 31-40: Vegetação e Raízes (Verdes)
+        Biome.PLANTACOES_ABRIGOS -> createPalette(0xFF276749.toInt(), 0xFF38A169.toInt(), 0xFF9AE6B4.toInt(), 0xFF68D391.toInt(), 0xFF1C4532.toInt())
+        Biome.CAVERNA_DAS_RAIZES -> createPalette(0xFF38A169.toInt(), 0xFF2F855A.toInt(), 0xFFC6F6D5.toInt(), 0xFF9AE6B4.toInt(), 0xFF1C4532.toInt())
+        Biome.FLORESTA_SUBTERRANEA -> createPalette(0xFF22543D.toInt(), 0xFF276749.toInt(), 0xFF48BB78.toInt(), 0xFF38A169.toInt(), 0xFF1C4532.toInt())
+        Biome.JARDIM_DE_PEDRA -> createPalette(0xFF2D3748.toInt(), 0xFF2F855A.toInt(), 0xFF68D391.toInt(), 0xFF48BB78.toInt(), 0xFF1A202C.toInt())
+        Biome.TUNEIS_VERDES -> createPalette(0xFF2F855A.toInt(), 0xFF38A169.toInt(), 0xFF9AE6B4.toInt(), 0xFF68D391.toInt(), 0xFF1C4532.toInt())
+
+        // 41-50: Rochas e Minerais (Cinzas e Metálicos)
+        Biome.CONSTRUCOES_ROCHOSAS -> createPalette(0xFF4A5568.toInt(), 0xFF718096.toInt(), 0xFFA0AEC0.toInt(), 0xFFCBD5E0.toInt(), 0xFF1A202C.toInt())
+        Biome.MINA_DE_FERRO -> createPalette(0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFFE2E8F0.toInt(), 0xFFA0AEC0.toInt(), 0xFF1A202C.toInt())
+        Biome.CAVERNA_DE_GRANITO -> createPalette(0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF718096.toInt(), 0xFF4A5568.toInt(), 0xFF000000.toInt())
+        Biome.TUNEIS_DE_XISTO -> createPalette(0xFF2D3748.toInt(), 0xFF1A202C.toInt(), 0xFF4A5568.toInt(), 0xFF2D3748.toInt(), 0xFF000000.toInt())
+        Biome.ABISMO_DE_PEDRA -> createPalette(0xFF000000.toInt(), 0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt())
+
+        // 51-60: Ouro e Riquezas (Amarelos e Verdes)
+        Biome.MINA_DE_OURO -> createPalette(0xFF744210.toInt(), 0xFFD69E2E.toInt(), 0xFFFAF089.toInt(), 0xFFECC94B.toInt(), 0xFF2D1B0E.toInt())
+        Biome.CAVERNA_DE_ESMERALDA -> createPalette(0xFF22543D.toInt(), 0xFF38A169.toInt(), 0xFF9AE6B4.toInt(), 0xFF68D391.toInt(), 0xFF1C4532.toInt())
+        Biome.TUNEIS_DE_RUBI -> createPalette(0xFF742A2A.toInt(), 0xFFC53030.toInt(), 0xFFFEB2B2.toInt(), 0xFFFC8181.toInt(), 0xFF2D1212.toInt())
+        Biome.SALOES_DOURADOS -> createPalette(0xFF975A16.toInt(), 0xFFECC94B.toInt(), 0xFFFFFFF0.toInt(), 0xFFF6E05E.toInt(), 0xFF2D1B0E.toInt())
+        Biome.TESOURO_SUBTERRANEO -> createPalette(0xFFB7791F.toInt(), 0xFFF6E05E.toInt(), 0xFFFFFFF0.toInt(), 0xFFFAF089.toInt(), 0xFF2D1B0E.toInt())
+
+        // 61-70: Antiguidade e Ruínas (Bege e Mármore)
+        Biome.RUINAS_ANTIGAS -> createPalette(0xFF744210.toInt(), 0xFFD69E2E.toInt(), 0xFFFAF089.toInt(), 0xFFECC94B.toInt(), 0xFF2D1B0E.toInt())
+        Biome.TUMULO_DOS_REIS -> createPalette(0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFFA0AEC0.toInt(), 0xFF718096.toInt(), 0xFF1A202C.toInt())
+        Biome.CATACUMBAS_ESQUECIDAS -> createPalette(0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFF2D3748.toInt(), 0xFF000000.toInt())
+        Biome.TEMPLO_ROCHOSO -> createPalette(0xFF4A5568.toInt(), 0xFF718096.toInt(), 0xFFA0AEC0.toInt(), 0xFFCBD5E0.toInt(), 0xFF1A202C.toInt())
+        Biome.SALOES_DE_MARMORE -> createPalette(0xFFE2E8F0.toInt(), 0xFFFFFFFF.toInt(), 0xFFCBD5E0.toInt(), 0xFFA0AEC0.toInt(), 0xFF2D3748.toInt())
+
+        // 71-80: Magia e Mistério (Roxos e Estelares)
+        Biome.CAVERNA_ARCANA -> createPalette(0xFF44337A.toInt(), 0xFF6B46C1.toInt(), 0xFFD6BCFA.toInt(), 0xFF9F7AEA.toInt(), 0xFF2D1B4E.toInt())
+        Biome.TUNEIS_DE_MANA -> createPalette(0xFF2A4365.toInt(), 0xFF3182CE.toInt(), 0xFF90CDF4.toInt(), 0xFF63B3ED.toInt(), 0xFF1A365D.toInt())
+        Biome.ABISMO_ESTELAR -> createPalette(0xFF1A365D.toInt(), 0xFF2A4365.toInt(), 0xFF3182CE.toInt(), 0xFF2B6CB0.toInt(), 0xFF000000.toInt())
+        Biome.GRUTA_DOS_DESEJOS -> createPalette(0xFF702459.toInt(), 0xFFB83280.toInt(), 0xFFF687B3.toInt(), 0xFFED64A6.toInt(), 0xFF4A1239.toInt())
+        Biome.LABIRINTO_MAGICO -> createPalette(0xFF553C9A.toInt(), 0xFF805AD5.toInt(), 0xFFE9D8FD.toInt(), 0xFFB794F4.toInt(), 0xFF2D1B4E.toInt())
+
+        // 81-90: Natureza e Aberturas (Verdes e Amarelos)
+        Biome.POMARES_ABERTURAS -> createPalette(0xFF276749.toInt(), 0xFF38A169.toInt(), 0xFF9AE6B4.toInt(), 0xFF68D391.toInt(), 0xFF1C4532.toInt())
+        Biome.VALE_SUBTERRANEO -> createPalette(0xFF22543D.toInt(), 0xFF276749.toInt(), 0xFF48BB78.toInt(), 0xFF38A169.toInt(), 0xFF1C4532.toInt())
+        Biome.CAVERNA_DO_SOL -> createPalette(0xFF744210.toInt(), 0xFFD69E2E.toInt(), 0xFFFAF089.toInt(), 0xFFECC94B.toInt(), 0xFF2D1B0E.toInt())
+        Biome.TUNEIS_DE_VENTO -> createPalette(0xFF718096.toInt(), 0xFFE2E8F0.toInt(), 0xFFCBD5E0.toInt(), 0xFFA0AEC0.toInt(), 0xFF2D3748.toInt())
+        Biome.JARDIM_SUSPENSO -> createPalette(0xFF2F855A.toInt(), 0xFF38A169.toInt(), 0xFF9AE6B4.toInt(), 0xFF68D391.toInt(), 0xFF1C4532.toInt())
+
+        // 91-100: Escuridão e Vazio (Pretos e Cinzas)
+        Biome.ABISMO_PROFUNDO -> createPalette(0xFF000000.toInt(), 0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt())
+        Biome.CAVERNA_DO_VAZIO -> createPalette(0xFF1A202C.toInt(), 0xFF000000.toInt(), 0xFF2D3748.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt())
+        Biome.TUNEIS_SOMBRIOS -> createPalette(0xFF2D3748.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt())
+        Biome.VALE_DAS_SOMBRAS -> createPalette(0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFF2D3748.toInt(), 0xFF000000.toInt())
+        Biome.NUCLEO_ESCURO -> createPalette(0xFF000000.toInt(), 0xFF000000.toInt(), 0xFF1A202C.toInt(), 0xFF000000.toInt(), 0xFF000000.toInt())
+
+        // 101-110: Fogo e Vulcão (Vermelhos e Laranjas)
+        Biome.ERA_DINOSSAUROS -> createPalette(0xFF742A2A.toInt(), 0xFFC53030.toInt(), 0xFFFEB2B2.toInt(), 0xFFFC8181.toInt(), 0xFF2D1212.toInt())
+        Biome.CAVERNA_DE_LAVA -> createPalette(0xFF9B2C2C.toInt(), 0xFFE53E3E.toInt(), 0xFFFFF5F5.toInt(), 0xFFFEB2B2.toInt(), 0xFF2D1212.toInt())
+        Biome.TUNEIS_VULCANICOS -> createPalette(0xFF7B341E.toInt(), 0xFFC05621.toInt(), 0xFFFFFAF0.toInt(), 0xFFF6AD55.toInt(), 0xFF2D1B0E.toInt())
+        Biome.FORJA_INFERNAL -> createPalette(0xFF742A2A.toInt(), 0xFF9B2C2C.toInt(), 0xFFE53E3E.toInt(), 0xFFC53030.toInt(), 0xFF2D1212.toInt())
+        Biome.NUCLEO_DE_FOGO -> createPalette(0xFFC53030.toInt(), 0xFFE53E3E.toInt(), 0xFFF56565.toInt(), 0xFFFC8181.toInt(), 0xFF2D1212.toInt())
+
+        // 111-120: O Fim da Jornada (Brancos e Dourados)
+        Biome.ABISMO_FINAL -> createPalette(0xFF1A202C.toInt(), 0xFF2D3748.toInt(), 0xFFFFFFFF.toInt(), 0xFFA0AEC0.toInt(), 0xFF000000.toInt())
+        Biome.CAMINHO_DA_ETERNIDADE -> createPalette(0xFFE2E8F0.toInt(), 0xFFFFFFFF.toInt(), 0xFFCBD5E0.toInt(), 0xFFA0AEC0.toInt(), 0xFF2D3748.toInt())
+        Biome.SALOES_DO_DESTINO -> createPalette(0xFF975A16.toInt(), 0xFFECC94B.toInt(), 0xFFFFFFF0.toInt(), 0xFFF6E05E.toInt(), 0xFF2D1B0E.toInt())
+        Biome.PORTAL_DO_TEMPO -> createPalette(0xFF44337A.toInt(), 0xFF6B46C1.toInt(), 0xFFD6BCFA.toInt(), 0xFF9F7AEA.toInt(), 0xFF2D1B4E.toInt())
+        Biome.O_ULTIMO_PISO -> createPalette(0xFF000000.toInt(), 0xFFD69E2E.toInt(), 0xFFFFFFFF.toInt(), 0xFFECC94B.toInt(), 0xFF000000.toInt())
+    }
+}

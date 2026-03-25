@@ -440,13 +440,21 @@ class AudioManager(context: Context) {
      * @param bioma Bioma para determinar os parâmetros
      * @return Par (frequenciaHz, duracaoMs)
      */
-    private fun obterParametrosSomAmbiente(bioma: Biome): Pair<Float, Int> = when (bioma) {
-        Biome.MINA_ABANDONADA -> Pair(80f, 500)        // Gotejamento grave
-        Biome.RIACHOS_SUBTERRANEOS -> Pair(440f, 300)  // Água corrente
-        Biome.PLANTACOES_ABRIGOS -> Pair(330f, 400)    // Vento suave
-        Biome.CONSTRUCOES_ROCHOSAS -> Pair(120f, 600)  // Eco de pedra
-        Biome.POMARES_ABERTURAS -> Pair(550f, 250)     // Pássaros distantes
-        Biome.ERA_DINOSSAUROS -> Pair(60f, 800)        // Rugido distante
+    private fun obterParametrosSomAmbiente(bioma: Biome): Pair<Float, Int> {
+        val nome = bioma.name
+        return when {
+            nome.contains("MINA") || nome.contains("CAVERNA") || nome.contains("TUNEIS") -> 
+                Pair(80f, 500)        // Gotejamento grave
+            nome.contains("RIACHO") || nome.contains("LAGO") || nome.contains("AQUATICO") || nome.contains("ABISMO") -> 
+                Pair(440f, 300)       // Água corrente
+            nome.contains("JARDIM") || nome.contains("FLORESTA") || nome.contains("PLANTACAO") || nome.contains("RAIZES") || nome.contains("POMAR") -> 
+                Pair(330f, 400)       // Vento suave
+            nome.contains("CONSTRUCAO") || nome.contains("RUINA") || nome.contains("TEMPLO") || nome.contains("SALOES") || nome.contains("TUMULO") -> 
+                Pair(120f, 600)       // Eco de pedra
+            nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") -> 
+                Pair(60f, 800)        // Rugido distante
+            else -> Pair(100f, 500)   // Som padrão
+        }
     }
 
     // =========================================================================

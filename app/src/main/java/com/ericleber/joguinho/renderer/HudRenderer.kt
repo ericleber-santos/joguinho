@@ -81,13 +81,13 @@ class HudRenderer {
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", largura - padding, centroY, textPaint)
 
-        // Slowdown — acima do centro, centralizado (Aumentado mais 100%)
+        // Slowdown — centralizado, na mesma reta do mapa (centroY)
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = (alturaB * 1.28f).coerceIn(40f, 64f)
             textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, alturaA + alturaB * 0.15f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, centroY, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -150,13 +150,13 @@ class HudRenderer {
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("A${gameState.floorNumber}  M${gameState.mapIndex + 1}/3", w - padding * 2, baselineY, textPaint)
 
-        // Slowdown — texto acima da barra, centralizado (Aumentado mais 100%)
+        // Slowdown — centralizado, na mesma reta do mapa (baselineY)
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = 60f
             textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - padding * 2.5f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -413,14 +413,7 @@ class HudRenderer {
     /**
      * Retorna o nome legível do bioma em português.
      */
-    private fun nomeBioma(biome: com.ericleber.joguinho.biome.Biome): String = when (biome) {
-        com.ericleber.joguinho.biome.Biome.MINA_ABANDONADA      -> "Mina Abandonada"
-        com.ericleber.joguinho.biome.Biome.RIACHOS_SUBTERRANEOS -> "Riachos Subterrâneos"
-        com.ericleber.joguinho.biome.Biome.PLANTACOES_ABRIGOS   -> "Plantações e Abrigos"
-        com.ericleber.joguinho.biome.Biome.CONSTRUCOES_ROCHOSAS -> "Construções Rochosas"
-        com.ericleber.joguinho.biome.Biome.POMARES_ABERTURAS    -> "Pomares e Aberturas"
-        com.ericleber.joguinho.biome.Biome.ERA_DINOSSAUROS      -> "Era dos Dinossauros"
-    }
+    private fun nomeBioma(biome: com.ericleber.joguinho.biome.Biome): String = biome.displayName
 
     /**
      * Exibe o score atual.
