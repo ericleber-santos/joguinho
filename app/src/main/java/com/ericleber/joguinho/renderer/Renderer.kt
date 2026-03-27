@@ -84,8 +84,17 @@ class Renderer(
 
         // Em tablets (largura > 600dp), mostramos muito mais do mapa
         val isTablet = (screenWidth / density) >= 600f
-        // Aumentamos mais 20% a quantidade de tiles visíveis para remover o zoom
-        val tilesVisiveisDesejados = if (isTablet) 36f else 24f
+        
+        // Configuração de zoom baseada no tipo de dispositivo
+        // Se for tablet, aproximamos 20% (reduzimos a quantidade de tiles visíveis)
+        // Se for celular, mantemos o padrão
+        val tilesVisiveisDesejados = if (isTablet) {
+            // Aproximar 20% em relação ao padrão de tablet (que era 36f)
+            // 36 * 0.8 = 28.8f (aproximadamente 29 tiles visíveis)
+            28.8f 
+        } else {
+            24f
+        }
 
         // Calcula tile para que caibam X tiles na menor dimensão da tela
         val tileBase = minOf(screenWidth.toFloat(), alturaA) / tilesVisiveisDesejados
