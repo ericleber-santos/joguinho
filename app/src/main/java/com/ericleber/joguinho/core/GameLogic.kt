@@ -321,9 +321,9 @@ class GameLogic(private val gameState: GameState) {
                 gameState.heroSlowdownRemainingMs = 0
             }
 
-            // Aplica Slowdown ao Spike
-            gameState.spikeIsSlowedDown = true
-            gameState.spikeSlowdownRemainingMs += SLOWDOWN_SPIKE_MS
+            // Spike é imune a danos e lentidão (Requisito: Spike não sofre dano ou lentidão)
+            // gameState.spikeIsSlowedDown = true
+            // gameState.spikeSlowdownRemainingMs += SLOWDOWN_SPIKE_MS
 
             // Emite evento para SpikeAI e HUD
             gameState.emitEvent(GameEvent.HeroReceivedSlowdown)

@@ -78,7 +78,7 @@ class CharacterRenderer {
         isSlowedDown: Boolean = false,
         hasSpeedBuff: Boolean = false
     ) {
-        val s = tileW / 48f
+        val s = (tileW / 48f) * 1.5f
         val totalFrames = if (animState == HeroAnimState.IDLE) 4 else 8
         val t = frame.toFloat() / totalFrames
 
@@ -236,7 +236,8 @@ class CharacterRenderer {
         tileW: Float,
         tileH: Float
     ) {
-        val s = tileW / 52f
+        // Redução de 20% sobre o tamanho anterior (2.25 * 0.8 = 1.8)
+        val s = (tileW / 52f) * 1.8f
         val t = frame.toFloat() / 12f
         val bob = (Math.sin(t * Math.PI * 2) * 1.8 * s).toFloat()
         val cx = x
