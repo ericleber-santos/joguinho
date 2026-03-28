@@ -22,10 +22,18 @@ import kotlin.random.Random
 class EntityPlacer(private val random: Random) {
 
     /**
-     * Calcula a quantidade de Monsters para o mapa atual.
-     * Mapa 1 = 3 monstros, Mapa 2 = 4 monstros, Mapa 3 = 5 monstros.
+     * Calcula a quantidade de Monsters para o mapa atual com base no andar e índice do mapa.
+     * Lógica de Progressão:
+     * - Base: 2 monstros no andar 1.
+     * - Aumenta 1 monstro a cada 5 andares.
+     * - Adiciona +1 ou +2 monstros dependendo do mapIndex (mapas posteriores no mesmo andar são mais difíceis).
+     * - Limite máximo de 10 monstros para evitar tédio/impossibilidade.
      */
-    fun monsterCount(mapIndex: Int): Int = 3 + mapIndex
+    fun monsterCount(floorNumber: Int, mapIndex: Int): Int {
+        val baseByFloor = 2 + (floorNumber / 5)
+        val bonusByMap = mapIndex // +0, +1 ou +2
+        return (baseByFloor + bonusByMap).coerceAtMost(10)
+    }
 
     /**
      * Calcula a quantidade de Traps para o Floor informado.
@@ -48,7 +56,7 @@ class EntityPlacer(private val random: Random) {
         mapIndex: Int,
         criticalPath: Set<Int>
     ): List<MonsterState> {
-        val count = monsterCount(mapIndex)
+        val count = monsterCount(floorNumber, mapIndex)
         val candidates = getFloorCandidates(maze, criticalPath).toMutableList()
         
         val monsters = mutableListOf<MonsterState>()
@@ -58,13 +66,12 @@ class EntityPlacer(private val random: Random) {
             val exitX = maze.exitIndex % maze.width
             val exitY = maze.exitIndex / maze.width
             
-            // Busca um tile de chão próximo à saída (distância 2-3)
+            // Busca um tile de chão na sala adjacente à saída (distância 2-4)
+            // Requisito: Boss spawnado única e exclusivamente na sala ao lado da escada
             val bossTile = candidates.filter { 
                 val dist = Math.abs(it % maze.width - exitX) + Math.abs(it / maze.width - exitY)
                 dist in 2..4
-            }.minByOrNull { 
-                Math.abs(it % maze.width - exitX) + Math.abs(it / maze.width - exitY)
-            }
+            }.shuffled(random).firstOrNull()
             
             bossTile?.let {
                 monsters.add(MonsterState(
@@ -99,10 +106,14 @@ class EntityPlacer(private val random: Random) {
      */
     fun placeItems(
         maze: MazeData,
+        mapIndex: Int,
         criticalPath: Set<Int>,
         occupiedIndices: Set<Int>
     ): List<ItemState> {
-        // 1 item por mapa, em algum lugar fora do caminho crítico
+        // Requisito: O power up poderá estar em locais aleatórios SOMENTE no mapa onde tem chefão (mapIndex == 2)
+        if (mapIndex != 2) return emptyList()
+
+        // 1 item por mapa de boss, em algum lugar fora do caminho crítico
         val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
         val selected = candidates.shuffled(random).take(1)
         
@@ -110,7 +121,7 @@ class EntityPlacer(private val random: Random) {
             ItemState(
                 id = "item_${maze.seed}_$i",
                 position = Position(index % maze.width, index / maze.width),
-                type = ItemType.SPEED_BOOTS
+                type = ItemType.SPEED_BOOTS // Representará a Banana visualmente
             )
         }
     }

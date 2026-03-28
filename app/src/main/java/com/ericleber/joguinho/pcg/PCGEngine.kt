@@ -80,7 +80,7 @@ class PCGEngine {
                 val monsterIndices = monsters.map { it.position.y * maze.width + it.position.x }.toSet()
                 val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
                 val trapIndices = traps.map { it.position.y * maze.width + it.position.x }.toSet()
-                val items = placer.placeItems(maze, criticalPath, monsterIndices + trapIndices)
+                val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
 
                 return GeneratedMap(maze, monsters, traps, items)
             }
@@ -175,7 +175,7 @@ class PCGEngine {
         val monsterIndices = monsters.map { it.position.y * w + it.position.x }.toSet()
         val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
         val trapIndices = traps.map { it.position.y * w + it.position.x }.toSet()
-        val items = placer.placeItems(maze, criticalPath, monsterIndices + trapIndices)
+        val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
 
         return GeneratedMap(maze, monsters, traps, items)
     }

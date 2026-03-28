@@ -222,20 +222,14 @@ class Renderer(
             }
         }
 
-        // Passo 2.5: Itens
+        // Passo 2.5: Itens (Power-ups)
         for (item in gameState.items) {
             if (!item.isActive) continue
-            val sx = item.position.x * tileW + cameraX
-            val sy = item.position.y * tileH + cameraY
+            val sx = item.position.x * tileW + cameraX + tileW / 2f
+            val sy = item.position.y * tileH + cameraY + tileH / 2f
             
-            // Renderiza bota de velocidade (simples via Canvas por enquanto)
-            val paint = android.graphics.Paint().apply { color = android.graphics.Color.CYAN }
-            val s = tileW * 0.4f
-            val padding = (tileW - s) / 2f
-            canvas.drawRect(sx + padding, sy + padding, sx + padding + s, sy + padding + s, paint)
-            // Detalhe branco para brilho
-            paint.color = android.graphics.Color.WHITE
-            canvas.drawRect(sx + padding + 2f, sy + padding + 2f, sx + padding + 6f, sy + padding + 6f, paint)
+            // Requisito: O power up deveria se parecer com uma banana ou cacho de banana
+            characterRenderer.renderBanana(canvas, sx, sy, heroAnimFrame, tileW)
         }
 
         // Passo 3: Personagens (centro do tile)
@@ -249,18 +243,38 @@ class Renderer(
             val mx = monster.position.x * tileW + cameraX + tileW / 2f
             val my = monster.position.y * tileH + cameraY + tileH / 2f
             val seed = monster.id.hashCode()
-            // Lógica de escala:
-            // - Aumento global de 50% em todos os monstros
-            // - Boss: Mantém escala imponente (base 2.5 + variação)
-            val baseScale = (0.7f + ((seed and 0xF) / 15f) * 0.6f) * 1.5f
+            // Lógica de escala proporcional ao Herói (1.5f base):
+            // - Monstro Pequeno: 50% do herói (0.75f)
+            // - Monstro Médio: Mesmo tamanho do herói (1.50f)
+            // - Monstro Grande: 50% maior que o herói (2.25f)
+            // - Chefão (Boss): 100% maior que o herói (3.00f)
             val finalScale = if (monster.isBoss) {
-                2.5f + ((seed and 0x7) / 7f) * 0.5f
+                3.00f
             } else {
-                baseScale
+                when (seed % 3) {
+                    0 -> 0.75f
+                    1 -> 1.50f
+                    else -> 2.25f
+                }
+            }
+
+            // Garante que monstros pequenos não tenham a mesma cor do chão (geralmente tons de cinza/marrom)
+            val bodyColor = if (monster.isBoss) {
+                Color.rgb(200, 40, 40)
+            } else {
+                val r = 150 + (seed and 0xFF) % 100
+                val g = 50 + (seed shr 8 and 0xFF) % 80
+                val b = 50 + (seed shr 16 and 0xFF) % 80
+                // Se for pequeno e muito cinza, força um tom mais vibrante
+                if (finalScale < 1.0f && (r - g < 20 && r - b < 20)) {
+                    Color.rgb(255, 100, 100) // Força vermelho vibrante
+                } else {
+                    Color.rgb(r, g, b)
+                }
             }
 
             val appearance = MonsterAppearance(
-                bodyColor = if (monster.isBoss) Color.rgb(200, 40, 40) else Color.rgb(150 + (seed and 0xFF) % 100, 50 + (seed shr 8 and 0xFF) % 80, 50 + (seed shr 16 and 0xFF) % 80),
+                bodyColor = bodyColor,
                 eyeColor = if (monster.isBoss) Color.YELLOW else Color.rgb(255, 200 + (seed and 0x3F), 0),
                 size = finalScale,
                 shapeVariant = seed and 0x3, 
@@ -270,6 +284,7 @@ class Renderer(
             characterRenderer.renderMonster(canvas, mx, my, appearance, monsterAnimFrame, tileW, tileH)
         }
 
+        // Spike: 70% do tamanho do herói (1.5f * 0.7 = 1.05f)
         characterRenderer.renderSpike(canvas, spikeSx, spikeSy, gameState.spikeCompanionState, spikeAnimFrame, tileW, tileH)
 
         // Se estiver em animação de saída, sobe o herói

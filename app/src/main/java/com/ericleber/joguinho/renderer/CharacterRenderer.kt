@@ -78,6 +78,7 @@ class CharacterRenderer {
         isSlowedDown: Boolean = false,
         hasSpeedBuff: Boolean = false
     ) {
+        // Escala base do Herói (1.0x para referência das outras entidades)
         val s = (tileW / 48f) * 1.5f
         val totalFrames = if (animState == HeroAnimState.IDLE) 4 else 8
         val t = frame.toFloat() / totalFrames
@@ -106,11 +107,16 @@ class CharacterRenderer {
         }
 
         val cx = x
-        val cy = y + bob
+        // Escalonamento Inteligente: O offset vertical é calculado dinamicamente com base na escala 's'.
+        // Isso garante que a base dos pés (que está a ~24s do topo do sprite) 
+        // sempre toque o centro do tile (y original), independentemente do tamanho.
+        val yOffset = -12 * s 
+        val cy = y + bob + yOffset
 
-        // Sombra elíptica no chão (alpha 60 — discreta)
+        // Sombra dinâmica: O tamanho da sombra também escala com o personagem.
         paintFill.color = Color.argb(60, 0, 0, 0)
-        canvas.drawOval(RectF(cx - 8 * s, cy + 20 * s, cx + 8 * s, cy + 25 * s), paintFill)
+        // A sombra permanece no 'y' original (chão do tile), mas seu tamanho acompanha a escala 's'.
+        canvas.drawOval(RectF(cx - 8 * s, y + 20 * s, cx + 8 * s, y + 25 * s), paintFill)
 
         // --- Pernas animadas ---
         val legSwing = when (animState) {
@@ -241,11 +247,13 @@ class CharacterRenderer {
         val t = frame.toFloat() / 12f
         val bob = (Math.sin(t * Math.PI * 2) * 1.8 * s).toFloat()
         val cx = x
-        val cy = y + bob
+        // Escalonamento Inteligente para o Spike: Offset dinâmico baseado na escala 's'.
+        val yOffset = -6 * s
+        val cy = y + bob + yOffset
 
-        // Sombra elíptica no chão
+        // Sombra dinâmica para o Spike.
         paintFill.color = Color.argb(60, 0, 0, 0)
-        canvas.drawOval(RectF(cx - 8 * s, cy + 12 * s, cx + 8 * s, cy + 16 * s), paintFill)
+        canvas.drawOval(RectF(cx - 8 * s, y + 12 * s, cx + 8 * s, y + 16 * s), paintFill)
 
         // --- Rabo animado ---
         val rabAnim = when (spikeState) {
@@ -399,11 +407,19 @@ class CharacterRenderer {
         val t = frame.toFloat() / 8f
         val bob = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
         val cx = x
-        val cy = y + bob
+        
+        // Escalonamento Inteligente para Monstros:
+        // Ajusta o Y-Offset para que a base de qualquer forma (redonda, quadrada, etc.) 
+        // toque o chão do tile, evitando que monstros grandes "entrem" nas paredes superiores.
+        val yOffset = when (appearance.shapeVariant % 4) {
+            3 -> -4 * s // Monstros altos precisam de mais offset
+            else -> -2 * s
+        }
+        val cy = y + bob + yOffset
 
-        // Sombra elíptica no chão
+        // Sombra dinâmica para Monstros.
         paintFill.color = Color.argb(60, 0, 0, 0)
-        canvas.drawOval(RectF(cx - 8 * s, cy + 10 * s, cx + 8 * s, cy + 15 * s), paintFill)
+        canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
 
         when (appearance.shapeVariant % 4) {
             0 -> monsterRedondo(canvas, cx, cy, s, t, appearance)
@@ -412,12 +428,37 @@ class CharacterRenderer {
             3 -> monsterAlto(canvas, cx, cy, s, t, appearance)
         }
 
-        // Efeito de aura para o Boss
+        // --- Efeitos de Aura (Requisito: Diferenciação visual) ---
         if (appearance.isBoss) {
-            paintContorno.color = Color.argb(100, 255, 50, 50)
-            paintContorno.strokeWidth = 2f * s
-            val auraRaio = (12 + Math.sin(t * Math.PI * 4) * 2) * s
+            // Aura Vermelha e Preta Assustadora para o Boss
+            paintFill.color = Color.argb(60, 0, 0, 0) // Sombra preta pulsante
+            val auraBase = (14 + Math.sin(t * Math.PI * 3) * 3) * s
+            canvas.drawCircle(cx, cy, auraBase.toFloat(), paintFill)
+            
+            paintContorno.color = Color.argb(150, 200, 0, 0) // Vermelho intenso
+            paintContorno.strokeWidth = 3f * s
+            val auraRaio = (16 + Math.sin(t * Math.PI * 5) * 2) * s
             canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
+            paintContorno.strokeWidth = 1.5f
+        } else if (appearance.size < 1.0f) {
+            // Aura Amarela com Raios para Monstros Pequenos (Requisito: Identificação fácil)
+            paintContorno.color = Color.argb(180, 255, 255, 0) // Amarelo vibrante
+            paintContorno.strokeWidth = 1.5f * s
+            val auraRaio = (10 + Math.sin(t * Math.PI * 6) * 1.5) * s
+            canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
+            
+            // Desenha pequenos "raios" ao redor
+            val numRaios = 4
+            for (i in 0 until numRaios) {
+                val ang = (i * (360 / numRaios) + t * 360) * Math.PI / 180.0
+                val r1 = auraRaio + 1 * s
+                val r2 = auraRaio + 4 * s
+                canvas.drawLine(
+                    (cx + r1 * Math.cos(ang)).toFloat(), (cy + r1 * Math.sin(ang)).toFloat(),
+                    (cx + r2 * Math.cos(ang)).toFloat(), (cy + r2 * Math.sin(ang)).toFloat(),
+                    paintContorno
+                )
+            }
             paintContorno.strokeWidth = 1.5f
         }
     }
@@ -557,5 +598,38 @@ class CharacterRenderer {
             (Color.green(color) + f).coerceAtMost(255),
             (Color.blue(color) + f).coerceAtMost(255)
         )
+    }
+
+    /**
+     * Desenha uma Banana ou Cacho de Bananas (Power-up).
+     */
+    fun renderBanana(canvas: Canvas, x: Float, y: Float, frame: Int, tileW: Float) {
+        val s = tileW / 48f
+        val t = frame.toFloat() / 15f
+        val bob = (Math.sin(t * Math.PI * 2) * 3 * s).toFloat()
+        val cx = x
+        val cy = y + bob
+
+        // Sombra
+        paintFill.color = Color.argb(40, 0, 0, 0)
+        canvas.drawOval(RectF(cx - 6 * s, y + 10 * s, cx + 6 * s, y + 14 * s), paintFill)
+
+        // Corpo da Banana (Amarelo vibrante)
+        paintFill.color = Color.rgb(255, 225, 50)
+        path.reset()
+        path.moveTo(cx - 8 * s, cy - 4 * s)
+        path.quadTo(cx, cy + 8 * s, cx + 8 * s, cy - 4 * s)
+        path.quadTo(cx, cy + 4 * s, cx - 8 * s, cy - 4 * s)
+        canvas.drawPath(path, paintFill)
+
+        // Ponta (Marrom)
+        paintFill.color = Color.rgb(100, 70, 20)
+        canvas.drawRect(cx - 9 * s, cy - 6 * s, cx - 7 * s, cy - 3 * s, paintFill)
+        
+        // Outline
+        paintContorno.color = Color.rgb(150, 120, 0)
+        paintContorno.strokeWidth = 1.2f * s
+        canvas.drawPath(path, paintContorno)
+        paintContorno.strokeWidth = 1.5f
     }
 }

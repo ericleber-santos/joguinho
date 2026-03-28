@@ -290,7 +290,28 @@ class GameLogic(private val gameState: GameState) {
 
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
-            if (monster.position != heroPos) return@map monster
+            
+            // Hitbox Dinâmica: Monstros maiores ocupam uma área de colisão maior.
+            // - Pequeno (0.5x): Colisão apenas no mesmo tile.
+            // - Médio (1.0x): Colisão no mesmo tile.
+            // - Grande (1.5x): Colisão no mesmo tile e tiles adjacentes (raio 1).
+            // - Boss (2.0x): Colisão em raio de 1.5 tiles.
+            val seed = monster.id.hashCode()
+            val scale = if (monster.isBoss) 2.0f else when (seed % 3) {
+                0 -> 0.5f
+                1 -> 1.0f
+                else -> 1.5f
+            }
+            
+            val dx = Math.abs(monster.position.x - heroPos.x)
+            val dy = Math.abs(monster.position.y - heroPos.y)
+            val isColliding = if (scale > 1.2f) {
+                dx <= 1 && dy <= 1 // Raio de 1 tile para monstros grandes/boss
+            } else {
+                monster.position == heroPos // Apenas mesmo tile para pequenos/médios
+            }
+
+            if (!isColliding) return@map monster
 
             // Verifica cooldown de 2 segundos para o mesmo monstro
             val lastCollision = gameState.monsterCollisionCooldowns[monster.id] ?: 0L
