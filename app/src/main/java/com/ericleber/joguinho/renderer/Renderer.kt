@@ -232,7 +232,19 @@ class Renderer(
             characterRenderer.renderBanana(canvas, sx, sy, heroAnimFrame, tileW)
         }
 
-        // Passo 3: Personagens (centro do tile)
+        // Passo 3: Paredes (Agora desenhadas ANTES dos personagens para evitar sobreposição de cabeças)
+        for (ty in minY..maxY) {
+            for (tx in minX..maxX) {
+                val idx = ty * mazeData.width + tx
+                if (idx < 0 || idx >= mazeData.tiles.size) continue
+                if (mazeData.tiles[idx] != 1) continue
+                val sx = tx * tileW + cameraX
+                val sy = ty * tileH + cameraY
+                tileRenderer.renderWallTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
+            }
+        }
+
+        // Passo 4: Personagens (centro do tile)
         val heroSx = gameState.heroPosition.x * tileW + cameraX + tileW / 2f
         val heroSy = gameState.heroPosition.y * tileH + cameraY + tileH / 2f
         val spikeSx = gameState.spikePosition.x * tileW + cameraX + tileW / 2f
@@ -244,7 +256,7 @@ class Renderer(
             val my = monster.position.y * tileH + cameraY + tileH / 2f
             val seed = monster.id.hashCode()
             // Lógica de escala proporcional ao Herói (1.5f base):
-            // - Monstro Pequeno: 50% do herói (0.75f)
+            // - Monstro Pequeno: 60% do herói (0.90f) - Aumentado 20% sobre os 50% anteriores
             // - Monstro Médio: Mesmo tamanho do herói (1.50f)
             // - Monstro Grande: 50% maior que o herói (2.25f)
             // - Chefão (Boss): 100% maior que o herói (3.00f)
@@ -252,7 +264,7 @@ class Renderer(
                 3.00f
             } else {
                 when (seed % 3) {
-                    0 -> 0.75f
+                    0 -> 0.90f
                     1 -> 1.50f
                     else -> 2.25f
                 }
@@ -306,18 +318,6 @@ class Renderer(
             isSlowedDown = gameState.heroIsSlowedDown,
             hasSpeedBuff = gameState.heroHasSpeedBuff
         )
-
-        // Passo 4: Paredes (por cima de tudo)
-        for (ty in minY..maxY) {
-            for (tx in minX..maxX) {
-                val idx = ty * mazeData.width + tx
-                if (idx < 0 || idx >= mazeData.tiles.size) continue
-                if (mazeData.tiles[idx] != 1) continue
-                val sx = tx * tileW + cameraX
-                val sy = ty * tileH + cameraY
-                tileRenderer.renderWallTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
-            }
-        }
 
         // Passo 5: Placa de Saída e Escada
         if (saidaTx in minX..maxX && saidaTy in minY..maxY) {

@@ -30,17 +30,26 @@ class EntityPlacer(private val random: Random) {
      * - Limite máximo de 10 monstros para evitar tédio/impossibilidade.
      */
     fun monsterCount(floorNumber: Int, mapIndex: Int): Int {
-        val baseByFloor = 2 + (floorNumber / 5)
-        val bonusByMap = mapIndex // +0, +1 ou +2
-        return (baseByFloor + bonusByMap).coerceAtMost(10)
+        // Aumento drástico de densidade:
+        // - Base: 4 monstros no andar 1 (era 2).
+        // - Aumenta 1 monstro a cada 3 andares (era 5).
+        // - Bônus por mapa: +1 no mapa 1, +2 no mapa 2 (era +0, +1, +2).
+        val baseByFloor = 4 + (floorNumber / 3)
+        val bonusByMap = mapIndex + 1
+        return (baseByFloor + bonusByMap).coerceAtMost(15) // Limite aumentado para 15
     }
 
     /**
      * Calcula a quantidade de Traps para o Floor informado.
      * Fórmula: min(1 + floor(floorNumber / 15), 8)  — Requisito 5.6
      */
-    fun trapCount(floorNumber: Int): Int =
-        minOf(1 + floorNumber / 15, 8)
+    fun trapCount(floorNumber: Int): Int {
+        // Aumento drástico de armadilhas:
+        // - Base: 3 armadilhas no andar 1 (era 1).
+        // - Aumenta 1 armadilha a cada 5 andares (era 15).
+        // - Mínimo de 3, máximo de 12.
+        return (3 + floorNumber / 5).coerceAtMost(12)
+    }
 
     /**
      * Posiciona Monsters no mapa.

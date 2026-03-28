@@ -90,12 +90,28 @@ class HudRenderer {
             canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, centroY, textPaint)
         }
         
-        // Mensagem do Boss — abaixo da label de lentidão
+        // Mensagem do Boss — Painel de Destaque no Topo (Requisito: Visibilidade e Impacto)
         gameState.bossMessage?.let { msg ->
-            textPaint.textSize = (alturaB * 0.5f).coerceIn(16f, 24f)
-            textPaint.color = Color.rgb(255, 200, 50) // Amarelo/Dourado para o Boss
+            val bannerH = alturaB * 0.8f
+            val bannerY = 20f // Topo da tela
+            val bannerW = largura * 0.8f
+            val bannerX = (largura - bannerW) / 2f
+            
+            // Fundo do Banner do Boss (Preto com borda vermelha)
+            bgPaint.color = Color.argb(200, 0, 0, 0)
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            
+            bgPaint.color = Color.rgb(200, 0, 0)
+            bgPaint.style = Paint.Style.STROKE
+            bgPaint.strokeWidth = 3f
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            bgPaint.style = Paint.Style.FILL
+            
+            // Texto do Boss
+            textPaint.textSize = bannerH * 0.6f
+            textPaint.color = Color.rgb(255, 255, 255)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(msg, largura / 2f, centroY + (alturaB * 0.4f), textPaint)
+            canvas.drawText("BOSS: $msg", largura / 2f, bannerY + bannerH * 0.7f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -168,12 +184,26 @@ class HudRenderer {
             canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
         }
         
-        // Mensagem do Boss
+        // Mensagem do Boss — Painel de Destaque no Topo
         gameState.bossMessage?.let { msg ->
-            textPaint.textSize = barH * 0.4f
-            textPaint.color = Color.rgb(255, 200, 50)
+            val bannerH = barH * 1.2f
+            val bannerY = 30f
+            val bannerW = w * 0.8f
+            val bannerX = (w - bannerW) / 2f
+            
+            bgPaint.color = Color.argb(200, 0, 0, 0)
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            
+            bgPaint.color = Color.rgb(200, 0, 0)
+            bgPaint.style = Paint.Style.STROKE
+            bgPaint.strokeWidth = 4f
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            bgPaint.style = Paint.Style.FILL
+            
+            textPaint.textSize = bannerH * 0.6f
+            textPaint.color = Color.WHITE
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(msg, w / 2f, baselineY + barH * 0.3f, textPaint)
+            canvas.drawText("BOSS: $msg", w / 2f, bannerY + bannerH * 0.7f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -229,12 +259,26 @@ class HudRenderer {
             canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
         }
         
-        // Mensagem do Boss
+        // Mensagem do Boss — Painel de Destaque no Topo
         gameState.bossMessage?.let { msg ->
-            textPaint.textSize = barH * 0.4f
-            textPaint.color = Color.rgb(255, 200, 50)
+            val bannerH = barH * 1.2f
+            val bannerY = 30f
+            val bannerW = w * 0.8f
+            val bannerX = (w - bannerW) / 2f
+            
+            bgPaint.color = Color.argb(200, 0, 0, 0)
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            
+            bgPaint.color = Color.rgb(200, 0, 0)
+            bgPaint.style = Paint.Style.STROKE
+            bgPaint.strokeWidth = 4f
+            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            bgPaint.style = Paint.Style.FILL
+            
+            textPaint.textSize = bannerH * 0.6f
+            textPaint.color = Color.WHITE
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(msg, w / 2f, baselineY + barH * 0.3f, textPaint)
+            canvas.drawText("BOSS: $msg", w / 2f, bannerY + bannerH * 0.7f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
