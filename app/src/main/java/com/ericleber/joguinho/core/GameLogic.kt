@@ -1,6 +1,7 @@
 package com.ericleber.joguinho.core
 
 import com.ericleber.joguinho.pcg.BSPMazeGenerator
+import com.ericleber.joguinho.audio.TipoEfeito
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -60,6 +61,9 @@ class GameLogic(private val gameState: GameState) {
 
     // Callback chamado ao final de cada Map para salvar estado (Requisito 7.1)
     var onMapCompleted: (() -> Unit)? = null
+
+    // Callback para solicitar reprodução de efeito sonoro
+    var onSoundEffectRequested: ((TipoEfeito) -> Unit)? = null
 
     /**
      * Atualiza toda a lógica de jogo para o frame atual.
@@ -189,6 +193,8 @@ class GameLogic(private val gameState: GameState) {
         )
         gameState.bossMessage = frases.random()
         gameState.bossMessageTimerMs = 3000L
+        // Evento de áudio: Provocação do Boss
+        onSoundEffectRequested?.invoke(TipoEfeito.BOSS_PROVOCACAO)
     }
 
     private fun verificarColisaoItens() {
@@ -199,7 +205,8 @@ class GameLogic(private val gameState: GameState) {
                     ItemType.SPEED_BOOTS -> {
                         gameState.heroHasSpeedBuff = true
                         gameState.heroSpeedBuffRemainingMs = 7000L
-                        // TODO: Tocar som de "coisa boa"
+                        // Evento de áudio: Power-up coletado
+                        onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                     }
                 }
                 item.copy(isActive = false)
@@ -296,6 +303,9 @@ class GameLogic(private val gameState: GameState) {
             gameState.heroIsSlowedDown = true
             gameState.heroSlowdownRemainingMs += SLOWDOWN_MONSTER_MS
             gameState.currentMapClean = false
+            
+            // Evento de áudio: Lentidão iniciada
+            onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
             
             // Incrementa contador de lentidões no mapa
             gameState.mapSlowdownCount++

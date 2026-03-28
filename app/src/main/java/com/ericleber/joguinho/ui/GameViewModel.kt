@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ericleber.joguinho.audio.AudioManager
+import com.ericleber.joguinho.audio.TipoEfeito
 import com.ericleber.joguinho.core.GameLogic
 import com.ericleber.joguinho.core.GameLoop
 import com.ericleber.joguinho.core.GamePhase
@@ -96,6 +97,9 @@ class GameViewModel : ViewModel() {
             } else {
                 gerarMapa()
             }
+        }
+        gameLogic.onSoundEffectRequested = { tipo: TipoEfeito ->
+            audioManager?.reproduzirEfeito(tipo)
         }
     }
 

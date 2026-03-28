@@ -38,7 +38,10 @@ enum class TipoEfeito(
     ARMADILHA_ATIVADA(880f, 300, FormaOnda.SENOIDAL),
     CONTATO_MONSTRO(150f, 400, FormaOnda.QUADRADA),
     MAP_CONCLUIDO(523f, 600, FormaOnda.SENOIDAL),
-    FLOOR_CONCLUIDO(659f, 800, FormaOnda.SENOIDAL)
+    FLOOR_CONCLUIDO(659f, 800, FormaOnda.SENOIDAL),
+    LENTIDAO_INICIO(200f, 500, FormaOnda.QUADRADA),
+    BOSS_PROVOCACAO(400f, 600, FormaOnda.QUADRADA),
+    POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL)
 }
 
 /** Forma de onda para síntese de áudio procedural. */
@@ -359,9 +362,17 @@ class AudioManager(context: Context) {
      * @return ID do recurso de música ou null
      */
     private fun obterRecursoMusicaBioma(bioma: Biome): Int? {
-        // Mapeamento futuro de Bioma → R.raw.nome_da_musica
-        // Exemplo: Biome.MINA_ABANDONADA -> R.raw.musica_mina_abandonada
-        return null
+        val ctx = contextoRef.get() ?: return null
+        val nomeRes = when (bioma) {
+            Biome.MINA_ABANDONADA -> "bgm_mina"
+            Biome.RIACHOS_SUBTERRANEOS -> "bgm_riacho"
+            Biome.JARDIM_DE_FUNGOS -> "bgm_plantacao"
+            Biome.CONSTRUCOES_ROCHOSAS -> "bgm_rocha"
+            Biome.ERA_DINOSSAUROS -> "bgm_vulcao"
+            else -> "bgm_default"
+        }
+        val id = ctx.resources.getIdentifier(nomeRes, "raw", ctx.packageName)
+        return if (id != 0) id else null
     }
 
     // =========================================================================
@@ -483,9 +494,13 @@ class AudioManager(context: Context) {
      */
     fun retomar() {
         emReproducao = true
-        try {
-            mediaPlayerAtual?.start()
-        } catch (_: Exception) {}
+        if (mediaPlayerAtual == null && biomaAtual != null) {
+            transicionarParaBioma(biomaAtual!!)
+        } else {
+            try {
+                mediaPlayerAtual?.start()
+            } catch (_: Exception) {}
+        }
 
         // Reinicia agendamento de sons ambientes
         biomaAtual?.let { agendarSonsAmbientes(it) }
