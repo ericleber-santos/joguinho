@@ -25,7 +25,8 @@ data class MonsterAppearance(
     val eyeColor: Int,
     val size: Float,
     val shapeVariant: Int,
-    val animVariant: Int
+    val animVariant: Int,
+    val isBoss: Boolean = false
 )
 
 /**
@@ -408,6 +409,15 @@ class CharacterRenderer {
             1 -> monsterEspinhoso(canvas, cx, cy, s, t, appearance)
             2 -> monsterQuadrado(canvas, cx, cy, s, t, appearance)
             3 -> monsterAlto(canvas, cx, cy, s, t, appearance)
+        }
+
+        // Efeito de aura para o Boss
+        if (appearance.isBoss) {
+            paintContorno.color = Color.argb(100, 255, 50, 50)
+            paintContorno.strokeWidth = 2f * s
+            val auraRaio = (12 + Math.sin(t * Math.PI * 4) * 2) * s
+            canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
+            paintContorno.strokeWidth = 1.5f
         }
     }
 

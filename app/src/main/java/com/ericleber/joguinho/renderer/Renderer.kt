@@ -249,11 +249,23 @@ class Renderer(
             val mx = monster.position.x * tileW + cameraX + tileW / 2f
             val my = monster.position.y * tileH + cameraY + tileH / 2f
             val seed = monster.id.hashCode()
+            // Lógica de escala:
+            // - Aumento global de 50% em todos os monstros
+            // - Boss: Mantém escala imponente (base 2.5 + variação)
+            val baseScale = (0.7f + ((seed and 0xF) / 15f) * 0.6f) * 1.5f
+            val finalScale = if (monster.isBoss) {
+                2.5f + ((seed and 0x7) / 7f) * 0.5f
+            } else {
+                baseScale
+            }
+
             val appearance = MonsterAppearance(
-                bodyColor = Color.rgb(150 + (seed and 0xFF) % 100, 50 + (seed shr 8 and 0xFF) % 80, 50 + (seed shr 16 and 0xFF) % 80),
-                eyeColor = Color.rgb(255, 200 + (seed and 0x3F), 0),
-                size = 0.7f + ((seed and 0xF) / 15f) * 0.6f,
-                shapeVariant = seed and 0x3, animVariant = seed shr 4 and 0x3
+                bodyColor = if (monster.isBoss) Color.rgb(200, 40, 40) else Color.rgb(150 + (seed and 0xFF) % 100, 50 + (seed shr 8 and 0xFF) % 80, 50 + (seed shr 16 and 0xFF) % 80),
+                eyeColor = if (monster.isBoss) Color.YELLOW else Color.rgb(255, 200 + (seed and 0x3F), 0),
+                size = finalScale,
+                shapeVariant = seed and 0x3, 
+                animVariant = seed shr 4 and 0x3,
+                isBoss = monster.isBoss
             )
             characterRenderer.renderMonster(canvas, mx, my, appearance, monsterAnimFrame, tileW, tileH)
         }
