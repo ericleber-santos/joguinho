@@ -116,6 +116,7 @@ class GameViewModel : ViewModel() {
         gameState.mazeData = mapaGerado.maze
         gameState.monsters = mapaGerado.monsters
         gameState.traps = mapaGerado.traps
+        gameState.items = mapaGerado.items
         gameState.currentMapClean = true
 
         val maze = mapaGerado.maze

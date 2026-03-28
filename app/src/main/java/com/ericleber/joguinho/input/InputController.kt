@@ -212,11 +212,17 @@ class InputController(
 
         // Calcula velocidade efetiva
         val baseSpeed = BASE_SPEED_TILES_PER_SEC
-        val speedMultiplier = when {
+        var speedMultiplier = when {
             gameState.heroIsSlowedDown -> SLOWDOWN_MULTIPLIER
             runButtonPressed -> RUN_MULTIPLIER
             else -> 1f
         }
+        
+        // Aplica buff de velocidade (+50%) se ativo
+        if (gameState.heroHasSpeedBuff) {
+            speedMultiplier *= 1.5f
+        }
+        
         val effectiveSpeed = baseSpeed * speedMultiplier
 
         // Vetor de movimento por frame usando entrada analógica/normalizada

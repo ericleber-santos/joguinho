@@ -1,5 +1,6 @@
 package com.ericleber.joguinho.pcg
 
+import com.ericleber.joguinho.core.ItemState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.MonsterState
 import com.ericleber.joguinho.core.TrapState
@@ -12,7 +13,8 @@ import kotlin.random.Random
 data class GeneratedMap(
     val maze: MazeData,
     val monsters: List<MonsterState>,
-    val traps: List<TrapState>
+    val traps: List<TrapState>,
+    val items: List<ItemState> = emptyList()
 )
 
 /**
@@ -74,11 +76,13 @@ class PCGEngine {
                 val entityRandom = Random(attemptSeed xor 0xDEADBEEF)
                 val placer = EntityPlacer(entityRandom)
 
-                val monsters = placer.placeMonsters(maze, floorNumber, criticalPath)
+                val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath)
                 val monsterIndices = monsters.map { it.position.y * maze.width + it.position.x }.toSet()
                 val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
+                val trapIndices = traps.map { it.position.y * maze.width + it.position.x }.toSet()
+                val items = placer.placeItems(maze, criticalPath, monsterIndices + trapIndices)
 
-                return GeneratedMap(maze, monsters, traps)
+                return GeneratedMap(maze, monsters, traps, items)
             }
         }
 
@@ -167,10 +171,12 @@ class PCGEngine {
 
         val criticalPath = computeCriticalPath(maze)
         val placer = EntityPlacer(Random(seed))
-        val monsters = placer.placeMonsters(maze, floorNumber, criticalPath)
+        val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath)
         val monsterIndices = monsters.map { it.position.y * w + it.position.x }.toSet()
         val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
+        val trapIndices = traps.map { it.position.y * w + it.position.x }.toSet()
+        val items = placer.placeItems(maze, criticalPath, monsterIndices + trapIndices)
 
-        return GeneratedMap(maze, monsters, traps)
+        return GeneratedMap(maze, monsters, traps, items)
     }
 }

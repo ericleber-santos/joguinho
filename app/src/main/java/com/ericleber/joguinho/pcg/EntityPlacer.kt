@@ -1,5 +1,7 @@
 package com.ericleber.joguinho.pcg
 
+import com.ericleber.joguinho.core.ItemState
+import com.ericleber.joguinho.core.ItemType
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.MonsterState
 import com.ericleber.joguinho.core.MovementPattern
@@ -20,11 +22,10 @@ import kotlin.random.Random
 class EntityPlacer(private val random: Random) {
 
     /**
-     * Calcula a quantidade de Monsters para o Floor informado.
-     * Fórmula: min(2 + floor(floorNumber / 10), 12)  — Requisito 5.5
+     * Calcula a quantidade de Monsters para o mapa atual.
+     * Mapa 1 = 3 monstros, Mapa 2 = 4 monstros, Mapa 3 = 5 monstros.
      */
-    fun monsterCount(floorNumber: Int): Int =
-        minOf(2 + floorNumber / 10, 12)
+    fun monsterCount(mapIndex: Int): Int = 3 + mapIndex
 
     /**
      * Calcula a quantidade de Traps para o Floor informado.
@@ -44,19 +45,72 @@ class EntityPlacer(private val random: Random) {
     fun placeMonsters(
         maze: MazeData,
         floorNumber: Int,
+        mapIndex: Int,
         criticalPath: Set<Int>
     ): List<MonsterState> {
-        val count = monsterCount(floorNumber)
-        val candidates = getFloorCandidates(maze, criticalPath)
-        val selected = candidates.shuffled(random).take(count)
-        val patterns = MovementPattern.entries.toTypedArray()
+        val count = monsterCount(mapIndex)
+        val candidates = getFloorCandidates(maze, criticalPath).toMutableList()
+        
+        val monsters = mutableListOf<MonsterState>()
+        
+        // Se for o último mapa do bioma (mapIndex == 2), adiciona um Boss próximo à escada
+        if (mapIndex == 2) {
+            val exitX = maze.exitIndex % maze.width
+            val exitY = maze.exitIndex / maze.width
+            
+            // Busca um tile de chão próximo à saída (distância 2-3)
+            val bossTile = candidates.filter { 
+                val dist = Math.abs(it % maze.width - exitX) + Math.abs(it / maze.width - exitY)
+                dist in 2..4
+            }.minByOrNull { 
+                Math.abs(it % maze.width - exitX) + Math.abs(it / maze.width - exitY)
+            }
+            
+            bossTile?.let {
+                monsters.add(MonsterState(
+                    id = "boss_${floorNumber}",
+                    position = Position(it % maze.width, it / maze.width),
+                    movementPattern = MovementPattern.BOSS_STALKER,
+                    isActive = true,
+                    isBoss = true,
+                    bossType = (floorNumber / 10) % 3 // Varia o tipo por bioma
+                ))
+                candidates.remove(it)
+            }
+        }
 
-        return selected.mapIndexed { i, index ->
+        val selected = candidates.shuffled(random).take(count)
+        val patterns = arrayOf(MovementPattern.PATROL_HORIZONTAL, MovementPattern.PATROL_VERTICAL, MovementPattern.RANDOM)
+
+        monsters.addAll(selected.mapIndexed { i, index ->
             MonsterState(
-                id = "monster_${floorNumber}_$i",
+                id = "monster_${floorNumber}_${mapIndex}_$i",
                 position = Position(index % maze.width, index / maze.width),
                 movementPattern = patterns[random.nextInt(patterns.size)],
                 isActive = true
+            )
+        })
+        
+        return monsters
+    }
+
+    /**
+     * Posiciona itens benéficos (Botas de Velocidade) no mapa.
+     */
+    fun placeItems(
+        maze: MazeData,
+        criticalPath: Set<Int>,
+        occupiedIndices: Set<Int>
+    ): List<ItemState> {
+        // 1 item por mapa, em algum lugar fora do caminho crítico
+        val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
+        val selected = candidates.shuffled(random).take(1)
+        
+        return selected.mapIndexed { i, index ->
+            ItemState(
+                id = "item_${maze.seed}_$i",
+                position = Position(index % maze.width, index / maze.width),
+                type = ItemType.SPEED_BOOTS
             )
         }
     }

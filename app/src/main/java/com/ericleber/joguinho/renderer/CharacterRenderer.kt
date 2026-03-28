@@ -73,7 +73,9 @@ class CharacterRenderer {
         animState: HeroAnimState,
         frame: Int,
         tileW: Float,
-        tileH: Float
+        tileH: Float,
+        isSlowedDown: Boolean = false,
+        hasSpeedBuff: Boolean = false
     ) {
         val s = tileW / 48f
         val totalFrames = if (animState == HeroAnimState.IDLE) 4 else 8
@@ -85,17 +87,20 @@ class CharacterRenderer {
             else -> 0f
         }
 
-        // Efeito de piscar vermelho durante a lentidão
-        val isFlashingRed = animState == HeroAnimState.SLOWDOWN && (frame % 2 == 0)
+        // Efeito de piscar vermelho durante a lentidão ou azul durante o buff
+        val isFlashingRed = isSlowedDown && (frame % 2 == 0)
+        val isFlashingBlue = hasSpeedBuff && (frame % 2 == 0)
         
         val corCorpo = when {
             isFlashingRed -> Color.rgb(255, 50, 50) // Vermelho vibrante
-            animState == HeroAnimState.SLOWDOWN -> Color.rgb(80, 80, 180)
+            isFlashingBlue -> Color.rgb(50, 150, 255) // Azul vibrante
+            isSlowedDown -> Color.rgb(80, 80, 180)
             else -> Color.rgb(70, 110, 200)
         }
         val corCalca = when {
             isFlashingRed -> Color.rgb(180, 30, 30) // Vermelho escuro
-            animState == HeroAnimState.SLOWDOWN -> Color.rgb(50, 50, 130)
+            isFlashingBlue -> Color.rgb(30, 80, 180) // Azul escuro
+            isSlowedDown -> Color.rgb(50, 50, 130)
             else -> Color.rgb(45, 70, 140)
         }
 

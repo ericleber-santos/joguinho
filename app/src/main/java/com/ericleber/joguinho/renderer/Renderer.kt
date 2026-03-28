@@ -222,6 +222,22 @@ class Renderer(
             }
         }
 
+        // Passo 2.5: Itens
+        for (item in gameState.items) {
+            if (!item.isActive) continue
+            val sx = item.position.x * tileW + cameraX
+            val sy = item.position.y * tileH + cameraY
+            
+            // Renderiza bota de velocidade (simples via Canvas por enquanto)
+            val paint = android.graphics.Paint().apply { color = android.graphics.Color.CYAN }
+            val s = tileW * 0.4f
+            val padding = (tileW - s) / 2f
+            canvas.drawRect(sx + padding, sy + padding, sx + padding + s, sy + padding + s, paint)
+            // Detalhe branco para brilho
+            paint.color = android.graphics.Color.WHITE
+            canvas.drawRect(sx + padding + 2f, sy + padding + 2f, sx + padding + 6f, sy + padding + 6f, paint)
+        }
+
         // Passo 3: Personagens (centro do tile)
         val heroSx = gameState.heroPosition.x * tileW + cameraX + tileW / 2f
         val heroSy = gameState.heroPosition.y * tileH + cameraY + tileH / 2f
@@ -258,8 +274,11 @@ class Renderer(
             gameState.heroStoppedDurationSec > 0.05f -> HeroAnimState.IDLE
             else -> HeroAnimState.WALK
         }
-        val currentFrame = if (heroAnimState == HeroAnimState.IDLE) 0 else heroAnimFrame
-        characterRenderer.renderHero(canvas, heroSx, drawHeroSy, heroDirection, heroAnimState, currentFrame, tileW, tileH)
+        characterRenderer.renderHero(
+            canvas, heroSx, drawHeroSy, heroDirection, heroAnimState, heroAnimFrame, tileW, tileH,
+            isSlowedDown = gameState.heroIsSlowedDown,
+            hasSpeedBuff = gameState.heroHasSpeedBuff
+        )
 
         // Passo 4: Paredes (por cima de tudo)
         for (ty in minY..maxY) {

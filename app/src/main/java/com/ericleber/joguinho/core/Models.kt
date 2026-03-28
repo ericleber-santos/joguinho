@@ -9,7 +9,7 @@ enum class Direction {
 
 @Serializable
 enum class MovementPattern {
-    LINEAR, CIRCULAR, RANDOM, CHASE
+    LINEAR, CIRCULAR, RANDOM, CHASE, PATROL_HORIZONTAL, PATROL_VERTICAL, BOSS_STALKER
 }
 
 @Serializable
@@ -46,8 +46,23 @@ data class MonsterState(
     val id: String,
     val position: Position,
     val movementPattern: MovementPattern,
-    val isActive: Boolean
+    val isActive: Boolean,
+    val isBoss: Boolean = false,
+    val bossType: Int = 0 // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
 )
+
+@Serializable
+data class ItemState(
+    val id: String,
+    val position: Position,
+    val type: ItemType,
+    val isActive: Boolean = true
+)
+
+@Serializable
+enum class ItemType {
+    SPEED_BOOTS
+}
 
 @Serializable
 data class TrapState(

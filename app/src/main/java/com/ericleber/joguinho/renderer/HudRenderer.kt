@@ -85,9 +85,17 @@ class HudRenderer {
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = (alturaB * 1.28f).coerceIn(40f, 64f)
-            textPaint.color = Color.argb(255, 150, 150, 255) // Cor mais vibrante
+            textPaint.color = Color.argb(255, 255, 80, 80) // Vermelho para indicar perigo/lentidão
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, centroY, textPaint)
+        }
+        
+        // Mensagem do Boss — abaixo da label de lentidão
+        gameState.bossMessage?.let { msg ->
+            textPaint.textSize = (alturaB * 0.5f).coerceIn(16f, 24f)
+            textPaint.color = Color.rgb(255, 200, 50) // Amarelo/Dourado para o Boss
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(msg, largura / 2f, centroY + (alturaB * 0.4f), textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -155,9 +163,17 @@ class HudRenderer {
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = barH * 1.2f
-            textPaint.color = Color.argb(255, 150, 150, 255)
+            textPaint.color = Color.argb(255, 255, 80, 80)
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
+        }
+        
+        // Mensagem do Boss
+        gameState.bossMessage?.let { msg ->
+            textPaint.textSize = barH * 0.4f
+            textPaint.color = Color.rgb(255, 200, 50)
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(msg, w / 2f, baselineY + barH * 0.3f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -208,9 +224,17 @@ class HudRenderer {
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = barH * 1.2f
-            textPaint.color = Color.argb(255, 150, 150, 255)
+            textPaint.color = Color.argb(255, 255, 80, 80)
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
+        }
+        
+        // Mensagem do Boss
+        gameState.bossMessage?.let { msg ->
+            textPaint.textSize = barH * 0.4f
+            textPaint.color = Color.rgb(255, 200, 50)
+            textPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(msg, w / 2f, baselineY + barH * 0.3f, textPaint)
         }
 
         textPaint.textAlign = Paint.Align.LEFT

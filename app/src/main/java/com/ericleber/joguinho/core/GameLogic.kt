@@ -71,12 +71,34 @@ class GameLogic(private val gameState: GameState) {
         if (gameState.phase != GamePhase.PLAYING) return
         val maze = gameState.mazeData ?: return
 
+        val deltaMs = (deltaTimeSec * 1000).toLong()
+
         // Atualiza timers de Slowdown
         if (gameState.heroIsSlowedDown) {
-            gameState.heroSlowdownRemainingMs -= (deltaTimeSec * 1000).toLong()
+            gameState.heroSlowdownRemainingMs -= deltaMs
             if (gameState.heroSlowdownRemainingMs <= 0) {
                 gameState.heroIsSlowedDown = false
                 gameState.heroSlowdownRemainingMs = 0
+            }
+        }
+
+        // Verifica colisão com itens
+        verificarColisaoItens()
+
+        // Atualiza timer de Buff de Velocidade
+        if (gameState.heroHasSpeedBuff) {
+            gameState.heroSpeedBuffRemainingMs -= deltaMs
+            if (gameState.heroSpeedBuffRemainingMs <= 0) {
+                gameState.heroHasSpeedBuff = false
+                gameState.heroSpeedBuffRemainingMs = 0
+            }
+        }
+
+        // Atualiza timer de mensagem do Boss
+        if (gameState.bossMessage != null) {
+            gameState.bossMessageTimerMs -= deltaMs
+            if (gameState.bossMessageTimerMs <= 0) {
+                gameState.bossMessage = null
             }
         }
         if (gameState.spikeIsSlowedDown) {
@@ -114,16 +136,24 @@ class GameLogic(private val gameState: GameState) {
      */
     private fun atualizarMovimentoMonsters(deltaTimeSec: Float, maze: MazeData) {
         val heroPos = gameState.heroPosition
-        val velocidade = if (gameState.heroIsSlowedDown) MONSTER_SPEED_TILES_PER_SEC * 0.7f
-                         else MONSTER_SPEED_TILES_PER_SEC
-
+        
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
+
+            // Bosses são mais rápidos e têm IA especial
+            val baseVel = if (monster.isBoss) MONSTER_SPEED_TILES_PER_SEC * 1.4f else MONSTER_SPEED_TILES_PER_SEC
+            val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
 
             val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
             monsterTimers[monster.id] = timer
 
             val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
+            
+            // Lógica de Boss: Provocações
+            if (monster.isBoss && (timer % 5f < deltaTimeSec)) {
+                atualizarProvocacaoBoss(monster)
+            }
+
             val accumX = (monsterAccumX[monster.id] ?: 0f) + dx * velocidade * deltaTimeSec
             val accumY = (monsterAccumY[monster.id] ?: 0f) + dy * velocidade * deltaTimeSec
 
@@ -149,6 +179,36 @@ class GameLogic(private val gameState: GameState) {
         }
     }
 
+    private fun atualizarProvocacaoBoss(boss: MonsterState) {
+        val frases = listOf(
+            "Você não vai passar!",
+            "O Spike parece delicioso...",
+            "Fuja enquanto pode!",
+            "Este bioma é meu!",
+            "Onde pensa que vai?"
+        )
+        gameState.bossMessage = frases.random()
+        gameState.bossMessageTimerMs = 3000L
+    }
+
+    private fun verificarColisaoItens() {
+        val heroPos = gameState.heroPosition
+        gameState.items = gameState.items.map { item ->
+            if (item.isActive && item.position == heroPos) {
+                when (item.type) {
+                    ItemType.SPEED_BOOTS -> {
+                        gameState.heroHasSpeedBuff = true
+                        gameState.heroSpeedBuffRemainingMs = 7000L
+                        // TODO: Tocar som de "coisa boa"
+                    }
+                }
+                item.copy(isActive = false)
+            } else {
+                item
+            }
+        }
+    }
+
     /**
      * Calcula o vetor de direção (dx, dy) para um Monster conforme seu padrão.
      * Retorna valores entre -1.0 e 1.0.
@@ -160,38 +220,51 @@ class GameLogic(private val gameState: GameState) {
     ): Pair<Float, Float> = when (monster.movementPattern) {
 
         MovementPattern.LINEAR -> {
-            // Patrulha horizontal: vai e volta
             val fase = (timer * 0.5f) % 2f
             if (fase < 1f) Pair(1f, 0f) else Pair(-1f, 0f)
         }
 
+        MovementPattern.PATROL_HORIZONTAL -> {
+            // Patrulha curta (estilo Mario)
+            val fase = (timer * 0.8f) % 4f
+            if (fase < 2f) Pair(1f, 0f) else Pair(-1f, 0f)
+        }
+
+        MovementPattern.PATROL_VERTICAL -> {
+            val fase = (timer * 0.8f) % 4f
+            if (fase < 2f) Pair(0f, 1f) else Pair(0f, -1f)
+        }
+
+        MovementPattern.BOSS_STALKER -> {
+            // Persegue por 3s, para por 2s (susto)
+            val ciclo = timer % 5f
+            if (ciclo < 3f) {
+                val dx = (heroPos.x - monster.position.x).toFloat()
+                val dy = (heroPos.y - monster.position.y).toFloat()
+                val dist = sqrt(dx * dx + dy * dy)
+                if (dist > 0) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
+            } else {
+                Pair(0f, 0f)
+            }
+        }
+
         MovementPattern.CIRCULAR -> {
-            // Movimento circular ao redor da posição inicial
             val angulo = timer * 1.2f
-            Pair(
-                kotlin.math.cos(angulo.toDouble()).toFloat(),
-                kotlin.math.sin(angulo.toDouble()).toFloat()
-            )
+            Pair(kotlin.math.cos(angulo.toDouble()).toFloat(), kotlin.math.sin(angulo.toDouble()).toFloat())
         }
 
         MovementPattern.RANDOM -> {
-            // Muda direção a cada ~2 segundos
             val intervalo = (timer / 2f).toInt()
             val seed = monster.id.hashCode() xor intervalo
-            val direcoes = listOf(
-                Pair(1f, 0f), Pair(-1f, 0f), Pair(0f, 1f), Pair(0f, -1f),
-                Pair(0f, 0f) // pausa ocasional
-            )
+            val direcoes = listOf(Pair(1f, 0f), Pair(-1f, 0f), Pair(0f, 1f), Pair(0f, -1f), Pair(0f, 0f))
             direcoes[((seed and 0x7FFFFFFF) % direcoes.size)]
         }
 
         MovementPattern.CHASE -> {
-            // Persegue o Hero por linha de visão simples
             val dx = (heroPos.x - monster.position.x).toFloat()
             val dy = (heroPos.y - monster.position.y).toFloat()
             val dist = sqrt(dx * dx + dy * dy)
-            if (dist < 8f && dist > 0f) Pair(dx / dist, dy / dist)
-            else Pair(0f, 0f) // fora do alcance de perseguição
+            if (dist < 8f && dist > 0f) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
         }
     }
 
@@ -202,19 +275,26 @@ class GameLogic(private val gameState: GameState) {
     /**
      * Verifica se o Hero está na mesma posição de algum Monster ativo.
      * Aplica Slowdown ao Hero (3s) e ao Spike (2s), e recua o Monster 2 tiles.
+     * Agora com acúmulo de tempo e cooldown de 2s por monstro.
      */
     private fun verificarColisaoHeroMonster(maze: MazeData) {
-        if (gameState.heroIsSlowedDown) return // já em Slowdown, ignora nova colisão
-
         val heroPos = gameState.heroPosition
+        val currentTime = System.currentTimeMillis()
 
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
             if (monster.position != heroPos) return@map monster
 
-            // Aplica Slowdown ao Hero
+            // Verifica cooldown de 2 segundos para o mesmo monstro
+            val lastCollision = gameState.monsterCollisionCooldowns[monster.id] ?: 0L
+            if (currentTime - lastCollision < 2000L) return@map monster
+
+            // Registra colisão para cooldown
+            gameState.monsterCollisionCooldowns[monster.id] = currentTime
+
+            // Aplica/Acumula Slowdown ao Hero
             gameState.heroIsSlowedDown = true
-            gameState.heroSlowdownRemainingMs = SLOWDOWN_MONSTER_MS
+            gameState.heroSlowdownRemainingMs += SLOWDOWN_MONSTER_MS
             gameState.currentMapClean = false
             
             // Incrementa contador de lentidões no mapa
@@ -233,7 +313,7 @@ class GameLogic(private val gameState: GameState) {
 
             // Aplica Slowdown ao Spike
             gameState.spikeIsSlowedDown = true
-            gameState.spikeSlowdownRemainingMs = SLOWDOWN_SPIKE_MS
+            gameState.spikeSlowdownRemainingMs += SLOWDOWN_SPIKE_MS
 
             // Emite evento para SpikeAI e HUD
             gameState.emitEvent(GameEvent.HeroReceivedSlowdown)

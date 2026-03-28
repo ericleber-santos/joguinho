@@ -63,6 +63,17 @@ class GameState {
     var heroIsSlowedDown: Boolean = false
     var heroSlowdownRemainingMs: Long = 0L
     var mapSlowdownCount: Int = 0 // Contador de lentidões no mapa atual
+    
+    // Buff de velocidade (+50% por 7s)
+    var heroHasSpeedBuff: Boolean = false
+    var heroSpeedBuffRemainingMs: Long = 0L
+    
+    // Cooldown de monstros (ID do monstro -> timestamp da última colisão)
+    val monsterCollisionCooldowns: MutableMap<String, Long> = mutableMapOf()
+    
+    // Frase atual do Boss para exibição no HUD
+    var bossMessage: String? = null
+    var bossMessageTimerMs: Long = 0L
 
     // --- Estado do Spike ---
     var spikeIsSlowedDown: Boolean = false
@@ -71,6 +82,7 @@ class GameState {
     // --- Entidades do mapa ---
     var monsters: List<MonsterState> = emptyList()
     var traps: List<TrapState> = emptyList()
+    var items: List<ItemState> = emptyList()
 
     // --- Timers ---
     /** Tempo acumulado no Floor atual em milissegundos. */
