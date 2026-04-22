@@ -149,6 +149,16 @@ class GameActivity : AppCompatActivity() {
         // Iniciar novo jogo ou restaurar save conforme Intent extra "novoJogo"
         val novoJogo = intent.getBooleanExtra("novoJogo", true)
         if (novoJogo) {
+            val devMode = intent.getBooleanExtra("devMode", false)
+            if (devMode) {
+                viewModel.gameState.floorNumber = intent.getIntExtra("devFloor", 1)
+                val biomeName = intent.getStringExtra("devBiome")
+                if (biomeName != null) {
+                    viewModel.gameState.devModeForcedBiome = try { 
+                        com.ericleber.joguinho.biome.Biome.valueOf(biomeName) 
+                    } catch (e: Exception) { null }
+                }
+            }
             viewModel.iniciarJogo()
         } else {
             viewModel.restaurarEstado()

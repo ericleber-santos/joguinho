@@ -26,9 +26,10 @@ import kotlinx.coroutines.withContext
  *
  * Exibe animação de introdução (Hero e Spike entrando na caverna) por até 4 segundos,
  * com skip por toque. Após a animação, exibe o menu principal com as opções:
- * Continuar, Novo Jogo, Configurações, Galeria de Biomas e Recorde Pessoal.
+ * Continuar, Novo Jogo, Configurações, Galeria de Biomas, Recorde Pessoal e Modo DEV.
  *
  * Toda a UI é desenhada via Canvas em uma View customizada — sem XML.
+ * Design State of the Art (Pro Max) com Cubic Ease-Out e partículas decorativas.
  *
  * Requisitos: 1.1, 1.2, 1.3, 1.4, 1.5, 10.1, 10.7
  */
@@ -120,6 +121,51 @@ class MainMenuActivity : AppCompatActivity() {
         menuView.exibirGaleria(exibindoGaleria)
     }
 
+    /** Abre um Modal Nativo para iniciar o jogo em um local específico (Modo DEV). */
+    private fun abrirModoDev() {
+        val biomasNomes = Biome.entries.map { it.displayName }.toTypedArray()
+        
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(60, 40, 60, 40)
+        }
+        val floorInput = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "Andar Inicial (Ex: 15)"
+            textSize = 18f
+        }
+        val textBioma = android.widget.TextView(this).apply {
+            text = "Selecione o Bioma:"
+            textSize = 14f
+            setPadding(0, 30, 0, 10)
+        }
+        val biomeSpinner = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@MainMenuActivity, android.R.layout.simple_spinner_dropdown_item, biomasNomes)
+        }
+        layout.addView(floorInput)
+        layout.addView(textBioma)
+        layout.addView(biomeSpinner)
+
+        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("⚙️ Modo DEV (Teste)")
+            .setView(layout)
+            .setPositiveButton("Iniciar Jogo") { _, _ ->
+                val floorStr = floorInput.text.toString()
+                val floor = if (floorStr.isNotEmpty()) floorStr.toInt() else 1
+                val biome = Biome.entries[biomeSpinner.selectedItemPosition]
+                
+                val intent = Intent(this, GameActivity::class.java).apply {
+                    putExtra("novoJogo", true)
+                    putExtra("devMode", true)
+                    putExtra("devFloor", floor)
+                    putExtra("devBiome", biome.name)
+                }
+                startActivity(intent)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     // =========================================================================
     // View customizada — toda UI desenhada via Canvas
     // =========================================================================
@@ -145,6 +191,9 @@ class MainMenuActivity : AppCompatActivity() {
         // --- Animação de partículas da galeria ---
         private var frameGaleria = 0
         private var ultimoFrameMs = System.currentTimeMillis()
+        
+        // --- Interatividade de botões ---
+        private val retanguloBotoes = mutableMapOf<String, RectF>()
 
         // --- Tintas reutilizáveis ---
         private val tintaFundo = Paint().apply { isAntiAlias = true }
@@ -160,8 +209,23 @@ class MainMenuActivity : AppCompatActivity() {
         }
         private val tintaPersonagem = Paint().apply { isAntiAlias = true }
 
-        // --- Retângulos dos botões para detecção de toque ---
-        private val retanguloBotoes = mutableMapOf<String, RectF>()
+        // --- Tinta de sombra para os botões ---
+        private val tintaSombra = Paint().apply {
+            isAntiAlias = true
+            color = Color.argb(120, 0, 0, 0)
+        }
+
+        // --- Partículas Decorativas de Fundo ---
+        inner class MenuParticle(var x: Float, var y: Float, var speedY: Float, var size: Float, var alpha: Int)
+        private val particles = List(40) { 
+            MenuParticle(
+                x = (Math.random() * 3000).toFloat(),
+                y = (Math.random() * 2000).toFloat(),
+                speedY = (Math.random() * 2f + 0.5f).toFloat(),
+                size = (Math.random() * 4f + 2f).toFloat(),
+                alpha = (Math.random() * 150 + 50).toInt()
+            ) 
+        }
 
         init {
             // Iniciar loop de animação
@@ -191,6 +255,16 @@ class MainMenuActivity : AppCompatActivity() {
                     progressoIntro = ((agora - inicioIntroMs) / DURACAO_INTRO_MS.toFloat()).coerceIn(0f, 1f)
                     if (progressoIntro >= 1f) emIntro = false
                 }
+                
+                // Animar partículas de fundo flutuando pra cima
+                particles.forEach { p ->
+                    p.y -= p.speedY
+                    if (p.y < -10) {
+                        p.y = height.toFloat() + 10f
+                        p.x = (Math.random() * width).toFloat()
+                    }
+                }
+
                 // Avançar frame da galeria
                 val deltaTempo = agora - ultimoFrameMs
                 if (deltaTempo >= 100) {
@@ -238,6 +312,7 @@ class MainMenuActivity : AppCompatActivity() {
                         "configuracoes" -> abrirConfiguracoes()
                         "galeria" -> alternarGaleria()
                         "recorde" -> { /* apenas exibe informação */ }
+                        "modoDev" -> abrirModoDev()
                     }
                     return true
                 }
@@ -285,25 +360,39 @@ class MainMenuActivity : AppCompatActivity() {
             canvas.drawRect(centroX + raioArco * 0.7f, 0f, largura, altura, tintaFundo)
 
             // Efeito de luz da caverna
-            val alphaLuz = (progressoIntro * 180).toInt().coerceIn(0, 180)
+            // Usando Cubic Ease-Out para suavidade na entrada e luz
+            val t = progressoIntro
+            val easeOut = 1f - Math.pow(1.0 - t.toDouble(), 3.0).toFloat()
+            
+            val alphaLuz = (easeOut * 180).toInt().coerceIn(0, 180)
             tintaFundo.color = Color.argb(alphaLuz, 255, 140, 0)
             canvas.drawCircle(centroX, centroY, raioArco * 0.6f, tintaFundo)
 
+            // Partículas de poeira da caverna (brilho suave)
+            tintaFundo.color = Color.argb(100, 255, 200, 100)
+            particles.forEach { p ->
+                if (p.x in (centroX - raioArco)..(centroX + raioArco)) {
+                    canvas.drawCircle(p.x, p.y, p.size, tintaFundo)
+                }
+            }
+
             // Hero entrando da esquerda (Requisito 1.1)
-            val posHeroX = -largura * 0.15f + progressoIntro * (centroX - largura * 0.08f)
+            val posHeroX = -largura * 0.15f + easeOut * (centroX - largura * 0.08f)
             val posHeroY = centroY + altura * 0.05f
             desenharHeroSimples(canvas, posHeroX, posHeroY, altura * 0.12f)
 
             // Spike entrando da direita (Requisito 1.1)
-            val posSpikeX = largura * 1.15f - progressoIntro * (largura * 0.15f + centroX - largura * 0.08f)
+            val posSpikeX = largura * 1.15f - easeOut * (largura * 0.15f + centroX - largura * 0.08f)
             val posSpikeY = centroY + altura * 0.05f
             desenharSpikeSimples(canvas, posSpikeX, posSpikeY, altura * 0.10f)
 
-            // Título do jogo
-            val alphaTexto = (progressoIntro * 255).toInt().coerceIn(0, 255)
+            // Título do jogo com fade-in
+            val alphaTexto = (easeOut * 255).toInt().coerceIn(0, 255)
             tintaTexto.color = Color.argb(alphaTexto, 212, 160, 23)
             tintaTexto.textSize = altura * 0.10f
+            tintaTexto.setShadowLayer(8f, 0f, 4f, Color.BLACK)
             canvas.drawText("Spike na Caverna", centroX, altura * 0.18f, tintaTexto)
+            tintaTexto.clearShadowLayer()
 
             // Dica de skip
             tintaTexto.color = Color.argb((alphaTexto * 0.6f).toInt(), 255, 255, 255)
@@ -373,10 +462,18 @@ class MainMenuActivity : AppCompatActivity() {
             tintaFundo.color = 0xFF1A1008.toInt()
             canvas.drawRect(0f, altura * 0.6f, largura, altura, tintaFundo)
 
-            // Título
+            // Partículas cintilantes no fundo
+            particles.forEach { p ->
+                tintaFundo.color = Color.argb(p.alpha, 255, 220, 150)
+                canvas.drawCircle(p.x, p.y, p.size, tintaFundo)
+            }
+
+            // Título com sombra intensa (Premium)
             tintaTexto.color = 0xFFD4A017.toInt()
-            tintaTexto.textSize = altura * 0.11f
-            canvas.drawText("Spike na Caverna", largura / 2f, altura * 0.18f, tintaTexto)
+            tintaTexto.textSize = altura * 0.12f
+            tintaTexto.setShadowLayer(12f, 0f, 6f, Color.argb(200, 0, 0, 0))
+            canvas.drawText("Spike na Caverna", largura / 2f, altura * 0.16f, tintaTexto)
+            tintaTexto.clearShadowLayer()
 
             // Subtítulo decorativo
             tintaTexto.color = 0xFF8B6914.toInt()
@@ -396,13 +493,14 @@ class MainMenuActivity : AppCompatActivity() {
             val larguraBotao = largura * 0.32f
             val alturaBotao = altura * 0.11f
             val espacamento = altura * 0.135f
-            val inicioY = altura * 0.38f
+            val inicioY = altura * 0.35f
 
             val botoes = listOf(
                 Triple("continuar", "Continuar", temSave),
                 Triple("novoJogo", "Novo Jogo", false),
-                Triple("configuracoes", "Configurações", false),
                 Triple("galeria", "Galeria de Biomas", false),
+                Triple("configuracoes", "Configurações", false),
+                Triple("modoDev", "Modo DEV (Teste)", false),
                 Triple("recorde", "Recorde Pessoal", false)
             )
 
@@ -415,7 +513,7 @@ class MainMenuActivity : AppCompatActivity() {
                     topoY + alturaBotao
                 )
                 retanguloBotoes[acao] = rect
-                desenharBotao(canvas, rect, rotulo, destacado, acao == "continuar" && !temSave)
+                desenharBotao(canvas, rect, rotulo, acao, destacado, acao == "continuar" && !temSave)
             }
         }
 
@@ -428,36 +526,52 @@ class MainMenuActivity : AppCompatActivity() {
             canvas: Canvas,
             rect: RectF,
             rotulo: String,
+            acao: String,
             destacado: Boolean,
             desabilitado: Boolean
         ) {
-            // Fundo do botão
+            val isAcaoEspecial = acao == "modoDev" || acao == "recorde"
+            
+            // Sombra do botão (Pro Max)
+            val cornerRadius = 16f
+            canvas.drawRoundRect(
+                rect.left + 4f, rect.top + 6f, 
+                rect.right + 4f, rect.bottom + 6f, 
+                cornerRadius, cornerRadius, tintaSombra
+            )
+
+            // Fundo do botão com visual Glass/Moderno
             tintaBotao.color = when {
                 desabilitado -> 0xFF2A2A2A.toInt()
                 destacado -> 0xFF4A3000.toInt()
-                else -> 0xFF1E1E1E.toInt()
+                isAcaoEspecial -> 0xFF151A22.toInt() // cor diferente para funções não-core
+                else -> 0xFF1C1C1C.toInt()
             }
-            canvas.drawRoundRect(rect, 12f, 12f, tintaBotao)
+            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, tintaBotao)
 
             // Borda do botão
             tintaBotao.color = when {
                 desabilitado -> 0xFF444444.toInt()
                 destacado -> 0xFFD4A017.toInt()
+                isAcaoEspecial -> 0xFF405060.toInt()
                 else -> 0xFF555555.toInt()
             }
             tintaBotao.style = Paint.Style.STROKE
-            tintaBotao.strokeWidth = if (destacado) 3f else 1.5f
-            canvas.drawRoundRect(rect, 12f, 12f, tintaBotao)
+            tintaBotao.strokeWidth = if (destacado) 4f else 2f
+            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, tintaBotao)
             tintaBotao.style = Paint.Style.FILL
 
             // Texto do botão
             tintaTexto.color = when {
                 desabilitado -> 0xFF666666.toInt()
                 destacado -> 0xFFFFD700.toInt()
+                isAcaoEspecial -> 0xFFA0C0D0.toInt()
                 else -> 0xFFEEEEEE.toInt()
             }
             tintaTexto.textSize = rect.height() * 0.38f
+            tintaTexto.setShadowLayer(4f, 0f, 2f, Color.BLACK)
             canvas.drawText(rotulo, rect.centerX(), rect.centerY() + tintaTexto.textSize * 0.35f, tintaTexto)
+            tintaTexto.clearShadowLayer()
 
             // Indicador de destaque (save existente)
             if (destacado) {

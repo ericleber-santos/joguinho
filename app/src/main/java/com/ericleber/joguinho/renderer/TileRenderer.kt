@@ -63,9 +63,10 @@ class TileRenderer {
         }
     }
 
-    // =========================================================================
-    // PAREDE
-    // =========================================================================
+    // Bioma atual para diferenciação visual das paredes
+    private var biomeAtual: Biome = Biome.MINA_ABANDONADA
+    
+    fun setBiome(biome: Biome) { biomeAtual = biome }
 
     fun renderWallTile(
         canvas: Canvas,
@@ -90,40 +91,142 @@ class TileRenderer {
             paint.color = escurecer(corBase, 0.25f)
             canvas.drawRect(x, y + tileH - 2f, x + tileW, y + tileH, paint)
             canvas.drawRect(x + tileW - 2f, y, x + tileW, y + tileH, paint)
-            // Textura
-            renderTexturaPedraTopDown(canvas, x, y, tileW, tileH, palette, seed)
+            
+            // Textura ÚNICA por bioma
+            val nome = biomeAtual.name
+            when {
+                nome.contains("MINA") || nome.contains("CAVERNA") || nome.contains("TUNEIS") || nome.contains("CARVAO") ->
+                    texturaMina(canvas, x, y, tileW, tileH, palette, seed)
+                nome.contains("RIACHO") || nome.contains("LAGO") || nome.contains("AQUATICO") || nome.contains("ABISMO") ->
+                    texturaRiacho(canvas, x, y, tileW, tileH, palette, seed)
+                nome.contains("JARDIM") || nome.contains("FLORESTA") || nome.contains("PLANTACAO") || nome.contains("RAIZES") || nome.contains("POMAR") ->
+                    texturaJardim(canvas, x, y, tileW, tileH, palette, seed)
+                nome.contains("CONSTRUCAO") || nome.contains("RUINA") || nome.contains("TEMPLO") || nome.contains("SALOES") || nome.contains("TUMULO") ->
+                    texturaConstrucao(canvas, x, y, tileW, tileH, palette, seed)
+                nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") ->
+                    texturaVulcanica(canvas, x, y, tileW, tileH, palette, seed)
+                else ->
+                    texturaMina(canvas, x, y, tileW, tileH, palette, seed) // Fallback
+            }
         }
     }
 
-    private fun renderTexturaPedraTopDown(
-        canvas: Canvas, x: Float, y: Float,
-        tileW: Float, tileH: Float, palette: BiomePalette, seed: Int
-    ) {
+    // --- MINA: Rachaduras escuras, veios de minério brilhante ---
+    private fun texturaMina(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Rachaduras
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f
+        paint.color = Color.argb(100, 0, 0, 0)
+        val rx = x + (seed % 5 + 2) * (tw / 8f)
+        val ry = y + (seed % 4 + 1) * (th / 6f)
+        canvas.drawLine(rx, ry, rx + tw * 0.3f, ry + th * 0.35f, paint)
+        if (seed % 3 == 0) canvas.drawLine(rx + tw * 0.15f, ry + th * 0.12f, rx + tw * 0.4f, ry + th * 0.05f, paint)
+        paint.style = Paint.Style.FILL
+        // Veios de minério brilhante
+        if (seed % 4 == 0) {
+            paint.color = Color.argb(200, 220, 190, 80) // Ouro
+            val mx = x + ((seed * 3) and 0x7FFFFFFF) % ((tw * 0.7f).toInt().coerceAtLeast(1)) + tw * 0.1f
+            val my = y + ((seed * 7) and 0x7FFFFFFF) % ((th * 0.6f).toInt().coerceAtLeast(1)) + th * 0.15f
+            canvas.drawRect(mx, my, mx + tw * 0.08f, my + th * 0.06f, paint)
+            canvas.drawRect(mx + tw * 0.04f, my - th * 0.04f, mx + tw * 0.1f, my + th * 0.03f, paint)
+        }
+        // Musgo esparso
+        if (seed % 3 == 0) {
+            paint.color = Color.argb(120, Color.red(p.mossColor), Color.green(p.mossColor), Color.blue(p.mossColor))
+            val mmx = x + ((seed * 5) and 0x7FFFFFFF) % ((tw * 0.8f).toInt().coerceAtLeast(1))
+            val mmy = y + th * 0.7f
+            canvas.drawRect(mmx, mmy, mmx + tw * 0.15f, mmy + th * 0.08f, paint)
+        }
+    }
+
+    // --- RIACHO: Gotejamento, umidade escorrendo, poças ---
+    private fun texturaRiacho(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Linhas verticais de água escorrendo
+        paint.color = Color.argb(100, 100, 180, 255)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f
+        val numGotas = 1 + seed % 3
+        for (i in 0 until numGotas) {
+            val gx = x + tw * (0.2f + i * 0.3f)
+            canvas.drawLine(gx, y + th * 0.1f, gx, y + th * 0.7f, paint)
+        }
+        paint.style = Paint.Style.FILL
+        // Poça na base
+        if (seed % 2 == 0) {
+            paint.color = Color.argb(80, 60, 140, 220)
+            canvas.drawOval(RectF(x + tw * 0.15f, y + th * 0.75f, x + tw * 0.85f, y + th * 0.95f), paint)
+        }
+        // Musgo de umidade
+        paint.color = Color.argb(140, 60, 120, 80)
+        val mx = x + ((seed * 11) and 0x7FFFFFFF) % ((tw * 0.6f).toInt().coerceAtLeast(1)) + tw * 0.1f
+        canvas.drawRect(mx, y + th * 0.55f, mx + tw * 0.2f, y + th * 0.65f, paint)
+    }
+
+    // --- JARDIM: Raízes, trepadeiras, terra ---
+    private fun texturaJardim(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Raízes cruzando a parede
+        paint.color = Color.rgb(80, 55, 25)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2.5f
+        val ry = y + th * (0.3f + (seed % 3) * 0.15f)
+        canvas.drawLine(x, ry, x + tw, ry + th * 0.15f, paint)
+        if (seed % 2 == 0) canvas.drawLine(x + tw * 0.3f, y, x + tw * 0.5f, y + th, paint)
+        paint.style = Paint.Style.FILL
+        // Folhas nas raízes
+        paint.color = Color.rgb(50, 140, 40)
+        if (seed % 3 == 0) {
+            canvas.drawOval(RectF(x + tw * 0.2f, ry - th * 0.08f, x + tw * 0.35f, ry + th * 0.05f), paint)
+            canvas.drawOval(RectF(x + tw * 0.6f, ry - th * 0.05f, x + tw * 0.75f, ry + th * 0.08f), paint)
+        }
+        // Terra/barro na base
+        paint.color = Color.argb(100, 100, 70, 30)
+        canvas.drawRect(x, y + th * 0.85f, x + tw, y + th, paint)
+    }
+
+    // --- CONSTRUÇÃO: Tijolos, argamassa, ruínas ---
+    private fun texturaConstrucao(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Linhas de argamassa (padrão de tijolos)
+        paint.color = Color.argb(120, 0, 0, 0)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 1f
-        paint.color = Color.argb(60, 0, 0, 0)
-        val rx1 = x + (seed % 5).toFloat() * (tileW / 6f) + 3f
-        val ry1 = y + (seed % 4).toFloat() * (tileH / 5f) + 3f
-        canvas.drawLine(rx1, ry1, (rx1 + tileW * 0.25f).coerceAtMost(x + tileW - 1f),
-            (ry1 + tileH * 0.30f).coerceAtMost(y + tileH - 1f), paint)
+        // Linhas horizontais
+        canvas.drawLine(x, y + th * 0.33f, x + tw, y + th * 0.33f, paint)
+        canvas.drawLine(x, y + th * 0.66f, x + tw, y + th * 0.66f, paint)
+        // Linhas verticais alternadas (padrão de tijolos reais)
+        val offset = if ((seed % 2) == 0) tw * 0.5f else 0f
+        canvas.drawLine(x + tw * 0.33f + offset * 0.5f, y, x + tw * 0.33f + offset * 0.5f, y + th * 0.33f, paint)
+        canvas.drawLine(x + tw * 0.66f, y + th * 0.33f, x + tw * 0.66f, y + th * 0.66f, paint)
+        canvas.drawLine(x + tw * 0.33f + offset * 0.5f, y + th * 0.66f, x + tw * 0.33f + offset * 0.5f, y + th, paint)
         paint.style = Paint.Style.FILL
-
-        if (seed % 3 == 0 && tileW > 6f) {
-            paint.color = Color.argb(120,
-                Color.red(palette.mossColor), Color.green(palette.mossColor), Color.blue(palette.mossColor))
-            val mx = x + ((seed * 3).and(0x7FFFFFFF) % (tileW.toInt().coerceAtLeast(5) - 4)).toFloat()
-            val my = y + ((seed * 5).and(0x7FFFFFFF) % (tileH.toInt().coerceAtLeast(5) - 4)).toFloat()
-            canvas.drawRect(mx, my, mx + 3f, my + 3f, paint)
+        // Rachadura decorativa
+        if (seed % 5 == 0) {
+            paint.color = Color.argb(80, 0, 0, 0)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.5f
+            canvas.drawLine(x + tw * 0.4f, y + th * 0.1f, x + tw * 0.6f, y + th * 0.5f, paint)
+            canvas.drawLine(x + tw * 0.6f, y + th * 0.5f, x + tw * 0.5f, y + th * 0.9f, paint)
+            paint.style = Paint.Style.FILL
         }
+    }
 
-        if (seed % 5 == 0 && tileW > 8f) {
-            paint.color = Color.argb(140,
-                Color.red(palette.wallDetailColor), Color.green(palette.wallDetailColor), Color.blue(palette.wallDetailColor))
-            val vx = x + tileW * 0.3f + ((seed * 2) % 4).toFloat() * (tileW / 5f)
-            val vy = y + tileH * 0.3f
-            canvas.drawRect(vx.coerceAtMost(x + tileW - 3f), vy,
-                (vx + 2f).coerceAtMost(x + tileW - 1f), (vy + tileH * 0.35f).coerceAtMost(y + tileH - 1f), paint)
-        }
+    // --- VULCÂNICA: Lava brilhando nas fissuras, rocha escura ---
+    private fun texturaVulcanica(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Fissuras de lava
+        paint.color = Color.rgb(255, 100, 20) // Laranja-lava
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f
+        val fx = x + (seed % 4 + 1) * (tw / 6f)
+        val fy = y + th * 0.15f
+        canvas.drawLine(fx, fy, fx + tw * 0.15f, fy + th * 0.7f, paint)
+        if (seed % 2 == 0) canvas.drawLine(fx + tw * 0.1f, fy + th * 0.3f, fx + tw * 0.35f, fy + th * 0.5f, paint)
+        paint.style = Paint.Style.FILL
+        // Brilho da lava (glow suave)
+        paint.color = Color.argb(60, 255, 120, 0)
+        canvas.drawRect(fx - tw * 0.03f, fy, fx + tw * 0.18f, fy + th * 0.7f, paint)
+        // Pedras escuras extras
+        paint.color = escurecer(p.wallColor, 0.30f)
+        val px = x + ((seed * 9) and 0x7FFFFFFF) % ((tw * 0.5f).toInt().coerceAtLeast(1)) + tw * 0.2f
+        canvas.drawOval(RectF(px, y + th * 0.6f, px + tw * 0.15f, y + th * 0.75f), paint)
     }
 
     // Mantido para compatibilidade
@@ -131,7 +234,7 @@ class TileRenderer {
         canvas: Canvas, x: Float, y: Float,
         tileW: Float, tileH: Float, palette: BiomePalette, tileX: Int, tileY: Int
     ) {
-        renderTexturaPedraTopDown(canvas, x, y, tileW, tileH, palette, tileX * 7 + tileY * 13)
+        texturaMina(canvas, x, y, tileW, tileH, palette, tileX * 7 + tileY * 13)
     }
 
     // =========================================================================

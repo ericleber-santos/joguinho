@@ -37,84 +37,11 @@ class HudRenderer {
     }
 
     /**
-     * Renderiza o HUD no retângulo B (faixa inferior da tela).
-     * @param alturaA Y onde começa o retângulo B (= altura do retângulo A)
-     * @param alturaB altura do retângulo B em pixels
+     * Tinta para o ícone do Boss.
      */
-    fun renderRetanguloB(canvas: Canvas, gameState: GameState, largura: Float, alturaA: Float, alturaB: Float) {
-        // Fundo do retângulo B
-        bgPaint.color = Color.argb(220, 0, 0, 0)
-        canvas.drawRect(0f, alturaA, largura, alturaA + alturaB, bgPaint)
-
-        // Linha separadora sutil
-        bgPaint.color = Color.argb(80, 255, 255, 255)
-        bgPaint.style = Paint.Style.STROKE
-        bgPaint.strokeWidth = 1f
-        canvas.drawLine(0f, alturaA, largura, alturaA, bgPaint)
-        bgPaint.style = Paint.Style.FILL
-
-        val centroY = alturaA + alturaB * 0.6f
-        val padding = 12f
-
-        // Score — esquerda (Aumentado 50%)
-        textPaint.textSize = (alturaB * 0.67f).coerceIn(21f, 33f)
-        textPaint.color = Color.rgb(220, 220, 200)
-        textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, centroY, textPaint)
-
-        // Combo — centro (só se ativo) (Aumentado 50%)
-        if (gameState.comboStreak > 0) {
-            val corCombo = when {
-                gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
-                gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
-                else -> Color.rgb(255, 220, 80)
-            }
-            textPaint.textSize = (alturaB * 0.67f).coerceIn(21f, 33f)
-            textPaint.color = corCombo
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("x${gameState.comboStreak}", largura / 2f, centroY, textPaint)
-        }
-
-        // Andar e mapa — direita (Aumentado mais 50%)
-        textPaint.textSize = (alturaB * 0.85f).coerceIn(27f, 40f)
-        textPaint.color = Color.rgb(180, 180, 160)
-        textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", largura - padding, centroY, textPaint)
-
-        // Slowdown — centralizado, na mesma reta do mapa (centroY)
-        if (gameState.heroIsSlowedDown) {
-            val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = (alturaB * 1.28f).coerceIn(40f, 64f)
-            textPaint.color = Color.argb(255, 255, 80, 80) // Vermelho para indicar perigo/lentidão
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), largura / 2f, centroY, textPaint)
-        }
-        
-        // Mensagem do Boss — Painel de Destaque no Topo (Requisito: Visibilidade e Impacto)
-        gameState.bossMessage?.let { msg ->
-            val bannerH = alturaB * 0.8f
-            val bannerY = 20f // Topo da tela
-            val bannerW = largura * 0.8f
-            val bannerX = (largura - bannerW) / 2f
-            
-            // Fundo do Banner do Boss (Preto com borda vermelha)
-            bgPaint.color = Color.argb(200, 0, 0, 0)
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
-            
-            bgPaint.color = Color.rgb(200, 0, 0)
-            bgPaint.style = Paint.Style.STROKE
-            bgPaint.strokeWidth = 3f
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
-            bgPaint.style = Paint.Style.FILL
-            
-            // Texto do Boss
-            textPaint.textSize = bannerH * 0.6f
-            textPaint.color = Color.rgb(255, 255, 255)
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("BOSS: $msg", largura / 2f, bannerY + bannerH * 0.7f, textPaint)
-        }
-
-        textPaint.textAlign = Paint.Align.LEFT
+    private val bossIconPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
     }
 
     /**
@@ -134,18 +61,19 @@ class HudRenderer {
     }
 
     /**
-     * HUD compacto para smartphones — barra discreta na parte inferior.
-     * Score à esquerda, combo no centro, andar/mapa à direita.
-     * Slowdown aparece como texto pequeno acima da barra quando ativo.
+     * HUD compacto para smartphones — HUD translúcido "State of the Art".
+     * Respeita Safe Areas (evita entalhes).
      */
     fun renderCompact(canvas: Canvas, gameState: GameState, w: Int, h: Int) {
-        // Altura da barra baseada na altura da tela (aprox 8%)
-        val barH = h * 0.08f
-        val padding = w * 0.02f
+        // Altura da barra baseada na altura da tela (aprox 12% para toque fácil)
+        val barH = h * 0.12f
+        val padding = w * 0.04f
         val barY = h - barH
 
-        // Fundo semi-transparente na parte inferior
-        bgPaint.color = Color.argb(180, 0, 0, 0)
+        // HUD Inferior Premium (Sombra projetada)
+        bgPaint.color = Color.argb(120, 0, 0, 0)
+        canvas.drawRect(0f, barY - 10f, w.toFloat(), h.toFloat(), bgPaint) // sombra suave
+        bgPaint.color = Color.argb(220, 10, 12, 18) // Fundo profundo
         canvas.drawRect(0f, barY, w.toFloat(), h.toFloat(), bgPaint)
 
         val baselineY = barY + barH * 0.65f
@@ -175,35 +103,60 @@ class HudRenderer {
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("A${gameState.floorNumber} M${gameState.mapIndex + 1}/3", w - padding, baselineY, textPaint)
 
-        // Slowdown — centralizado, gigante
+        // Slowdown — centralizado, com sombra forte
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = barH * 1.2f
+            textPaint.textSize = barH * 0.8f
             textPaint.color = Color.argb(255, 255, 80, 80)
+            textPaint.setShadowLayer(8f, 0f, 4f, Color.BLACK)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - barH * 0.5f, textPaint)
+            textPaint.clearShadowLayer()
         }
         
-        // Mensagem do Boss — Painel de Destaque no Topo
+        // Mensagem do Boss — Painel estilo Zelda/Hades (Ícone + Texto Elegante)
         gameState.bossMessage?.let { msg ->
-            val bannerH = barH * 1.2f
-            val bannerY = 30f
-            val bannerW = w * 0.8f
+            val bannerH = barH * 1.5f
+            val bannerY = barY - bannerH - 20f
+            val bannerW = w * 0.85f
             val bannerX = (w - bannerW) / 2f
             
-            bgPaint.color = Color.argb(200, 0, 0, 0)
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            // Fundo do Painel do Boss com cantos arredondados (Pro Max)
+            val rect = RectF(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH)
             
-            bgPaint.color = Color.rgb(200, 0, 0)
+            // Sombra do painel
+            bgPaint.color = Color.argb(150, 0, 0, 0)
+            canvas.drawRoundRect(RectF(rect.left + 5f, rect.top + 8f, rect.right + 5f, rect.bottom + 8f), 12f, 12f, bgPaint)
+            
+            // Fundo escuro com leve tom vermelho (OKLCH dark-red vibe)
+            bgPaint.color = Color.argb(240, 20, 5, 5)
+            canvas.drawRoundRect(rect, 12f, 12f, bgPaint)
+            
+            // Borda dourada/vermelha
+            bgPaint.color = Color.rgb(200, 40, 40)
             bgPaint.style = Paint.Style.STROKE
-            bgPaint.strokeWidth = 4f
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            bgPaint.strokeWidth = 3f
+            canvas.drawRoundRect(rect, 12f, 12f, bgPaint)
             bgPaint.style = Paint.Style.FILL
             
-            textPaint.textSize = bannerH * 0.6f
+            // Ícone do Boss (quadrado à esquerda)
+            val iconSize = bannerH * 0.7f
+            val iconX = bannerX + 20f
+            val iconY = bannerY + (bannerH - iconSize) / 2f
+            bossIconPaint.color = Color.rgb(180, 30, 30) // placeholder para o rosto do Boss
+            canvas.drawRoundRect(RectF(iconX, iconY, iconX + iconSize, iconY + iconSize), 8f, 8f, bossIconPaint)
+            
+            // Texto da Mensagem Elegante
+            textPaint.textSize = bannerH * 0.4f
+            textPaint.color = Color.rgb(240, 220, 220)
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+            canvas.drawText("Chefe do Bioma:", iconX + iconSize + 20f, bannerY + bannerH * 0.4f, textPaint)
+            
+            textPaint.textSize = bannerH * 0.5f
             textPaint.color = Color.WHITE
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("BOSS: $msg", w / 2f, bannerY + bannerH * 0.7f, textPaint)
+            canvas.drawText(msg, iconX + iconSize + 20f, bannerY + bannerH * 0.85f, textPaint)
+            textPaint.clearShadowLayer()
         }
 
         textPaint.textAlign = Paint.Align.LEFT
@@ -253,32 +206,90 @@ class HudRenderer {
         // Slowdown
         if (gameState.heroIsSlowedDown) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
-            textPaint.textSize = barH * 1.2f
+            textPaint.textSize = barH * 0.9f
             textPaint.color = Color.argb(255, 255, 80, 80)
+            textPaint.setShadowLayer(8f, 0f, 4f, Color.BLACK)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, baselineY, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - barH * 0.6f, textPaint)
+            textPaint.clearShadowLayer()
         }
         
-        // Mensagem do Boss — Painel de Destaque no Topo
+        // Mensagem do Boss — Estilo Zelda/Hades (Tablet Escalonado)
         gameState.bossMessage?.let { msg ->
-            val bannerH = barH * 1.2f
-            val bannerY = 30f
-            val bannerW = w * 0.8f
+            val bannerH = barH * 2f
+            val bannerY = barY - bannerH - 30f
+            val bannerW = w * 0.6f // Painel mais centralizado em tablets
             val bannerX = (w - bannerW) / 2f
             
-            bgPaint.color = Color.argb(200, 0, 0, 0)
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            val rect = RectF(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH)
             
-            bgPaint.color = Color.rgb(200, 0, 0)
+            // Sombra do painel
+            bgPaint.color = Color.argb(150, 0, 0, 0)
+            canvas.drawRoundRect(RectF(rect.left + 8f, rect.top + 10f, rect.right + 8f, rect.bottom + 10f), 16f, 16f, bgPaint)
+            
+            // Fundo escuro
+            bgPaint.color = Color.argb(240, 20, 5, 5)
+            canvas.drawRoundRect(rect, 16f, 16f, bgPaint)
+            
+            // Borda elegante
+            bgPaint.color = Color.rgb(200, 40, 40)
             bgPaint.style = Paint.Style.STROKE
             bgPaint.strokeWidth = 4f
-            canvas.drawRect(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH, bgPaint)
+            canvas.drawRoundRect(rect, 16f, 16f, bgPaint)
             bgPaint.style = Paint.Style.FILL
             
-            textPaint.textSize = bannerH * 0.6f
+            // Ícone do Boss (Rosto furioso simplificado)
+            val iconSize = bannerH * 0.7f
+            val iconX = bannerX + 30f
+            val iconY = bannerY + (bannerH - iconSize) / 2f
+            
+            // Fundo da cabeça do Boss
+            bossIconPaint.color = Color.rgb(160, 20, 20)
+            canvas.drawRoundRect(RectF(iconX, iconY, iconX + iconSize, iconY + iconSize), 12f, 12f, bossIconPaint)
+            
+            // Chifres
+            bossIconPaint.color = Color.rgb(80, 10, 10)
+            canvas.drawRect(iconX + iconSize * 0.15f, iconY - iconSize * 0.15f, iconX + iconSize * 0.35f, iconY + iconSize * 0.2f, bossIconPaint)
+            canvas.drawRect(iconX + iconSize * 0.65f, iconY - iconSize * 0.15f, iconX + iconSize * 0.85f, iconY + iconSize * 0.2f, bossIconPaint)
+            
+            // Olhos brilhantes e furiosos
+            bossIconPaint.color = Color.YELLOW
+            val eyeW = iconSize * 0.25f
+            val eyeH = iconSize * 0.15f
+            val eyeY = iconY + iconSize * 0.35f
+            // Olho esquerdo
+            val pathLeftEye = android.graphics.Path()
+            pathLeftEye.moveTo(iconX + iconSize * 0.15f, eyeY + eyeH)
+            pathLeftEye.lineTo(iconX + iconSize * 0.40f, eyeY + eyeH * 0.5f)
+            pathLeftEye.lineTo(iconX + iconSize * 0.40f, eyeY + eyeH)
+            canvas.drawPath(pathLeftEye, bossIconPaint)
+            
+            // Olho direito
+            val pathRightEye = android.graphics.Path()
+            pathRightEye.moveTo(iconX + iconSize * 0.85f, eyeY + eyeH)
+            pathRightEye.lineTo(iconX + iconSize * 0.60f, eyeY + eyeH * 0.5f)
+            pathRightEye.lineTo(iconX + iconSize * 0.60f, eyeY + eyeH)
+            canvas.drawPath(pathRightEye, bossIconPaint)
+            
+            // Boca "denteada"
+            bossIconPaint.color = Color.BLACK
+            val mouthY = iconY + iconSize * 0.7f
+            canvas.drawRect(iconX + iconSize * 0.2f, mouthY, iconX + iconSize * 0.8f, mouthY + iconSize * 0.15f, bossIconPaint)
+            bossIconPaint.color = Color.WHITE // Dentes
+            canvas.drawRect(iconX + iconSize * 0.3f, mouthY, iconX + iconSize * 0.4f, mouthY + iconSize * 0.1f, bossIconPaint)
+            canvas.drawRect(iconX + iconSize * 0.6f, mouthY, iconX + iconSize * 0.7f, mouthY + iconSize * 0.1f, bossIconPaint)
+            
+            // Textos
+            textPaint.textSize = bannerH * 0.35f
+            textPaint.color = Color.rgb(240, 220, 220)
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+            canvas.drawText("Chefe do Bioma:", iconX + iconSize + 30f, bannerY + bannerH * 0.35f, textPaint)
+            
+            textPaint.textSize = bannerH * 0.45f
             textPaint.color = Color.WHITE
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("BOSS: $msg", w / 2f, bannerY + bannerH * 0.7f, textPaint)
+            canvas.drawText(msg, iconX + iconSize + 30f, bannerY + bannerH * 0.8f, textPaint)
+            textPaint.clearShadowLayer()
         }
 
         textPaint.textAlign = Paint.Align.LEFT

@@ -78,8 +78,8 @@ class CharacterRenderer {
         isSlowedDown: Boolean = false,
         hasSpeedBuff: Boolean = false
     ) {
-        // Escala base do Herói (1.0x para referência das outras entidades)
-        val s = (tileW / 48f) * 1.5f
+        // Escala base do Herói (Ajustada para capricho visual)
+        val s = (tileW / 48f) * 1.65f
         val totalFrames = if (animState == HeroAnimState.IDLE) 4 else 8
         val t = frame.toFloat() / totalFrames
 
@@ -602,33 +602,40 @@ class CharacterRenderer {
 
     /**
      * Desenha uma Banana ou Cacho de Bananas (Power-up).
+     * O power-up agora é muito maior e mais visível, com efeito de "Glow".
      */
     fun renderBanana(canvas: Canvas, x: Float, y: Float, frame: Int, tileW: Float) {
-        val s = tileW / 48f
+        val s = (tileW / 48f) * 1.8f // Aumentado em 80%
         val t = frame.toFloat() / 15f
-        val bob = (Math.sin(t * Math.PI * 2) * 3 * s).toFloat()
+        val bob = (Math.sin(t * Math.PI * 2) * 5 * s).toFloat()
         val cx = x
-        val cy = y + bob
+        val cy = y + bob - 5 * s // Levemente mais alta
 
-        // Sombra
+        // Sombra da banana
         paintFill.color = Color.argb(40, 0, 0, 0)
-        canvas.drawOval(RectF(cx - 6 * s, y + 10 * s, cx + 6 * s, y + 14 * s), paintFill)
+        canvas.drawOval(RectF(cx - 10 * s, y + 10 * s, cx + 10 * s, y + 16 * s), paintFill)
 
-        // Corpo da Banana (Amarelo vibrante)
-        paintFill.color = Color.rgb(255, 225, 50)
+        // Efeito de Glow (Brilho amarelo flutuante)
+        paintFill.color = Color.argb(50, 255, 255, 100)
+        canvas.drawCircle(cx, cy, 14 * s + (Math.sin(t * Math.PI * 4) * 2 * s).toFloat(), paintFill)
+        paintFill.color = Color.argb(80, 255, 255, 0)
+        canvas.drawCircle(cx, cy, 10 * s, paintFill)
+
+        // Corpo da Banana (Amarelo 100% vibrante)
+        paintFill.color = Color.rgb(255, 240, 0)
         path.reset()
-        path.moveTo(cx - 8 * s, cy - 4 * s)
-        path.quadTo(cx, cy + 8 * s, cx + 8 * s, cy - 4 * s)
-        path.quadTo(cx, cy + 4 * s, cx - 8 * s, cy - 4 * s)
+        path.moveTo(cx - 10 * s, cy - 6 * s)
+        path.quadTo(cx, cy + 12 * s, cx + 10 * s, cy - 6 * s)
+        path.quadTo(cx, cy + 4 * s, cx - 10 * s, cy - 6 * s)
         canvas.drawPath(path, paintFill)
 
         // Ponta (Marrom)
-        paintFill.color = Color.rgb(100, 70, 20)
-        canvas.drawRect(cx - 9 * s, cy - 6 * s, cx - 7 * s, cy - 3 * s, paintFill)
+        paintFill.color = Color.rgb(80, 50, 10)
+        canvas.drawRect(cx - 12 * s, cy - 8 * s, cx - 9 * s, cy - 4 * s, paintFill)
         
-        // Outline
-        paintContorno.color = Color.rgb(150, 120, 0)
-        paintContorno.strokeWidth = 1.2f * s
+        // Outline forte
+        paintContorno.color = Color.rgb(120, 80, 0)
+        paintContorno.strokeWidth = 2f * s
         canvas.drawPath(path, paintContorno)
         paintContorno.strokeWidth = 1.5f
     }

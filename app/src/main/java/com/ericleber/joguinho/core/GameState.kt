@@ -114,8 +114,10 @@ class GameState {
     var spikeCompanionState: String = "SEGUINDO"
 
     // --- Bioma atual ---
+    var devModeForcedBiome: Biome? = null
+
     val currentBiome: Biome
-        get() = Biome.entries.first { floorNumber in it.floorRange }
+        get() = devModeForcedBiome ?: Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
 
     // --- Eventos pendentes para o frame atual ---
     // CopyOnWriteArrayList garante leitura segura de múltiplas threads sem sincronização explícita

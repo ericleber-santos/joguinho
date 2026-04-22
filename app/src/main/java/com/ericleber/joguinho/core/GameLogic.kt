@@ -26,7 +26,10 @@ class GameLogic(private val gameState: GameState) {
 
     companion object {
         /** Duração do Slowdown causado por Monster em ms (Requisito 5.1). */
-        private const val SLOWDOWN_MONSTER_MS = 3000L
+        private const val SLOWDOWN_MONSTER_MS = 2000L
+
+        /** Tempo máximo acumulado de Slowdown para não frustrar o jogador. */
+        private const val SLOWDOWN_MAX_ACUMULADO_MS = 4000L
 
         /** Duração do Slowdown do Spike ao contato com Monster em ms (Requisito 5.1). */
         private const val SLOWDOWN_SPIKE_MS = 2000L
@@ -45,6 +48,15 @@ class GameLogic(private val gameState: GameState) {
 
         /** Velocidade base dos Monsters em tiles/segundo. */
         private const val MONSTER_SPEED_TILES_PER_SEC = 1.5f
+
+        /** Tempo máximo (em segundos) que o Spike pode ficar travado antes de teleportar. */
+        private const val SPIKE_STUCK_THRESHOLD_SEC = 3.0f
+
+        /** Distância do Spike ao Hero que dispara teleporte de emergência (em tiles). */
+        private const val SPIKE_TELEPORT_DISTANCE = 8f
+
+        /** Fator de aumento de velocidade do Boss por andar (Floor). */
+        private const val BOSS_SPEED_SCALING_PER_FLOOR = 0.015f
     }
 
     // Acumuladores de movimento sub-tile para Spike e Monsters
@@ -55,6 +67,10 @@ class GameLogic(private val gameState: GameState) {
 
     // Timers de padrão de movimento dos Monsters (para patrulha circular/aleatória)
     private val monsterTimers = mutableMapOf<String, Float>()
+
+    // Rastreamento de travamento do Spike (pathfinding melhorado)
+    private var spikeLastPosition: Position? = null
+    private var spikeStuckTimerSec = 0f
 
     // Callback chamado quando o Hero chega ao Exit (para lançar ScoreActivity)
     var onHeroReachedExit: (() -> Unit)? = null
@@ -144,8 +160,13 @@ class GameLogic(private val gameState: GameState) {
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
 
-            // Bosses são mais rápidos e têm IA especial
-            val baseVel = if (monster.isBoss) MONSTER_SPEED_TILES_PER_SEC * 1.4f else MONSTER_SPEED_TILES_PER_SEC
+            // Bosses ficam progressivamente mais rápidos a cada andar
+            val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
+            val baseVel = if (monster.isBoss) {
+                MONSTER_SPEED_TILES_PER_SEC * (1.4f + bossFloorBonus)
+            } else {
+                MONSTER_SPEED_TILES_PER_SEC
+            }
             val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
 
             val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
@@ -313,6 +334,13 @@ class GameLogic(private val gameState: GameState) {
 
             if (!isColliding) return@map monster
 
+            // Proteção: Impedir dano de monstros que estejam longe demais (invisíveis/fora da tela)
+            val monsterDistToHero = sqrt(
+                ((monster.position.x - heroPos.x).toFloat().let { it * it }) +
+                ((monster.position.y - heroPos.y).toFloat().let { it * it })
+            )
+            if (monsterDistToHero > 6f) return@map monster // Ignora monstros fora de alcance visível
+
             // Verifica cooldown de 2 segundos para o mesmo monstro
             val lastCollision = gameState.monsterCollisionCooldowns[monster.id] ?: 0L
             if (currentTime - lastCollision < 2000L) return@map monster
@@ -320,9 +348,10 @@ class GameLogic(private val gameState: GameState) {
             // Registra colisão para cooldown
             gameState.monsterCollisionCooldowns[monster.id] = currentTime
 
-            // Aplica/Acumula Slowdown ao Hero
+            // Aplica/Acumula Slowdown ao Hero (com cap máximo)
             gameState.heroIsSlowedDown = true
-            gameState.heroSlowdownRemainingMs += SLOWDOWN_MONSTER_MS
+            gameState.heroSlowdownRemainingMs = (gameState.heroSlowdownRemainingMs + SLOWDOWN_MONSTER_MS)
+                .coerceAtMost(SLOWDOWN_MAX_ACUMULADO_MS)
             gameState.currentMapClean = false
             
             // Evento de áudio: Lentidão iniciada
@@ -427,8 +456,27 @@ class GameLogic(private val gameState: GameState) {
         val dy = (heroPos.y - spikePos.y).toFloat()
         val distancia = sqrt(dx * dx + dy * dy)
 
+        // Rastreamento de travamento
+        if (spikeLastPosition == spikePos) {
+            spikeStuckTimerSec += deltaTimeSec
+        } else {
+            spikeStuckTimerSec = 0f
+            spikeLastPosition = spikePos
+        }
+
+        // Teleporte de emergência: se ficou travado por muito tempo E está longe do Hero
+        if (spikeStuckTimerSec >= SPIKE_STUCK_THRESHOLD_SEC && distancia > SPIKE_TELEPORT_DISTANCE) {
+            val destino = encontrarTileAdjacenteVazio(heroPos, maze)
+            if (destino != null) {
+                gameState.spikePosition = destino
+                spikeStuckTimerSec = 0f
+                spikeLastPosition = destino
+                gameState.spikeCompanionState = "ENTUSIASMADO"
+                return
+            }
+        }
+
         if (distancia <= SPIKE_MAX_DISTANCE) {
-            // Já está perto o suficiente
             spikeAccumX = 0f
             spikeAccumY = 0f
             return
@@ -453,11 +501,17 @@ class GameLogic(private val gameState: GameState) {
         spikeAccumX -= tileDx
         spikeAccumY -= tileDy
 
-        // Tenta mover na direção combinada primeiro, depois nos eixos separados
+        // Tenta mover na direção combinada primeiro, depois nos eixos separados,
+        // e agora também tenta diagonais alternativas para contornar paredes
         val candidatos = listOf(
             Position(spikePos.x + tileDx, spikePos.y + tileDy),
             Position(spikePos.x + tileDx, spikePos.y),
-            Position(spikePos.x, spikePos.y + tileDy)
+            Position(spikePos.x, spikePos.y + tileDy),
+            // Diagonais alternativas para contornar obstáculos
+            Position(spikePos.x + tileDx, spikePos.y + 1),
+            Position(spikePos.x + tileDx, spikePos.y - 1),
+            Position(spikePos.x + 1, spikePos.y + tileDy),
+            Position(spikePos.x - 1, spikePos.y + tileDy)
         )
 
         for (candidato in candidatos) {
@@ -466,7 +520,6 @@ class GameLogic(private val gameState: GameState) {
             val indice = candidato.y * maze.width + candidato.x
             if (maze.tiles[indice] == BSPMazeGenerator.TILE_FLOOR) {
                 gameState.spikePosition = candidato
-                // Atualiza estado comportamental do Spike no GameState para o Renderer
                 gameState.spikeCompanionState = when {
                     gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
                     distancia > 5f -> "CHAMANDO"
@@ -475,6 +528,27 @@ class GameLogic(private val gameState: GameState) {
                 return
             }
         }
+    }
+
+    /**
+     * Encontra um tile vazio (FLOOR) adjacente à posição alvo.
+     * Usado para o teleporte de emergência do Spike.
+     */
+    private fun encontrarTileAdjacenteVazio(alvo: Position, maze: MazeData): Position? {
+        val offsets = listOf(
+            Pair(-1, 0), Pair(1, 0), Pair(0, -1), Pair(0, 1),
+            Pair(-1, -1), Pair(1, -1), Pair(-1, 1), Pair(1, 1)
+        )
+        for ((ox, oy) in offsets) {
+            val nx = alvo.x + ox
+            val ny = alvo.y + oy
+            if (nx < 0 || ny < 0 || nx >= maze.width || ny >= maze.height) continue
+            val idx = ny * maze.width + nx
+            if (maze.tiles[idx] == BSPMazeGenerator.TILE_FLOOR) {
+                return Position(nx, ny)
+            }
+        }
+        return null
     }
 
     // -------------------------------------------------------------------------

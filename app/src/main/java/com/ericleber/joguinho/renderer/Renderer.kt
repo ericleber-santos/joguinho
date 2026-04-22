@@ -77,23 +77,19 @@ class Renderer(
     fun recalcularTile(mapWidth: Int, mapHeight: Int) {
         if (screenWidth <= 0 || screenHeight <= 0) return
         
-        // Ajusta o tamanho mínimo baseado na densidade da tela (reduzido para afastar a câmera)
-        tileSizeMinimo = 24f * density 
+        // Ajusta o tamaço mínimo baseado na densidade da tela
+        tileSizeMinimo = 40f * density 
         
         val alturaA = screenHeight * fracaoAreaJogo
 
-        // Em tablets (largura > 600dp), mostramos muito mais do mapa
+        // Em tablets (largura > 600dp), mostramos um pouco mais do mapa
         val isTablet = (screenWidth / density) >= 600f
         
-        // Configuração de zoom baseada no tipo de dispositivo
-        // Se for tablet, aproximamos 20% (reduzimos a quantidade de tiles visíveis)
-        // Se for celular, mantemos o padrão
+        // Zoom agressivo: poucos tiles visíveis = tudo maior e mais claro
         val tilesVisiveisDesejados = if (isTablet) {
-            // Aproximar 20% em relação ao padrão de tablet (que era 36f)
-            // 36 * 0.8 = 28.8f (aproximadamente 29 tiles visíveis)
-            28.8f 
+            18f // Tablet: aprox. 18 tiles visíveis
         } else {
-            24f
+            14f // Celular: aprox. 14 tiles visíveis (personagens BEM grandes)
         }
 
         // Calcula tile para que caibam X tiles na menor dimensão da tela
@@ -155,6 +151,7 @@ class Renderer(
             ?: BIOME_PALETTES.values.first()
 
         spriteCache.currentBiome = gameState.currentBiome.name
+        tileRenderer.setBiome(gameState.currentBiome)
 
         frameCounter++
         frameTotal++
@@ -168,7 +165,14 @@ class Renderer(
         bgPaint.color = palette.backgroundColor
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo, bgPaint)
 
-        val mazeData = gameState.mazeData ?: return
+        // Limita a área de desenho do jogo para não invadir o HUD (Culling)
+        canvas.save()
+        canvas.clipRect(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
+
+        val mazeData = gameState.mazeData ?: run {
+            canvas.restore()
+            return
+        }
 
         val entradaTx = mazeData.startIndex % mazeData.width
         val entradaTy = mazeData.startIndex / mazeData.width
@@ -230,6 +234,142 @@ class Renderer(
             
             // Requisito: O power up deveria se parecer com uma banana ou cacho de banana
             characterRenderer.renderBanana(canvas, sx, sy, heroAnimFrame, tileW)
+        }
+
+        // Passo 2.6: Armadilhas variadas por bioma (GRANDES e visíveis)
+        val trapPaint = Paint().apply { isAntiAlias = false; style = Paint.Style.FILL }
+        val trapPath = Path()
+        val biomeName = gameState.currentBiome.name
+        for (trap in gameState.traps) {
+            val ttx = trap.position.x
+            val tty = trap.position.y
+            if (ttx !in minX..maxX || tty !in minY..maxY) continue
+            val sx = ttx * tileW + cameraX
+            val sy = tty * tileH + cameraY
+            val cx = sx + tileW / 2f
+            val cy = sy + tileH / 2f
+            val phase = (System.currentTimeMillis() % 2000L) / 2000f
+            val anim = if (!trap.isActivated) (sin(phase * Math.PI * 2).toFloat() * 0.5f + 0.5f) else 1f
+
+            when {
+                // JARDIM/FLORESTA: Cobra que dá bote
+                biomeName.contains("JARDIM") || biomeName.contains("FLORESTA") || biomeName.contains("PLANTACAO") || biomeName.contains("RAIZES") || biomeName.contains("POMAR") -> {
+                    // Corpo da cobra (enrolada)
+                    trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(50, 150, 50)
+                    val bodyR = tileW * 0.30f
+                    canvas.drawCircle(cx, cy + tileH * 0.1f, bodyR, trapPaint)
+                    // Escamas
+                    trapPaint.color = if (trap.isActivated) Color.rgb(160, 30, 20) else Color.rgb(30, 110, 30)
+                    canvas.drawCircle(cx, cy + tileH * 0.1f, bodyR * 0.7f, trapPaint)
+                    // Cabeça (sobe quando ativada)
+                    val headY = cy - tileH * 0.15f - (anim * tileH * 0.25f)
+                    trapPaint.color = if (trap.isActivated) Color.rgb(220, 60, 30) else Color.rgb(60, 170, 60)
+                    canvas.drawOval(RectF(cx - tileW * 0.15f, headY - tileH * 0.1f, cx + tileW * 0.15f, headY + tileH * 0.1f), trapPaint)
+                    // Olhos
+                    trapPaint.color = Color.YELLOW
+                    canvas.drawRect(cx - tileW * 0.08f, headY - tileH * 0.04f, cx - tileW * 0.03f, headY + tileH * 0.02f, trapPaint)
+                    canvas.drawRect(cx + tileW * 0.03f, headY - tileH * 0.04f, cx + tileW * 0.08f, headY + tileH * 0.02f, trapPaint)
+                    // Língua bifurcada
+                    if (anim > 0.5f) {
+                        trapPaint.color = Color.RED
+                        trapPaint.style = Paint.Style.STROKE; trapPaint.strokeWidth = 1.5f
+                        canvas.drawLine(cx, headY + tileH * 0.08f, cx - tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
+                        canvas.drawLine(cx, headY + tileH * 0.08f, cx + tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
+                        trapPaint.style = Paint.Style.FILL
+                    }
+                }
+
+                // VULCÂNICA: Poça de lava borbulhante
+                biomeName.contains("VULCANICO") || biomeName.contains("LAVA") || biomeName.contains("FOGO") || biomeName.contains("DINOSSAURO") || biomeName.contains("FORJA") -> {
+                    // Poça de lava
+                    trapPaint.color = Color.rgb(200, 60, 10)
+                    canvas.drawOval(RectF(sx + tileW * 0.1f, sy + tileH * 0.2f, sx + tileW * 0.9f, sy + tileH * 0.85f), trapPaint)
+                    // Centro mais brilhante
+                    trapPaint.color = Color.rgb(255, 150, 30)
+                    canvas.drawOval(RectF(sx + tileW * 0.25f, sy + tileH * 0.35f, sx + tileW * 0.75f, sy + tileH * 0.7f), trapPaint)
+                    // Bolhas animadas
+                    trapPaint.color = Color.rgb(255, 200, 50)
+                    val bubbleY = cy - tileH * 0.1f * anim
+                    canvas.drawCircle(cx - tileW * 0.1f, bubbleY, tileW * 0.06f, trapPaint)
+                    canvas.drawCircle(cx + tileW * 0.15f, bubbleY - tileH * 0.05f, tileW * 0.04f, trapPaint)
+                    // Glow
+                    trapPaint.color = Color.argb((40 + (anim * 40).toInt()), 255, 100, 0)
+                    canvas.drawCircle(cx, cy, tileW * 0.45f, trapPaint)
+                }
+
+                // CONSTRUÇÃO/RUÍNAS: Dardos na parede (flechas)
+                biomeName.contains("CONSTRUCAO") || biomeName.contains("RUINA") || biomeName.contains("TEMPLO") || biomeName.contains("SALOES") || biomeName.contains("TUMULO") -> {
+                    // Buraco na parede (de onde saem os dardos)
+                    trapPaint.color = Color.rgb(40, 30, 20)
+                    canvas.drawRect(sx + tileW * 0.05f, cy - tileH * 0.12f, sx + tileW * 0.2f, cy + tileH * 0.12f, trapPaint)
+                    // Flecha/dardo saindo
+                    val dartLen = tileW * 0.6f * anim
+                    trapPaint.color = if (trap.isActivated) Color.rgb(180, 40, 40) else Color.rgb(120, 100, 60)
+                    canvas.drawRect(sx + tileW * 0.2f, cy - tileH * 0.03f, sx + tileW * 0.2f + dartLen, cy + tileH * 0.03f, trapPaint)
+                    // Ponta
+                    trapPath.reset()
+                    val tipX = sx + tileW * 0.2f + dartLen
+                    trapPath.moveTo(tipX, cy - tileH * 0.08f)
+                    trapPath.lineTo(tipX + tileW * 0.1f, cy)
+                    trapPath.lineTo(tipX, cy + tileH * 0.08f)
+                    trapPath.close()
+                    canvas.drawPath(trapPath, trapPaint)
+                    // Penas da flecha
+                    trapPaint.color = Color.rgb(200, 180, 100)
+                    canvas.drawRect(sx + tileW * 0.18f, cy - tileH * 0.06f, sx + tileW * 0.25f, cy + tileH * 0.06f, trapPaint)
+                }
+
+                // RIACHO/ÁGUA: Geyser de água
+                biomeName.contains("RIACHO") || biomeName.contains("LAGO") || biomeName.contains("AQUATICO") || biomeName.contains("ABISMO") -> {
+                    // Buraco no chão
+                    trapPaint.color = Color.rgb(30, 60, 100)
+                    canvas.drawOval(RectF(sx + tileW * 0.2f, sy + tileH * 0.5f, sx + tileW * 0.8f, sy + tileH * 0.9f), trapPaint)
+                    // Jato de água subindo
+                    val jetH = tileH * 0.7f * anim
+                    trapPaint.color = Color.argb(180, 100, 180, 255)
+                    canvas.drawRect(cx - tileW * 0.08f, cy - jetH * 0.5f, cx + tileW * 0.08f, sy + tileH * 0.6f, trapPaint)
+                    // Gotas
+                    trapPaint.color = Color.argb(200, 140, 200, 255)
+                    canvas.drawCircle(cx - tileW * 0.12f, cy - jetH * 0.4f, tileW * 0.04f, trapPaint)
+                    canvas.drawCircle(cx + tileW * 0.1f, cy - jetH * 0.3f, tileW * 0.03f, trapPaint)
+                }
+
+                // MINA (default): Espinhos grandes estilo Mario
+                else -> {
+                    // Espinhos GRANDES com base metálica
+                    trapPaint.color = Color.rgb(100, 90, 80) // Base metálica
+                    canvas.drawRect(sx + tileW * 0.05f, sy + tileH * 0.7f, sx + tileW * 0.95f, sy + tileH * 0.95f, trapPaint)
+                    // Espinhos
+                    trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(200, 170, 50)
+                    val spikeH = tileH * 0.6f * anim
+                    val numSpikes = 3
+                    val sw = tileW * 0.85f / numSpikes
+                    for (i in 0 until numSpikes) {
+                        val bx = sx + tileW * 0.075f + sw * i
+                        val by = sy + tileH * 0.7f
+                        trapPath.reset()
+                        trapPath.moveTo(bx, by)
+                        trapPath.lineTo(bx + sw, by)
+                        trapPath.lineTo(bx + sw / 2f, by - spikeH)
+                        trapPath.close()
+                        canvas.drawPath(trapPath, trapPaint)
+                    }
+                    // Outline
+                    trapPaint.color = Color.rgb(60, 30, 10)
+                    trapPaint.style = Paint.Style.STROKE; trapPaint.strokeWidth = 1.5f
+                    for (i in 0 until numSpikes) {
+                        val bx = sx + tileW * 0.075f + sw * i
+                        val by = sy + tileH * 0.7f
+                        trapPath.reset()
+                        trapPath.moveTo(bx, by)
+                        trapPath.lineTo(bx + sw, by)
+                        trapPath.lineTo(bx + sw / 2f, by - spikeH)
+                        trapPath.close()
+                        canvas.drawPath(trapPath, trapPaint)
+                    }
+                    trapPaint.style = Paint.Style.FILL
+                }
+            }
         }
 
         // Passo 3: Paredes (Agora desenhadas ANTES dos personagens para evitar sobreposição de cabeças)
@@ -327,10 +467,11 @@ class Renderer(
         // Partículas
         particleSystem.render(canvas)
 
-        // HUD no retângulo B
-        val alturaA = screenHeight * fracaoAreaJogo
-        val alturaB = screenHeight - alturaA
-        hudRenderer.renderRetanguloB(canvas, gameState, screenWidth.toFloat(), alturaA, alturaB)
+        // Restaura a área total de desenho para renderizar o HUD sobreposto
+        canvas.restore()
+
+        // HUD responsivo e Pro Max
+        hudRenderer.render(canvas, gameState, screenWidth / density)
     }
 
     /**
