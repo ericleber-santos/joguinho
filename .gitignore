@@ -33,5 +33,7 @@ google-services.json
 # Android Profiling
 *.hprof
 
-# Kiro - local settings only
-.kiro/settings/
+# AI Agent / GSD / Kiro configuration (not part of Android project)
+.agent/
+.planning/
+.kiro/
