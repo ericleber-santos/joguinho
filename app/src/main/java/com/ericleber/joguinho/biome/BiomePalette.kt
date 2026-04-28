@@ -162,3 +162,61 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = Biome.entries.associateWith { bio
         Biome.O_ULTIMO_PISO -> createPalette(0xFF000000.toInt(), 0xFFD69E2E.toInt(), 0xFFFFFFFF.toInt(), 0xFFECC94B.toInt(), 0xFF000000.toInt())
     }
 }
+
+/**
+ * Aplica um "Hue Shift" na cor baseada na profundidade (floorNumber).
+ * Reduz a luminosidade e empurra o matiz para tons mais frios (azul/roxo).
+ */
+fun applyDepthHueShift(color: Int, floorNumber: Int): Int {
+    if (floorNumber <= 1) return color
+    
+    val hsv = FloatArray(3)
+    Color.colorToHSV(color, hsv)
+    
+    // Profundidade máxima considerada para o cálculo = 100 andares
+    val depthFactor = (floorNumber.coerceAtMost(100) / 100f)
+    
+    // Matiz alvo (Azul escuro / Roxo = ~250 graus)
+    val targetHue = 250f
+    
+    // Desloca até 25% em direção ao azul na profundidade 100
+    val shiftAmount = depthFactor * 0.25f
+    
+    var diff = targetHue - hsv[0]
+    if (diff > 180f) diff -= 360f
+    if (diff < -180f) diff += 360f
+    
+    hsv[0] = (hsv[0] + diff * shiftAmount + 360f) % 360f
+    
+    // Reduz a luminosidade em até 35% na profundidade 100
+    hsv[2] = (hsv[2] * (1f - (depthFactor * 0.35f))).coerceIn(0f, 1f)
+    
+    return Color.HSVToColor(hsv)
+}
+
+/**
+ * Aplica o Hue Shift em toda a paleta.
+ */
+fun applyDepthHueShiftToPalette(palette: BiomePalette, floorNumber: Int): BiomePalette {
+    if (floorNumber <= 1) return palette
+    return BiomePalette(
+        wallColor = applyDepthHueShift(palette.wallColor, floorNumber),
+        wallTopColor = applyDepthHueShift(palette.wallTopColor, floorNumber),
+        wallShadowColor = applyDepthHueShift(palette.wallShadowColor, floorNumber),
+        wallDetailColor = applyDepthHueShift(palette.wallDetailColor, floorNumber),
+        floorColor = applyDepthHueShift(palette.floorColor, floorNumber),
+        floorVariant1 = applyDepthHueShift(palette.floorVariant1, floorNumber),
+        floorVariant2 = applyDepthHueShift(palette.floorVariant2, floorNumber),
+        floorVariant3 = applyDepthHueShift(palette.floorVariant3, floorNumber),
+        floorEdgeColor = applyDepthHueShift(palette.floorEdgeColor, floorNumber),
+        accentColor = applyDepthHueShift(palette.accentColor, floorNumber),
+        ambientLight = applyDepthHueShift(palette.ambientLight, floorNumber),
+        glowColor = applyDepthHueShift(palette.glowColor, floorNumber),
+        particleColor = applyDepthHueShift(palette.particleColor, floorNumber),
+        mushroomColor = applyDepthHueShift(palette.mushroomColor, floorNumber),
+        mushroomCapColor = applyDepthHueShift(palette.mushroomCapColor, floorNumber),
+        crystalColor = applyDepthHueShift(palette.crystalColor, floorNumber),
+        mossColor = applyDepthHueShift(palette.mossColor, floorNumber),
+        backgroundColor = applyDepthHueShift(palette.backgroundColor, floorNumber)
+    )
+}

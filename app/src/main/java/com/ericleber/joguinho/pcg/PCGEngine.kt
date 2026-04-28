@@ -1,8 +1,10 @@
 package com.ericleber.joguinho.pcg
 
+import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.core.ItemState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.MonsterState
+import com.ericleber.joguinho.core.SurvivalElementState
 import com.ericleber.joguinho.core.TrapState
 import java.util.LinkedList
 import kotlin.random.Random
@@ -14,7 +16,8 @@ data class GeneratedMap(
     val maze: MazeData,
     val monsters: List<MonsterState>,
     val traps: List<TrapState>,
-    val items: List<ItemState> = emptyList()
+    val items: List<ItemState> = emptyList(),
+    val survivalElements: List<SurvivalElementState> = emptyList()
 )
 
 /**
@@ -34,7 +37,7 @@ class PCGEngine {
     private val entityPlacer = EntityPlacer(Random.Default)
 
     companion object {
-        private const val MAX_GENERATION_ATTEMPTS = 3
+        private const val MAX_GENERATION_ATTEMPTS = 15
     }
 
     /**
@@ -61,7 +64,7 @@ class PCGEngine {
             // Cada tentativa usa seed ligeiramente diferente para variar o resultado
             val attemptSeed = combinedSeed + attempt
             val random = Random(attemptSeed)
-            val generator = BSPMazeGenerator(random)
+            val generator = HybridMapGenerator(random)
 
             val maze = generator.generate(
                 width = params.mapWidth,
@@ -76,13 +79,16 @@ class PCGEngine {
                 val entityRandom = Random(attemptSeed xor 0xDEADBEEF)
                 val placer = EntityPlacer(entityRandom)
 
-                val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath)
+                val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
+                val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
                 val monsterIndices = monsters.map { it.position.y * maze.width + it.position.x }.toSet()
                 val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
                 val trapIndices = traps.map { it.position.y * maze.width + it.position.x }.toSet()
                 val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
+                val itemIndices = items.map { it.position.y * maze.width + it.position.x }.toSet()
+                val survivalElements = placer.placeSurvivalElements(maze, mapIndex, criticalPath, monsterIndices + trapIndices + itemIndices)
 
-                return GeneratedMap(maze, monsters, traps, items)
+                return GeneratedMap(maze, monsters, traps, items, survivalElements)
             }
         }
 
@@ -108,7 +114,7 @@ class PCGEngine {
             if (current == maze.exitIndex) break
 
             for (neighbor in getNeighbors(current, maze)) {
-                if (!visited[neighbor] && maze.tiles[neighbor] == BSPMazeGenerator.TILE_FLOOR) {
+                if (!visited[neighbor] && maze.tiles[neighbor] == HybridMapGenerator.TILE_FLOOR) {
                     visited[neighbor] = true
                     prev[neighbor] = current
                     queue.add(neighbor)
@@ -146,15 +152,14 @@ class PCGEngine {
         val params = BiomeParametersProvider.forFloor(floorNumber)
         val w = params.mapWidth
         val h = params.mapHeight
-        val tiles = IntArray(w * h) { BSPMazeGenerator.TILE_WALL }
+        val tiles = IntArray(w * h) { HybridMapGenerator.TILE_WALL }
 
         // Corredor horizontal na linha do meio
         val midY = h / 2
-        for (x in 1 until w - 1) tiles[midY * w + x] = BSPMazeGenerator.TILE_FLOOR
+        for (x in 1 until w - 1) tiles[midY * w + x] = HybridMapGenerator.TILE_FLOOR
 
-        // Corredor vertical conectando entrada (topo) e saída (base)
-        for (y in 1 until h - 1) tiles[y * w + 1] = BSPMazeGenerator.TILE_FLOOR
-        for (y in 1 until h - 1) tiles[y * w + (w - 2)] = BSPMazeGenerator.TILE_FLOOR
+        for (y in 1 until h - 1) tiles[y * w + 1] = HybridMapGenerator.TILE_FLOOR
+        for (y in 1 until h - 1) tiles[y * w + (w - 2)] = HybridMapGenerator.TILE_FLOOR
 
         val startIndex = midY * w + 1
         val exitIndex = midY * w + (w - 2)
@@ -171,12 +176,15 @@ class PCGEngine {
 
         val criticalPath = computeCriticalPath(maze)
         val placer = EntityPlacer(Random(seed))
-        val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath)
+        val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
+        val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
         val monsterIndices = monsters.map { it.position.y * w + it.position.x }.toSet()
         val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
         val trapIndices = traps.map { it.position.y * w + it.position.x }.toSet()
         val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
+        val itemIndices = items.map { it.position.y * w + it.position.x }.toSet()
+        val survivalElements = placer.placeSurvivalElements(maze, mapIndex, criticalPath, monsterIndices + trapIndices + itemIndices)
 
-        return GeneratedMap(maze, monsters, traps, items)
+        return GeneratedMap(maze, monsters, traps, items, survivalElements)
     }
 }

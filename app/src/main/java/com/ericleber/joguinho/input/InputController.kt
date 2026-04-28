@@ -304,7 +304,16 @@ class InputController(
      */
     private fun isWall(pos: Position, maze: MazeData): Boolean {
         if (pos.x < 0 || pos.y < 0 || pos.x >= maze.width || pos.y >= maze.height) return true
-        return maze.tiles[pos.y * maze.width + pos.x] == 1
+        if (maze.tiles[pos.y * maze.width + pos.x] == 1) return true
+        
+        // Verifica colisões com Elementos de Sobrevivência Sólidos
+        val solidElement = gameState.survivalElements.find {
+            it.active && it.position == pos &&
+            (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR ||
+             it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX)
+        }
+        
+        return solidElement != null
     }
 
     /**

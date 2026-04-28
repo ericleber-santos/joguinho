@@ -1,11 +1,14 @@
 package com.ericleber.joguinho.pcg
 
+import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.core.ItemState
 import com.ericleber.joguinho.core.ItemType
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.MonsterState
 import com.ericleber.joguinho.core.MovementPattern
 import com.ericleber.joguinho.core.Position
+import com.ericleber.joguinho.core.SurvivalElementState
+import com.ericleber.joguinho.core.SurvivalElementType
 import com.ericleber.joguinho.core.TrapState
 import kotlin.random.Random
 
@@ -63,7 +66,8 @@ class EntityPlacer(private val random: Random) {
         maze: MazeData,
         floorNumber: Int,
         mapIndex: Int,
-        criticalPath: Set<Int>
+        criticalPath: Set<Int>,
+        biome: Biome
     ): List<MonsterState> {
         val count = monsterCount(floorNumber, mapIndex)
         val candidates = getFloorCandidates(maze, criticalPath).toMutableList()
@@ -96,14 +100,28 @@ class EntityPlacer(private val random: Random) {
         }
 
         val selected = candidates.shuffled(random).take(count)
-        val patterns = arrayOf(MovementPattern.PATROL_HORIZONTAL, MovementPattern.PATROL_VERTICAL, MovementPattern.RANDOM)
+        
+        // Ecologia de Monstros baseada no Bioma (Fase 4)
+        val patterns = when {
+            biome.name.contains("VULCANICO") || biome.name.contains("LAVA") || biome.name.contains("FOGO") ->
+                arrayOf(MovementPattern.TANK_SLOW, MovementPattern.TANK_SLOW, MovementPattern.RANDOM, MovementPattern.PATROL_HORIZONTAL)
+            biome.name.contains("FLORESTA") || biome.name.contains("JARDIM") || biome.name.contains("RAIZES") ->
+                arrayOf(MovementPattern.AMBUSH, MovementPattern.AMBUSH, MovementPattern.CHASE, MovementPattern.ZONING_DEFENDER)
+            biome.name.contains("CRISTAIS") || biome.name.contains("TEMPLO") || biome.name.contains("MISTICO") ->
+                arrayOf(MovementPattern.ZONING_DEFENDER, MovementPattern.ZONING_DEFENDER, MovementPattern.CHASE, MovementPattern.LINEAR)
+            else -> // MINA e outros
+                arrayOf(MovementPattern.PATROL_HORIZONTAL, MovementPattern.PATROL_VERTICAL, MovementPattern.RANDOM, MovementPattern.TANK_SLOW)
+        }
 
         monsters.addAll(selected.mapIndexed { i, index ->
+            val pos = Position(index % maze.width, index / maze.width)
+            val pattern = patterns[random.nextInt(patterns.size)]
             MonsterState(
                 id = "monster_${floorNumber}_${mapIndex}_$i",
-                position = Position(index % maze.width, index / maze.width),
-                movementPattern = patterns[random.nextInt(patterns.size)],
-                isActive = true
+                position = pos,
+                movementPattern = pattern,
+                isActive = true,
+                anchorPosition = if (pattern == MovementPattern.ZONING_DEFENDER) pos else null
             )
         })
         
@@ -161,6 +179,54 @@ class EntityPlacer(private val random: Random) {
                 isActivated = false
             )
         }
+    }
+
+    /**
+     * Posiciona os Elementos de Sobrevivência (Fase 5 - Encontros de Chefes)
+     *
+     * @param maze MazeData já validado
+     * @param mapIndex Índice do mapa (apenas 2 possui Boss)
+     * @param criticalPath Caminho crítico (evitar bloqueios)
+     * @param occupiedIndices Índices já ocupados por outras entidades
+     */
+    fun placeSurvivalElements(
+        maze: MazeData,
+        mapIndex: Int,
+        criticalPath: Set<Int>,
+        occupiedIndices: Set<Int> = emptySet()
+    ): List<SurvivalElementState> {
+        // Apenas para Boss fights
+        if (mapIndex != 2) return emptyList()
+
+        val elements = mutableListOf<SurvivalElementState>()
+        val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices).toMutableList()
+
+        // Regras de quantitativo
+        val elementCounts = mapOf(
+            SurvivalElementType.ICE_TORCH to 2,
+            SurvivalElementType.STONE_PILLAR to random.nextInt(3, 5), // 3 a 4
+            SurvivalElementType.MUD_SWAMP to random.nextInt(6, 12), // zonas dispersas
+            SurvivalElementType.PUSHABLE_BOX to random.nextInt(2, 4),
+            SurvivalElementType.DISTRACTION_BELL to 1
+        )
+
+        var idCounter = 0
+        for ((type, count) in elementCounts) {
+            val selected = candidates.shuffled(random).take(count)
+            for (index in selected) {
+                elements.add(
+                    SurvivalElementState(
+                        id = "surv_element_${maze.seed}_${idCounter++}",
+                        position = Position(index % maze.width, index / maze.width),
+                        type = type,
+                        durability = if (type == SurvivalElementType.STONE_PILLAR) 2 else 0
+                    )
+                )
+                candidates.remove(index)
+            }
+        }
+
+        return elements
     }
 
     /**

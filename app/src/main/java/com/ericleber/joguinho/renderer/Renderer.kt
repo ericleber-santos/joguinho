@@ -147,8 +147,9 @@ class Renderer(
         val tileW = tileWDinamico
         val tileH = tileHDinamico
 
-        val palette = BIOME_PALETTES[gameState.currentBiome]
+        val basePalette = BIOME_PALETTES[gameState.currentBiome]
             ?: BIOME_PALETTES.values.first()
+        val palette = com.ericleber.joguinho.biome.applyDepthHueShiftToPalette(basePalette, gameState.floorNumber)
 
         spriteCache.currentBiome = gameState.currentBiome.name
         tileRenderer.setBiome(gameState.currentBiome)
@@ -213,7 +214,7 @@ class Renderer(
                 val variant = (tx + ty) % 4
                 val sx = tx * tileW + cameraX
                 val sy = ty * tileH + cameraY
-                val decorKey = "biome_${gameState.currentBiome.name}_decor_$variant"
+                val decorKey = "biome_${gameState.currentBiome.name}_floor_${gameState.floorNumber}_decor_$variant"
                 val decorBitmap = spriteCache.getOrCreate(decorKey) {
                     tileRenderer.createTileBitmap(
                         when (variant) {
@@ -372,6 +373,86 @@ class Renderer(
             }
         }
 
+        // Passo 2.7: Zonas de AoE do Boss
+        for (zone in gameState.bossAoeZones) {
+            val sx = zone.position.x * tileW + cameraX
+            val sy = zone.position.y * tileH + cameraY
+            val cx = sx + tileW / 2f
+            val cy = sy + tileH / 2f
+            
+            // Desenha um círculo de aviso pulsante
+            val tempoAteExplodir = zone.explodesAtMs - gameState.bossFightState.elapsedMs
+            val proporcao = 1f - (tempoAteExplodir.toFloat() / 2000f).coerceIn(0f, 1f)
+            
+            trapPaint.style = android.graphics.Paint.Style.FILL
+            trapPaint.color = android.graphics.Color.argb(50 + (proporcao * 100).toInt(), 255, 0, 0)
+            canvas.drawCircle(cx, cy, tileW * 1.5f * proporcao, trapPaint) // Cobre uma área 3x3
+
+            trapPaint.style = android.graphics.Paint.Style.STROKE
+            trapPaint.strokeWidth = 5f
+            trapPaint.color = android.graphics.Color.RED
+            canvas.drawCircle(cx, cy, tileW * 1.5f, trapPaint)
+            trapPaint.style = android.graphics.Paint.Style.FILL
+        }
+
+        // Passo 2.8: Elementos de Sobrevivência
+        for (elem in gameState.survivalElements) {
+            if (!elem.active && elem.type != com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR) continue // Pilares inativos não somem, mas ficam quebrados
+            val sx = elem.position.x * tileW + cameraX
+            val sy = elem.position.y * tileH + cameraY
+            val cx = sx + tileW / 2f
+            val cy = sy + tileH / 2f
+
+            when (elem.type) {
+                com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH -> {
+                    trapPaint.color = android.graphics.Color.rgb(100, 150, 255)
+                    canvas.drawRect(cx - tileW * 0.1f, cy - tileH * 0.4f, cx + tileW * 0.1f, cy, trapPaint) // Pilar
+                    
+                    if (elem.cooldownRemainingMs <= 0) {
+                        trapPaint.color = android.graphics.Color.CYAN // Chama de gelo
+                        canvas.drawCircle(cx, cy - tileH * 0.5f, tileW * 0.2f, trapPaint)
+                    } else {
+                        trapPaint.color = android.graphics.Color.GRAY // Apagada
+                        canvas.drawCircle(cx, cy - tileH * 0.5f, tileW * 0.1f, trapPaint)
+                    }
+                }
+                com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR -> {
+                    if (elem.active) {
+                        trapPaint.color = android.graphics.Color.rgb(80, 80, 80)
+                        canvas.drawRect(sx + tileW * 0.1f, sy - tileH * 0.5f, sx + tileW * 0.9f, sy + tileH * 0.9f, trapPaint)
+                        // Rachaduras se durabilidade estiver baixa
+                        if (elem.durability == 1) {
+                            trapPaint.color = android.graphics.Color.BLACK
+                            trapPaint.style = android.graphics.Paint.Style.STROKE; trapPaint.strokeWidth = 3f
+                            canvas.drawLine(sx + tileW * 0.2f, sy - tileH * 0.3f, sx + tileW * 0.6f, sy + tileH * 0.2f, trapPaint)
+                            trapPaint.style = android.graphics.Paint.Style.FILL
+                        }
+                    } else {
+                        // Pilar destruído (escombros)
+                        trapPaint.color = android.graphics.Color.rgb(100, 100, 100)
+                        canvas.drawRect(sx + tileW * 0.1f, sy + tileH * 0.5f, sx + tileW * 0.9f, sy + tileH * 0.9f, trapPaint)
+                    }
+                }
+                com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP -> {
+                    trapPaint.color = android.graphics.Color.rgb(70, 50, 30) // Marrom escuro
+                    canvas.drawOval(android.graphics.RectF(sx, sy + tileH * 0.2f, sx + tileW, sy + tileH * 0.8f), trapPaint)
+                }
+                com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX -> {
+                    trapPaint.color = android.graphics.Color.rgb(139, 69, 19) // Madeira
+                    canvas.drawRect(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
+                    trapPaint.color = android.graphics.Color.rgb(101, 42, 14)
+                    trapPaint.style = android.graphics.Paint.Style.STROKE; trapPaint.strokeWidth = 4f
+                    canvas.drawRect(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
+                    canvas.drawLine(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
+                    trapPaint.style = android.graphics.Paint.Style.FILL
+                }
+                com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL -> {
+                    trapPaint.color = android.graphics.Color.YELLOW
+                    canvas.drawCircle(cx, cy, tileW * 0.3f, trapPaint) // Sino
+                }
+            }
+        }
+
         // Passo 3: Paredes (Agora desenhadas ANTES dos personagens para evitar sobreposição de cabeças)
         for (ty in minY..maxY) {
             for (tx in minX..maxX) {
@@ -395,24 +476,33 @@ class Renderer(
             val mx = monster.position.x * tileW + cameraX + tileW / 2f
             val my = monster.position.y * tileH + cameraY + tileH / 2f
             val seed = monster.id.hashCode()
-            // Lógica de escala proporcional ao Herói (1.5f base):
-            // - Monstro Pequeno: 60% do herói (0.90f) - Aumentado 20% sobre os 50% anteriores
-            // - Monstro Médio: Mesmo tamanho do herói (1.50f)
-            // - Monstro Grande: 50% maior que o herói (2.25f)
-            // - Chefão (Boss): 100% maior que o herói (3.00f)
             val finalScale = if (monster.isBoss) {
                 3.00f
+            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.TANK_SLOW) {
+                2.50f
+            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.AMBUSH) {
+                0.80f
             } else {
                 when (seed % 3) {
-                    0 -> 0.90f
-                    1 -> 1.50f
-                    else -> 2.25f
+                    0 -> 1.0f
+                    1 -> 1.4f
+                    else -> 1.8f
                 }
             }
 
-            // Garante que monstros pequenos não tenham a mesma cor do chão (geralmente tons de cinza/marrom)
+            // Garante alto contraste visual (MOB-01)
             val bodyColor = if (monster.isBoss) {
                 Color.rgb(200, 40, 40)
+            } else if (gameState.floorNumber > 25) {
+                // Em andares profundos (escuros e frios), força cores "Neon/Quentes" para destacar do fundo
+                val neonColors = listOf(
+                    Color.rgb(255, 105, 180), // Rosa Choque
+                    Color.rgb(255, 140, 0),   // Laranja Vibrante
+                    Color.rgb(173, 255, 47),  // Verde Limão
+                    Color.rgb(0, 255, 255),   // Ciano Brilhante
+                    Color.rgb(255, 215, 0)    // Amarelo Ouro
+                )
+                neonColors[(seed and 0x7FFFFFFF) % neonColors.size]
             } else {
                 val r = 150 + (seed and 0xFF) % 100
                 val g = 50 + (seed shr 8 and 0xFF) % 80
@@ -425,9 +515,17 @@ class Renderer(
                 }
             }
 
+            val eyeColor = if (monster.isBoss) {
+                Color.YELLOW 
+            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.AMBUSH) {
+                Color.RED // Olhos vermelhos brilhantes e assustadores para Emboscada
+            } else {
+                Color.rgb(255, 200 + (seed and 0x3F), 0)
+            }
+
             val appearance = MonsterAppearance(
                 bodyColor = bodyColor,
-                eyeColor = if (monster.isBoss) Color.YELLOW else Color.rgb(255, 200 + (seed and 0x3F), 0),
+                eyeColor = eyeColor,
                 size = finalScale,
                 shapeVariant = seed and 0x3, 
                 animVariant = seed shr 4 and 0x3,

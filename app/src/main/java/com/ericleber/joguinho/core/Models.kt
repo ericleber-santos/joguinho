@@ -9,7 +9,8 @@ enum class Direction {
 
 @Serializable
 enum class MovementPattern {
-    LINEAR, CIRCULAR, RANDOM, CHASE, PATROL_HORIZONTAL, PATROL_VERTICAL, BOSS_STALKER
+    LINEAR, CIRCULAR, RANDOM, CHASE, PATROL_HORIZONTAL, PATROL_VERTICAL, BOSS_STALKER,
+    AMBUSH, ZONING_DEFENDER, TANK_SLOW
 }
 
 @Serializable
@@ -48,7 +49,8 @@ data class MonsterState(
     val movementPattern: MovementPattern,
     val isActive: Boolean,
     val isBoss: Boolean = false,
-    val bossType: Int = 0 // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
+    val bossType: Int = 0, // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
+    val anchorPosition: Position? = null // Ponto central para Zoning Defenders
 )
 
 @Serializable
@@ -57,6 +59,40 @@ data class ItemState(
     val position: Position,
     val type: ItemType,
     val isActive: Boolean = true
+)
+
+@Serializable
+enum class SurvivalElementType {
+    ICE_TORCH, STONE_PILLAR, MUD_SWAMP, PUSHABLE_BOX, DISTRACTION_BELL
+}
+
+@Serializable
+data class SurvivalElementState(
+    val id: String,
+    var position: Position,
+    val type: SurvivalElementType,
+    val active: Boolean = true,
+    val cooldownRemainingMs: Long = 0L,
+    val durability: Int = 2
+)
+
+@Serializable
+data class AoeZone(
+    val position: Position,
+    val createdAtMs: Long,
+    val explodesAtMs: Long,
+    val radiusTiles: Float = 1.5f
+)
+
+@Serializable
+data class BossFightState(
+    val isActive: Boolean = false,
+    val elapsedMs: Long = 0L,
+    val totalDurationMs: Long = 120000L,
+    val bossStunRemainingMs: Long = 0L,
+    val bossDistractedMs: Long = 0L,
+    val bellUsed: Boolean = false,
+    val nextAoeMs: Long = 45000L
 )
 
 @Serializable

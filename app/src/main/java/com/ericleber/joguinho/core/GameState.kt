@@ -84,6 +84,11 @@ class GameState {
     var traps: List<TrapState> = emptyList()
     var items: List<ItemState> = emptyList()
 
+    // --- Boss Fight & Sobrevivência ---
+    var bossFightState: BossFightState = BossFightState()
+    var survivalElements: List<SurvivalElementState> = emptyList()
+    var bossAoeZones: List<AoeZone> = emptyList()
+
     // --- Timers ---
     /** Tempo acumulado no Floor atual em milissegundos. */
     var floorTimerMs: Long = 0L
@@ -230,6 +235,9 @@ class GameState {
         ),
         monsters = monsters,
         traps = traps,
+        bossFightState = bossFightState,
+        survivalElements = survivalElements,
+        bossAoeZones = bossAoeZones,
         floorTimerMs = floorTimerMs,
         accumulatedScore = accumulatedScore,
         comboStreak = comboStreak,
@@ -255,6 +263,9 @@ class GameState {
         spikeSlowdownRemainingMs = save.spikeState.slowdownRemainingMs
         monsters = save.monsters
         traps = save.traps
+        bossFightState = save.bossFightState
+        survivalElements = save.survivalElements
+        bossAoeZones = save.bossAoeZones
         floorTimerMs = save.floorTimerMs
         accumulatedScore = save.accumulatedScore
         comboStreak = save.comboStreak

@@ -162,6 +162,11 @@ class HudRenderer {
         textPaint.textAlign = Paint.Align.LEFT
         renderBannerMapaAtual(canvas, gameState, w, h)
         renderInfoMapaEsquerda(canvas, gameState)
+        
+        // Timer de Sobrevivência do Boss
+        if (gameState.bossFightState.isActive) {
+            renderBossTimer(canvas, gameState, w.toFloat())
+        }
     }
 
     /**
@@ -295,6 +300,11 @@ class HudRenderer {
         textPaint.textAlign = Paint.Align.LEFT
         renderBannerMapaAtual(canvas, gameState, w, h)
         renderInfoMapaEsquerda(canvas, gameState)
+        
+        // Timer de Sobrevivência do Boss
+        if (gameState.bossFightState.isActive) {
+            renderBossTimer(canvas, gameState, w.toFloat())
+        }
     }
 
     /**
@@ -602,6 +612,60 @@ class HudRenderer {
         textPaint.textSize = 13f
         textPaint.color = Color.rgb(255, 220, 100)
         canvas.drawText(achievementName, panelX + 28f, panelY + 36f, textPaint)
+    }
+
+    /**
+     * Renderiza o timer gigante centralizado no topo da tela durante a luta contra o Boss.
+     */
+    private fun renderBossTimer(canvas: Canvas, gameState: GameState, screenWidth: Float) {
+        val state = gameState.bossFightState
+        val remainingMs = kotlin.math.max(0L, state.totalDurationMs - state.elapsedMs)
+        val seconds = remainingMs / 1000
+        val millis = (remainingMs % 1000) / 10
+
+        // Cor muda baseada na fase
+        val color = when {
+            state.elapsedMs < 40000L -> Color.WHITE // Fase 1
+            state.elapsedMs < 80000L -> Color.rgb(255, 165, 0) // Fase 2: Laranja
+            else -> Color.RED // Fase 3: Vermelho
+        }
+
+        val text = "%02d:%02d".format(seconds, millis)
+        
+        textPaint.textSize = 48f
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = color
+        
+        val x = screenWidth / 2f
+        val y = 80f // Topo da tela
+
+        // Sombra grossa
+        textPaint.setShadowLayer(8f, 0f, 4f, Color.BLACK)
+        canvas.drawText(text, x, y, textPaint)
+        
+        // Efeito de tremor na fase 3
+        if (state.elapsedMs >= 80000L) {
+            val shakeX = (Math.random() * 4 - 2).toFloat()
+            val shakeY = (Math.random() * 4 - 2).toFloat()
+            canvas.drawText(text, x + shakeX, y + shakeY, textPaint)
+        }
+        
+        textPaint.clearShadowLayer()
+        textPaint.textAlign = Paint.Align.LEFT
+        
+        // Fase Label
+        textPaint.textSize = 16f
+        val faseText = when {
+            state.elapsedMs < 40000L -> "FASE 1 - SOBREVIVA"
+            state.elapsedMs < 80000L -> "FASE 2 - PERIGO EM ÁREA"
+            else -> "FASE 3 - FÚRIA TOTAL"
+        }
+        
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+        canvas.drawText(faseText, x, y + 25f, textPaint)
+        textPaint.clearShadowLayer()
+        textPaint.textAlign = Paint.Align.LEFT
     }
 
     // -------------------------------------------------------------------------

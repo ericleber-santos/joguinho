@@ -121,7 +121,17 @@ class GameViewModel : ViewModel() {
         gameState.monsters = mapaGerado.monsters
         gameState.traps = mapaGerado.traps
         gameState.items = mapaGerado.items
+        gameState.survivalElements = mapaGerado.survivalElements
         gameState.currentMapClean = true
+
+        // Reset BossFightState se aplicável
+        if (gameState.mapIndex == 2) {
+            gameState.bossFightState = com.ericleber.joguinho.core.BossFightState(isActive = true)
+            gameState.bossAoeZones = emptyList()
+        } else {
+            gameState.bossFightState = com.ericleber.joguinho.core.BossFightState(isActive = false)
+            gameState.bossAoeZones = emptyList()
+        }
 
         val maze = mapaGerado.maze
         val startX = maze.startIndex % maze.width
