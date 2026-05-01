@@ -156,40 +156,43 @@ class CharacterRenderer {
         val armTopY = bodyTop + u * 0.5f
         val armLen  = u * 5f
 
-        // Braço Esquerdo (atrás no perfil)
-        val lArmX = cx - u * 4.5f
+        // Braço Esquerdo (atrás no perfil - sombra)
+        val lArmX = cx - u * 3.8f
         val lArmSwingPx = armSwing * u * 1.5f
-        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, currentShirt)
-        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
-        fillCircle(canvas, lArmX + u, armTopY + lArmSwingPx + armLen + u, u*1.2f, heroSkin)
+        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u*2.2f, armLen, currentShirt)
+        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u*2.2f, armLen, heroOutline, u*0.5f)
+        fillCircle(canvas, lArmX + u*1.1f, armTopY + lArmSwingPx + armLen + u, u*1.3f, heroSkin)
 
-        // CORPO
-        fillRect(canvas, cx - u * 4f, bodyTop, u * 8f, u * 7f, currentShirt)
-        strokeRect(canvas, cx - u*4f, bodyTop, u*8f, u*7f, heroOutline, u*0.5f)
+        // CORPO (Perfil 3/4: mais estreito para dar profundidade)
+        fillRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, currentShirt)
+        strokeRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, heroOutline, u*0.5f)
 
-        // Detalhes da camisa deslocados
-        fillRect(canvas, cx + u*1.8f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
-        fillRect(canvas, cx + u*1.8f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
+        // Detalhes da camisa (botões/gola)
+        fillRect(canvas, cx + u*1.0f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
+        fillRect(canvas, cx + u*1.0f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
 
         // Braço Direito (à frente no perfil)
-        val rArmX = cx + u * 2.5f
+        val rArmX = cx - u * 1.5f // Recuado para alinhar com a nuca, não com o nariz
         val rArmSwingPx = -armSwing * u * 1.5f
-        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, currentShirt)
-        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
-        fillCircle(canvas, rArmX + u, armTopY + rArmSwingPx + armLen + u, u*1.2f, heroSkin)
+        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, currentShirt)
+        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, heroOutline, u*0.5f)
+        fillCircle(canvas, rArmX + u*1.1f, armTopY + rArmSwingPx + armLen + u, u*1.3f, heroSkin)
 
         val legTopY = bodyTop + u * 7f
         val legLen  = u * 5f
-        val legW    = u * 2.8f
-        val legSwingPx = legSwing * u * 2f
+        val legW    = u * 2.5f
+        val legSwingPx = legSwing * u * 2.5f // Balanço mais amplo para movimento dinâmico
 
-        fillRect(canvas, cx - u * 3.8f, legTopY - legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx - u*3.8f, legTopY - legSwingPx, legW, legLen, heroOutline, u*0.5f)
-        fillRect(canvas, cx - u*4f, legTopY - legSwingPx + legLen, legW + u, u*2f, heroShoes)
+        // Pernas (Centralizadas sob o tronco no perfil)
+        // Perna 1 (Trás)
+        fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u*0.5f)
+        fillRect(canvas, cx - u * 2.8f, legTopY + legSwingPx + legLen, legW + u, u*1.8f, heroShoes)
 
-        fillRect(canvas, cx + u * 1f, legTopY + legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx + u*1f, legTopY + legSwingPx, legW, legLen, heroOutline, u*0.5f)
-        fillRect(canvas, cx + u*0.8f, legTopY + legSwingPx + legLen, legW + u, u*2f, heroShoes)
+        // Perna 2 (Frente)
+        fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u*0.5f)
+        fillRect(canvas, cx + u * 0.2f, legTopY - legSwingPx + legLen, legW + u, u*1.8f, heroShoes)
 
         val shadowY = cy + u * 12f
         drawShadow(canvas, cx, shadowY, u * 5f, u)
