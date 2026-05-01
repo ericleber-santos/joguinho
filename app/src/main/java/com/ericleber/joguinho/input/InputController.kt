@@ -251,7 +251,7 @@ class InputController(
      * Verifica colisão de um círculo (hitbox do herói) contra os tiles do labirinto.
      * @param radius Raio da hitbox (em frações de tile). 0.35f permite passar em corredores apertados.
      */
-    private fun checkCollision(x: Float, y: Float, maze: MazeData, radius: Float = 0.35f): Boolean {
+    private fun checkCollision(x: Float, y: Float, maze: MazeData, radius: Float = 0.32f): Boolean {
         val left = (x - radius).toInt()
         val right = (x + radius).toInt()
         val top = (y - radius).toInt()

@@ -62,6 +62,8 @@ class GameState {
     // --- Estado do Hero ---
     var heroIsSlowedDown: Boolean = false
     var heroSlowdownRemainingMs: Long = 0L
+    var heroLives: Int = 3
+    var heroLastSlowdownTimeMs: Long = 0L
     var mapSlowdownCount: Int = 0 // Contador de lentidões no mapa atual
     
     // Buff de velocidade (+50% por 7s)
@@ -92,6 +94,9 @@ class GameState {
     // --- Timers ---
     /** Tempo acumulado no Floor atual em milissegundos. */
     var floorTimerMs: Long = 0L
+    
+    /** Timer regressivo do mapa atual (5 minutos). */
+    var mapTimerMs: Long = 300000L
 
     // --- Score e combo ---
     var accumulatedScore: Float = 0f
@@ -225,7 +230,9 @@ class GameState {
             position = heroPosition,
             direction = heroDirection,
             isSlowedDown = heroIsSlowedDown,
-            slowdownRemainingMs = heroSlowdownRemainingMs
+            slowdownRemainingMs = heroSlowdownRemainingMs,
+            lives = heroLives,
+            lastSlowdownTimeMs = heroLastSlowdownTimeMs
         ),
         spikePosition = spikePosition,
         spikeState = SpikeState(
@@ -258,6 +265,8 @@ class GameState {
         heroDirection = save.heroState.direction
         heroIsSlowedDown = save.heroState.isSlowedDown
         heroSlowdownRemainingMs = save.heroState.slowdownRemainingMs
+        heroLives = save.heroState.lives
+        heroLastSlowdownTimeMs = save.heroState.lastSlowdownTimeMs
         spikePosition = save.spikePosition
         spikeIsSlowedDown = save.spikeState.isSlowedDown
         spikeSlowdownRemainingMs = save.spikeState.slowdownRemainingMs

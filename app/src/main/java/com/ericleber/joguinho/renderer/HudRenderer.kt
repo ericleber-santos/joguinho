@@ -58,6 +58,9 @@ class HudRenderer {
         } else {
             renderExpanded(canvas, gameState, w, h)
         }
+        
+        // Bússola presente em ambos os modos
+        renderCompass(canvas, gameState, w.toFloat(), h.toFloat())
     }
 
     /**
@@ -110,15 +113,15 @@ class HudRenderer {
             val bannerW = w * 0.85f
             val bannerX = (w - bannerW) / 2f
             
-            // Fundo do Painel do Boss com cantos arredondados (Pro Max)
+            // Fundo do Painel do Boss com cantos arredondados (Pro Max - Mais Transparente)
             val rect = RectF(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH)
             
             // Sombra do painel
-            bgPaint.color = Color.argb(150, 0, 0, 0)
+            bgPaint.color = Color.argb(100, 0, 0, 0)
             canvas.drawRoundRect(RectF(rect.left + 5f, rect.top + 8f, rect.right + 5f, rect.bottom + 8f), 12f, 12f, bgPaint)
             
             // Fundo escuro com leve tom vermelho (OKLCH dark-red vibe)
-            bgPaint.color = Color.argb(240, 20, 5, 5)
+            bgPaint.color = Color.argb(180, 20, 5, 5)
             canvas.drawRoundRect(rect, 12f, 12f, bgPaint)
             
             // Borda dourada/vermelha
@@ -369,14 +372,17 @@ class HudRenderer {
         val margem = 10f
         val padH = 14f
         val padV = 10f
-        val espacoLinha = 30f
-        val tamanhoTexto = 22f
+        val espacoLinha = 38f
+        val tamanhoTexto = 28f
 
         val andar = gameState.floorNumber
         val mapa = gameState.mapIndex + 1
         val nomeBiomaTexto = nomeBioma(gameState.currentBiome)
-        val timerSeg = gameState.floorTimerMs / 1000
-        val timerTexto = "%d:%02d".format(timerSeg / 60, timerSeg % 60)
+        
+        // Timer regressivo do mapa (5 minutos)
+        val mTimerMs = gameState.mapTimerMs
+        val mSeg = mTimerMs / 1000
+        val timerTexto = "TEMPO %d:%02d".format(mSeg / 60, mSeg % 60)
 
         val linhas = listOf(
             "Andar $andar",
@@ -391,20 +397,20 @@ class HudRenderer {
         val painelW = larguraMax + padH * 2
         val painelH = linhas.size * espacoLinha + padV * 2
 
-        // Fundo semi-transparente
-        bgPaint.color = Color.argb(170, 0, 0, 0)
+        // Fundo semi-transparente (Mais transparente conforme pedido)
+        bgPaint.color = Color.argb(110, 0, 0, 0)
         canvas.drawRoundRect(
             android.graphics.RectF(margem, margem, margem + painelW, margem + painelH),
-            8f, 8f, bgPaint
+            12f, 12f, bgPaint
         )
 
         // Borda sutil
-        bgPaint.color = Color.argb(90, 255, 255, 255)
+        bgPaint.color = Color.argb(60, 255, 255, 255)
         bgPaint.style = Paint.Style.STROKE
-        bgPaint.strokeWidth = 1f
+        bgPaint.strokeWidth = 2f
         canvas.drawRoundRect(
             android.graphics.RectF(margem, margem, margem + painelW, margem + painelH),
-            8f, 8f, bgPaint
+            12f, 12f, bgPaint
         )
         bgPaint.style = Paint.Style.FILL
 
@@ -424,15 +430,70 @@ class HudRenderer {
         linhas.forEachIndexed { i, linha ->
             val tx = margem + padH
             val ty = margem + padV + espacoLinha * (i + 1) - 3f
+            
+            // Cor especial para o timer se estiver acabando (< 1 min)
+            val corTexto = if (i == 3 && gameState.mapTimerMs < 60000L) {
+                if ((System.currentTimeMillis() / 500) % 2 == 0L) Color.RED else Color.WHITE
+            } else {
+                cores[i]
+            }
+
             // Sombra
             textPaint.color = Color.argb(140, 0, 0, 0)
             canvas.drawText(linha, tx + 1f, ty + 1f, textPaint)
             // Texto
-            textPaint.color = cores[i]
+            textPaint.color = corTexto
             canvas.drawText(linha, tx, ty, textPaint)
         }
 
+        // Renderiza Vidas (Corações) abaixo do painel
+        renderLives(canvas, gameState, margem + padH, margem + painelH + 20f)
+
         textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    /**
+     * Desenha os corações de vida do herói.
+     */
+    private fun renderLives(canvas: Canvas, gameState: GameState, x: Float, y: Float) {
+        val heartSize = 35f
+        val spacing = 45f
+        
+        for (i in 0 until 3) {
+            val hx = x + i * spacing
+            val hy = y
+            
+            val active = i < gameState.heroLives
+            
+            if (active) {
+                paint.color = Color.rgb(255, 50, 50) // Vermelho vibrante
+            } else {
+                paint.color = Color.argb(80, 100, 100, 100) // Cinza apagado
+            }
+            
+            paint.style = Paint.Style.FILL
+            
+            // Desenha um coração simples usando dois círculos e um triângulo
+            val r = heartSize * 0.3f
+            canvas.drawCircle(hx - r, hy, r, paint)
+            canvas.drawCircle(hx + r, hy, r, paint)
+            
+            val path = android.graphics.Path()
+            path.moveTo(hx - r * 2, hy + r * 0.2f)
+            path.lineTo(hx + r * 2, hy + r * 0.2f)
+            path.lineTo(hx, hy + heartSize * 0.7f)
+            path.close()
+            canvas.drawPath(path, paint)
+            
+            // Borda do coração
+            paint.color = if (active) Color.rgb(150, 0, 0) else Color.argb(40, 255, 255, 255)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f
+            canvas.drawCircle(hx - r, hy, r, paint)
+            canvas.drawCircle(hx + r, hy, r, paint)
+            canvas.drawPath(path, paint)
+            paint.style = Paint.Style.FILL
+        }
     }
 
     /**
@@ -645,6 +706,68 @@ class HudRenderer {
         textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
         canvas.drawText(faseText, x, y + 25f, textPaint)
         textPaint.clearShadowLayer()
+        textPaint.textAlign = Paint.Align.LEFT
+    }
+ 
+    /**
+     * Renderiza uma seta de bússola indicando a direção da saída.
+     * Fica no canto superior direito, abaixo do Score.
+     */
+    fun renderCompass(canvas: Canvas, gameState: GameState, w: Float, h: Float) {
+        val maze = gameState.mazeData ?: return
+        val exitIdx = maze.exitIndex
+        val exitX = (exitIdx % maze.width).toFloat() + 0.5f
+        val exitY = (exitIdx / maze.width).toFloat() + 0.5f
+        
+        val heroX = gameState.heroPosition.x
+        val heroY = gameState.heroPosition.y
+        
+        // Vetor direção mundo (isométrico simplificado para bússola 2D)
+        val dx = exitX - heroX
+        val dy = exitY - heroY
+        
+        // Ângulo para a saída
+        val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
+        
+        // Posição no HUD (Canto superior direito)
+        val compassSize = 50f
+        val compassX = w - 80f
+        val compassY = h * 0.15f + 60f
+        
+        // Fundo do compasso
+        bgPaint.color = Color.argb(100, 0, 0, 0)
+        canvas.drawCircle(compassX, compassY, compassSize, bgPaint)
+        
+        // Borda
+        bgPaint.color = Color.argb(150, 255, 255, 255)
+        bgPaint.style = Paint.Style.STROKE
+        bgPaint.strokeWidth = 2f
+        canvas.drawCircle(compassX, compassY, compassSize, bgPaint)
+        bgPaint.style = Paint.Style.FILL
+        
+        // Seta (Ponteiro)
+        canvas.save()
+        canvas.rotate(Math.toDegrees(angleRad.toDouble()).toFloat(), compassX, compassY)
+        
+        val arrowPath = android.graphics.Path()
+        arrowPath.moveTo(compassX + compassSize * 0.7f, compassY)
+        arrowPath.lineTo(compassX - compassSize * 0.3f, compassY - compassSize * 0.3f)
+        arrowPath.lineTo(compassX - compassSize * 0.15f, compassY)
+        arrowPath.lineTo(compassX - compassSize * 0.3f, compassY + compassSize * 0.3f)
+        arrowPath.close()
+        
+        // Cor da seta (Dourada para ser bem visível)
+        paint.color = Color.rgb(255, 215, 0)
+        paint.style = Paint.Style.FILL
+        canvas.drawPath(arrowPath, paint)
+        
+        canvas.restore()
+        
+        // Texto "SAÍDA" abaixo
+        textPaint.textSize = 14f
+        textPaint.color = Color.rgb(220, 220, 220)
+        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText("SAÍDA", compassX, compassY + compassSize + 15f, textPaint)
         textPaint.textAlign = Paint.Align.LEFT
     }
 

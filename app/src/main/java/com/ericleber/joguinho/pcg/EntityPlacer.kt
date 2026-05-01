@@ -228,13 +228,11 @@ class EntityPlacer(private val random: Random) {
         val elements = mutableListOf<SurvivalElementState>()
         val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices).toMutableList()
 
-        // Regras de quantitativo
+        // Regras de quantitativo - REMOVIDO ICE_TORCH e DISTRACTION_BELL para Fase 6
         val elementCounts = mapOf(
-            SurvivalElementType.ICE_TORCH to 2,
-            SurvivalElementType.STONE_PILLAR to random.nextInt(3, 5), // 3 a 4
-            SurvivalElementType.MUD_SWAMP to random.nextInt(6, 12), // zonas dispersas
-            SurvivalElementType.PUSHABLE_BOX to random.nextInt(2, 4),
-            SurvivalElementType.DISTRACTION_BELL to 1
+            SurvivalElementType.STONE_PILLAR to random.nextInt(5, 8), // Aumentado
+            SurvivalElementType.MUD_SWAMP to random.nextInt(10, 15), // Mais lama
+            SurvivalElementType.PUSHABLE_BOX to random.nextInt(3, 5)
         )
 
         var idCounter = 0

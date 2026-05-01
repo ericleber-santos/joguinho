@@ -47,7 +47,9 @@ data class HeroState(
     val position: Position,
     val direction: Direction,
     val isSlowedDown: Boolean,
-    val slowdownRemainingMs: Long
+    val slowdownRemainingMs: Long,
+    val lives: Int = 3,
+    val lastSlowdownTimeMs: Long = 0L
 )
 
 @Serializable
@@ -65,7 +67,8 @@ data class MonsterState(
     val isActive: Boolean,
     val isBoss: Boolean = false,
     val bossType: Int = 0, // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
-    val anchorPosition: Position? = null // Ponto central para Zoning Defenders
+    val anchorPosition: Position? = null, // Ponto central para Zoning Defenders
+    val rageMultiplier: Float = 1.0f
 )
 
 @Serializable
