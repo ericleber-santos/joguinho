@@ -35,6 +35,7 @@ class Renderer(
     var screenWidth: Int = 0
     var screenHeight: Int = 0
     var density: Float = 1f
+    private var lastFrameTimeMs: Long = 0L
 
     private val bgPaint = Paint().apply {
         isAntiAlias = false
@@ -135,6 +136,12 @@ class Renderer(
      * @param gameState estado atual do jogo
      */
     fun render(canvas: Canvas, gameState: GameState) {
+        val currentTime = System.currentTimeMillis()
+        if (lastFrameTimeMs == 0L) lastFrameTimeMs = currentTime
+        val deltaMs = currentTime - lastFrameTimeMs
+        lastFrameTimeMs = currentTime
+        characterRenderer.update(deltaMs)
+
         // Atualiza posição do hero para scroll da câmera
         heroWorldX = gameState.heroPosition.x
         heroWorldY = gameState.heroPosition.y
@@ -537,8 +544,19 @@ class Renderer(
             characterRenderer.renderMonster(canvas, mx, my, appearance, monsterAnimFrame, tileW, tileH)
         }
 
-        // Spike: 70% do tamanho do herói (1.5f * 0.7 = 1.05f)
-        characterRenderer.renderSpike(canvas, spikeSx, spikeSy, gameState.spikeCompanionState, spikeAnimFrame, tileW, tileH)
+        val facingLeft = when (gameState.heroDirection) {
+            com.ericleber.joguinho.core.Direction.WEST,
+            com.ericleber.joguinho.core.Direction.NORTH_WEST,
+            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+            else -> false
+        }
+
+        val dogState = when (gameState.spikeCompanionState) {
+            "IDLE" -> AnimState.IDLE
+            "ATACANDO" -> AnimState.RUN
+            else -> AnimState.WALK
+        }
+        characterRenderer.drawDog(canvas, spikeSx, spikeSy, tileW, dogState, facingLeft)
 
         // Se estiver em animação de saída, sobe o herói
         var drawHeroSy = heroSy
@@ -547,17 +565,17 @@ class Renderer(
             drawHeroSy -= progress * tileH * 1.2f // Sobe até o teto
         }
 
-        val heroDirection = mapDirectionToHeroDirection(gameState.heroDirection)
         val heroAnimState = when {
-            gameState.isExiting -> HeroAnimState.WALK // Usa animação de andar para simular escalada
-            gameState.heroIsSlowedDown -> HeroAnimState.SLOWDOWN
-            gameState.heroStoppedDurationSec > 0.05f -> HeroAnimState.IDLE
-            else -> HeroAnimState.WALK
+            gameState.isExiting -> AnimState.WALK
+            gameState.heroIsSlowedDown -> AnimState.WALK
+            gameState.heroHasSpeedBuff -> AnimState.RUN
+            gameState.heroStoppedDurationSec > 0.05f -> AnimState.IDLE
+            else -> AnimState.WALK
         }
-        characterRenderer.renderHero(
-            canvas, heroSx, drawHeroSy, heroDirection, heroAnimState, heroAnimFrame, tileW, tileH,
-            isSlowedDown = gameState.heroIsSlowedDown,
-            hasSpeedBuff = gameState.heroHasSpeedBuff
+        characterRenderer.drawHero(
+            canvas, heroSx, drawHeroSy, tileW, heroAnimState, facingLeft,
+            isFlashingRed = gameState.heroIsSlowedDown,
+            isFlashingBlue = gameState.heroHasSpeedBuff
         )
 
         // Passo 5: Placa de Saída e Escada

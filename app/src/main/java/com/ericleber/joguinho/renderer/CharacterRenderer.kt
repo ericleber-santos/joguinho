@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import kotlin.math.abs
+import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /**
  * Direções de movimento do Hero (8 direções cardinais/diagonais).
@@ -13,9 +16,9 @@ import android.graphics.RectF
 enum class HeroDirection { N, NE, E, SE, S, SW, W, NW }
 
 /**
- * Estado de animação do Hero.
+ * Animações disponíveis para o Herói e Cachorro.
  */
-enum class HeroAnimState { WALK, IDLE, SLOWDOWN }
+enum class AnimState { IDLE, WALK, RUN }
 
 /**
  * Aparência procedural de um Monster.
@@ -29,372 +32,333 @@ data class MonsterAppearance(
     val isBoss: Boolean = false
 )
 
-/**
- * Renderiza sprites do Hero, Spike e Monsters via Canvas.
- *
- * Estética pixel art Stardew Valley cave:
- * - Outline de 1px escuro em todos os personagens
- * - Olhos grandes e expressivos
- * - Sombra elíptica no chão (oval semi-transparente, alpha 60)
- * - Sprites proporcionais ao tile (escala relativa a tileW)
- *
- * Regras: Paint.isAntiAlias = false, Paint.isFilterBitmap = false.
- * Requisitos: 8.5, 17.1, 17.2, 2.8, 25.6
- */
 class CharacterRenderer {
 
+    // ── Paleta do Herói ───────────────────────────────────────────────────────
+    private val heroSkin        = 0xFFE8B87A.toInt()
+    private val heroSkinDark    = 0xFFC9944A.toInt()
+    private val heroHat         = 0xFF7A5230.toInt()
+    private val heroHatBrim     = 0xFF5C3A1A.toInt()
+    private val heroShirt       = 0xFF4A7EC7.toInt()
+    private val heroShirtDark   = 0xFF2E5FA8.toInt()
+    private val heroPants       = 0xFF3A2E22.toInt()
+    private val heroShoes       = 0xFF2A1A0A.toInt()
+    private val heroOutline     = 0xFF1A0A00.toInt()
+    private val heroEye         = 0xFF1A0A00.toInt()
+
+    // ── Paleta do Cachorro ────────────────────────────────────────────────────
+    private val dogWhite        = 0xFFF0EEE8.toInt()
+    private val dogBlack        = 0xFF2A2520.toInt()
+    private val dogNose         = 0xFF2A1A1A.toInt()
+    private val dogEye          = 0xFF1A0A00.toInt()
+    private val dogTongue       = 0xFFE06060.toInt()
+    private val dogOutline      = 0xFF1A0A00.toInt()
+
+    // ── Estado de animação ────────────────────────────────────────────────────
+    private var animTick        = 0L      // tick global acumulado
+    private val paint           = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    // Paints antigos (para compatibilidade com monstros e bananas)
     private val paintFill = Paint().apply {
         isAntiAlias = false
         isFilterBitmap = false
         style = Paint.Style.FILL
     }
-
     private val paintContorno = Paint().apply {
         isAntiAlias = false
         isFilterBitmap = false
         style = Paint.Style.STROKE
         strokeWidth = 1.5f
     }
-
     private val path = Path()
 
-    // -------------------------------------------------------------------------
-    // Hero — aventureiro com chapéu, estilo Stardew Valley
-    // -------------------------------------------------------------------------
-
     /**
-     * Desenha o Hero com outline 1px, olhos grandes expressivos e sombra no chão.
-     * Bob vertical animado durante caminhada.
-     * Escala: s = tileW / 48f → personagem ocupa ~2/3 do tile.
+     * Chame a cada frame do seu game loop.
+     * @param deltaMs tempo em milissegundos desde o último frame
      */
-    fun renderHero(
-        canvas: Canvas,
-        x: Float, y: Float,
-        direction: HeroDirection,
-        animState: HeroAnimState,
-        frame: Int,
-        tileW: Float,
-        tileH: Float,
-        isSlowedDown: Boolean = false,
-        hasSpeedBuff: Boolean = false
-    ) {
-        // Escala base do Herói (Ajustada para capricho visual)
-        val s = (tileW / 48f) * 1.65f
-        val totalFrames = if (animState == HeroAnimState.IDLE) 4 else 8
-        val t = frame.toFloat() / totalFrames
-
-        val bob = when (animState) {
-            HeroAnimState.WALK     -> (Math.sin(t * Math.PI * 2) * 2.5 * s).toFloat()
-            HeroAnimState.SLOWDOWN -> (Math.sin(t * Math.PI) * 1.5 * s).toFloat()
-            else -> 0f
-        }
-
-        // Efeito de piscar vermelho durante a lentidão ou azul durante o buff
-        val isFlashingRed = isSlowedDown && (frame % 2 == 0)
-        val isFlashingBlue = hasSpeedBuff && (frame % 2 == 0)
-        
-        val corCorpo = when {
-            isFlashingRed -> Color.rgb(255, 50, 50) // Vermelho vibrante
-            isFlashingBlue -> Color.rgb(50, 150, 255) // Azul vibrante
-            isSlowedDown -> Color.rgb(80, 80, 180)
-            else -> Color.rgb(70, 110, 200)
-        }
-        val corCalca = when {
-            isFlashingRed -> Color.rgb(180, 30, 30) // Vermelho escuro
-            isFlashingBlue -> Color.rgb(30, 80, 180) // Azul escuro
-            isSlowedDown -> Color.rgb(50, 50, 130)
-            else -> Color.rgb(45, 70, 140)
-        }
-
-        val cx = x
-        // Escalonamento Inteligente: O offset vertical é calculado dinamicamente com base na escala 's'.
-        // Isso garante que a base dos pés (que está a ~24s do topo do sprite) 
-        // sempre toque o centro do tile (y original), independentemente do tamanho.
-        val yOffset = -12 * s 
-        val cy = y + bob + yOffset
-
-        // Sombra dinâmica: O tamanho da sombra também escala com o personagem.
-        paintFill.color = Color.argb(60, 0, 0, 0)
-        // A sombra permanece no 'y' original (chão do tile), mas seu tamanho acompanha a escala 's'.
-        canvas.drawOval(RectF(cx - 8 * s, y + 20 * s, cx + 8 * s, y + 25 * s), paintFill)
-
-        // --- Pernas animadas ---
-        val legSwing = when (animState) {
-            HeroAnimState.WALK -> (Math.sin(t * Math.PI * 2) * 3.5 * s).toFloat()
-            else -> 0f
-        }
-        // Outline das pernas
-        paintContorno.color = escurecer(corCalca, 0.45f)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx - 5 * s, cy + 13 * s, cx - 1 * s, cy + 22 * s + legSwing, paintContorno)
-        canvas.drawRect(cx + 1 * s, cy + 13 * s, cx + 5 * s, cy + 22 * s - legSwing, paintContorno)
-        // Pernas
-        paintFill.color = corCalca
-        canvas.drawRect(cx - 5 * s, cy + 13 * s, cx - 1 * s, cy + 22 * s + legSwing, paintFill)
-        canvas.drawRect(cx + 1 * s, cy + 13 * s, cx + 5 * s, cy + 22 * s - legSwing, paintFill)
-        // Botas
-        val corBota = Color.rgb(80, 50, 20)
-        paintFill.color = corBota
-        canvas.drawRect(cx - 5.5f * s, cy + 19 * s + legSwing, cx - 0.5f * s, cy + 24 * s + legSwing, paintFill)
-        canvas.drawRect(cx + 0.5f * s, cy + 19 * s - legSwing, cx + 5.5f * s, cy + 24 * s - legSwing, paintFill)
-        // Outline botas
-        paintContorno.color = escurecer(corBota, 0.40f)
-        canvas.drawRect(cx - 5.5f * s, cy + 19 * s + legSwing, cx - 0.5f * s, cy + 24 * s + legSwing, paintContorno)
-        canvas.drawRect(cx + 0.5f * s, cy + 19 * s - legSwing, cx + 5.5f * s, cy + 24 * s - legSwing, paintContorno)
-
-        // --- Corpo (casaco de aventureiro) ---
-        paintFill.color = corCorpo
-        canvas.drawRect(cx - 6 * s, cy + 4 * s, cx + 6 * s, cy + 14 * s, paintFill)
-        // Detalhe central do casaco
-        paintFill.color = escurecer(corCorpo, 0.15f)
-        canvas.drawRect(cx - 1 * s, cy + 4 * s, cx + 1 * s, cy + 14 * s, paintFill)
-        // Botões
-        paintFill.color = clarear(corCorpo, 0.30f)
-        canvas.drawRect(cx - 0.5f * s, cy + 6 * s, cx + 0.5f * s, cy + 7 * s, paintFill)
-        canvas.drawRect(cx - 0.5f * s, cy + 9 * s, cx + 0.5f * s, cy + 10 * s, paintFill)
-
-        // --- Braços ---
-        val armSwing = when (direction) {
-            HeroDirection.N, HeroDirection.NE, HeroDirection.NW -> -2 * s
-            HeroDirection.S, HeroDirection.SE, HeroDirection.SW -> 2 * s
-            else -> 0f
-        }
-        paintFill.color = corCorpo
-        canvas.drawRect(cx - 9 * s, cy + 5 * s + armSwing, cx - 6 * s, cy + 14 * s, paintFill)
-        canvas.drawRect(cx + 6 * s, cy + 5 * s - armSwing, cx + 9 * s, cy + 14 * s, paintFill)
-        // Outline do corpo + braços
-        paintContorno.color = escurecer(corCorpo, 0.45f)
-        paintContorno.strokeWidth = 1.2f
-        canvas.drawRect(cx - 9 * s, cy + 4 * s, cx + 9 * s, cy + 14 * s, paintContorno)
-
-        // --- Cabeça ---
-        val corPele = Color.rgb(225, 185, 145)
-        paintFill.color = corPele
-        canvas.drawRect(cx - 5 * s, cy - 4 * s, cx + 5 * s, cy + 5 * s, paintFill)
-        // Outline da cabeça
-        paintContorno.color = escurecer(corPele, 0.40f)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx - 5 * s, cy - 4 * s, cx + 5 * s, cy + 5 * s, paintContorno)
-
-        // --- Chapéu ---
-        val corAba = Color.rgb(110, 75, 30)
-        val corCopa = Color.rgb(90, 60, 20)
-        // Aba larga
-        paintFill.color = corAba
-        canvas.drawRect(cx - 8 * s, cy - 6 * s, cx + 8 * s, cy - 3 * s, paintFill)
-        // Copa
-        paintFill.color = corCopa
-        canvas.drawRect(cx - 4 * s, cy - 12 * s, cx + 4 * s, cy - 6 * s, paintFill)
-        // Fita do chapéu
-        paintFill.color = Color.rgb(180, 140, 60)
-        canvas.drawRect(cx - 4 * s, cy - 7 * s, cx + 4 * s, cy - 6 * s, paintFill)
-        // Highlight no chapéu (canto superior esquerdo — estilo Stardew)
-        paintFill.color = clarear(corCopa, 0.25f)
-        canvas.drawRect(cx - 3.5f * s, cy - 11.5f * s, cx - 1 * s, cy - 9 * s, paintFill)
-        // Outline do chapéu
-        paintContorno.color = escurecer(corCopa, 0.50f)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx - 8 * s, cy - 12 * s, cx + 8 * s, cy - 3 * s, paintContorno)
-
-        // --- Olhos grandes expressivos (estilo Stardew) ---
-        val corOlho = when (animState) {
-            HeroAnimState.SLOWDOWN -> Color.rgb(140, 140, 255)
-            else -> Color.rgb(20, 20, 20)
-        }
-        // Olho esquerdo — maior que antes
-        paintFill.color = corOlho
-        canvas.drawRect(cx - 4 * s, cy - 3 * s, cx - 1 * s, cy + 1 * s, paintFill)
-        // Olho direito
-        canvas.drawRect(cx + 1 * s, cy - 3 * s, cx + 4 * s, cy + 1 * s, paintFill)
-        // Brilho nos olhos (pixel branco no canto superior esquerdo)
-        paintFill.color = Color.WHITE
-        canvas.drawRect(cx - 3.5f * s, cy - 3 * s, cx - 2.5f * s, cy - 2 * s, paintFill)
-        canvas.drawRect(cx + 1.5f * s, cy - 3 * s, cx + 2.5f * s, cy - 2 * s, paintFill)
-        // Pupila (ponto escuro menor)
-        paintFill.color = Color.rgb(5, 5, 5)
-        canvas.drawRect(cx - 2.5f * s, cy - 2 * s, cx - 1.5f * s, cy + 0.5f * s, paintFill)
-        canvas.drawRect(cx + 1.5f * s, cy - 2 * s, cx + 2.5f * s, cy + 0.5f * s, paintFill)
+    fun update(deltaMs: Long) {
+        animTick += deltaMs
     }
 
-    fun createHeroFrames(direction: HeroDirection, animState: HeroAnimState, tileW: Int, tileH: Int): List<Bitmap> {
-        val frameCount = if (animState == HeroAnimState.IDLE) 4 else 8
-        return List(frameCount) { i ->
-            val bmp = Bitmap.createBitmap(tileW, tileH * 2, Bitmap.Config.ARGB_8888)
-            renderHero(Canvas(bmp), tileW / 2f, tileH / 2f, direction, animState, i, tileW.toFloat(), tileH.toFloat())
-            bmp
-        }
-    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // HERÓI
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // -------------------------------------------------------------------------
-    // Spike — viralata branco com manchas pretas, fofo e expressivo
-    // -------------------------------------------------------------------------
-
-    /**
-     * Desenha o Spike com outline 1px, olhos grandes expressivos e sombra no chão.
-     * Rabo animado por estado comportamental.
-     * Orelhas erguidas/abaixadas por estado.
-     */
-    fun renderSpike(
+    fun drawHero(
         canvas: Canvas,
-        x: Float, y: Float,
-        spikeState: String,
-        frame: Int,
-        tileW: Float,
-        tileH: Float
+        cx: Float,
+        cy: Float,
+        tileSize: Float,
+        state: AnimState,
+        facingLeft: Boolean = false,
+        isFlashingRed: Boolean = false,
+        isFlashingBlue: Boolean = false
     ) {
-        // Redução de 20% sobre o tamanho anterior (2.25 * 0.8 = 1.8)
-        val s = (tileW / 52f) * 1.8f
-        val t = frame.toFloat() / 12f
-        val bob = (Math.sin(t * Math.PI * 2) * 1.8 * s).toFloat()
-        val cx = x
-        // Escalonamento Inteligente para o Spike: Offset dinâmico baseado na escala 's'.
-        val yOffset = -6 * s
-        val cy = y + bob + yOffset
+        val u = tileSize / 20f
 
-        // Sombra dinâmica para o Spike.
-        paintFill.color = Color.argb(60, 0, 0, 0)
-        canvas.drawOval(RectF(cx - 8 * s, y + 12 * s, cx + 8 * s, y + 16 * s), paintFill)
+        val t = animTick / 1000f
 
-        // --- Rabo animado ---
-        val rabAnim = when (spikeState) {
-            "CELEBRANDO", "ENTUSIASMADO" -> (Math.sin(t * Math.PI * 5) * 5 * s).toFloat()
-            "SEGUINDO"                   -> (Math.sin(t * Math.PI * 2) * 2.5 * s).toFloat()
-            else -> 0f
-        }
-        paintFill.color = Color.rgb(245, 245, 245)
-        canvas.drawRect(cx + 6 * s, cy + 1 * s + rabAnim, cx + 12 * s, cy + 4 * s + rabAnim, paintFill)
-        paintFill.color = Color.rgb(30, 30, 30)
-        canvas.drawRect(cx + 8 * s, cy + 1 * s + rabAnim, cx + 11 * s, cy + 3 * s + rabAnim, paintFill)
-        // Outline do rabo
-        paintContorno.color = Color.rgb(20, 20, 20)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx + 6 * s, cy + 1 * s + rabAnim, cx + 12 * s, cy + 4 * s + rabAnim, paintContorno)
+        val bodyBob: Float
+        val legSwing: Float
+        val armSwing: Float
 
-        // --- Corpo branco ---
-        val corCorpo = Color.rgb(245, 245, 245)
-        paintFill.color = corCorpo
-        canvas.drawRect(cx - 7 * s, cy + 1 * s, cx + 7 * s, cy + 11 * s, paintFill)
-        // Manchas pretas no dorso
-        paintFill.color = Color.rgb(30, 30, 30)
-        canvas.drawRect(cx - 5 * s, cy + 1 * s, cx - 1 * s, cy + 5 * s, paintFill)
-        canvas.drawRect(cx + 2 * s, cy + 4 * s, cx + 5 * s, cy + 7 * s, paintFill)
-        paintFill.color = Color.rgb(50, 50, 50)
-        canvas.drawRect(cx - 2 * s, cy + 7 * s, cx + 1 * s, cy + 9 * s, paintFill)
-        // Outline do corpo
-        paintContorno.color = Color.rgb(20, 20, 20)
-        paintContorno.strokeWidth = 1.2f
-        canvas.drawRect(cx - 7 * s, cy + 1 * s, cx + 7 * s, cy + 11 * s, paintContorno)
-
-        // --- Patas animadas ---
-        val pataAnim = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
-        // Patas traseiras (pretas)
-        paintFill.color = Color.rgb(30, 30, 30)
-        canvas.drawRect(cx - 6 * s, cy + 10 * s, cx - 3 * s, cy + 15 * s + pataAnim, paintFill)
-        canvas.drawRect(cx + 3 * s, cy + 10 * s, cx + 6 * s, cy + 15 * s - pataAnim, paintFill)
-        // Patas dianteiras (brancas)
-        paintFill.color = Color.rgb(235, 235, 235)
-        canvas.drawRect(cx - 5 * s, cy + 9 * s, cx - 2 * s, cy + 14 * s - pataAnim, paintFill)
-        canvas.drawRect(cx + 2 * s, cy + 9 * s, cx + 5 * s, cy + 14 * s + pataAnim, paintFill)
-        // Outline patas
-        paintContorno.color = Color.rgb(20, 20, 20)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx - 6 * s, cy + 9 * s, cx - 2 * s, cy + 15 * s, paintContorno)
-        canvas.drawRect(cx + 2 * s, cy + 9 * s, cx + 6 * s, cy + 15 * s, paintContorno)
-
-        // --- Cabeça ---
-        paintFill.color = corCorpo
-        canvas.drawRect(cx - 6 * s, cy - 6 * s, cx + 6 * s, cy + 3 * s, paintFill)
-        // Mancha preta na cabeça (lado esquerdo)
-        paintFill.color = Color.rgb(30, 30, 30)
-        canvas.drawRect(cx - 5 * s, cy - 6 * s, cx - 1 * s, cy - 2 * s, paintFill)
-        // Outline da cabeça
-        paintContorno.color = Color.rgb(20, 20, 20)
-        paintContorno.strokeWidth = 1.2f
-        canvas.drawRect(cx - 6 * s, cy - 6 * s, cx + 6 * s, cy + 3 * s, paintContorno)
-
-        // --- Orelhas ---
-        val orelhaOffset = when (spikeState) {
-            "ALERTANDO", "ENTUSIASMADO" -> -2.5f * s
-            "INCENTIVANDO", "SLOWDOWN_PROPRIO" -> 2f * s
-            else -> 0f
-        }
-        val corOrelha = Color.rgb(220, 210, 200)
-        paintFill.color = corOrelha
-        canvas.drawRect(cx - 7 * s, cy - 10 * s + orelhaOffset, cx - 3 * s, cy - 5 * s, paintFill)
-        canvas.drawRect(cx + 3 * s, cy - 10 * s + orelhaOffset, cx + 7 * s, cy - 5 * s, paintFill)
-        // Interior rosa
-        paintFill.color = Color.rgb(255, 180, 180)
-        canvas.drawRect(cx - 6 * s, cy - 9 * s + orelhaOffset, cx - 4 * s, cy - 6 * s, paintFill)
-        canvas.drawRect(cx + 4 * s, cy - 9 * s + orelhaOffset, cx + 6 * s, cy - 6 * s, paintFill)
-        // Outline orelhas
-        paintContorno.color = escurecer(corOrelha, 0.35f)
-        paintContorno.strokeWidth = 1f
-        canvas.drawRect(cx - 7 * s, cy - 10 * s + orelhaOffset, cx - 3 * s, cy - 5 * s, paintContorno)
-        canvas.drawRect(cx + 3 * s, cy - 10 * s + orelhaOffset, cx + 7 * s, cy - 5 * s, paintContorno)
-
-        // --- Olhos grandes expressivos ---
-        val corOlho = when (spikeState) {
-            "ALERTANDO"        -> Color.rgb(255, 70, 70)
-            "INCENTIVANDO"     -> Color.rgb(255, 200, 50)
-            "ENTUSIASMADO"     -> Color.rgb(80, 220, 80)
-            "SLOWDOWN_PROPRIO" -> Color.rgb(140, 140, 255)
-            "CELEBRANDO"       -> Color.rgb(255, 220, 80)
-            else               -> Color.rgb(30, 30, 30)
-        }
-        // Olho esquerdo
-        paintFill.color = corOlho
-        canvas.drawRect(cx - 4.5f * s, cy - 5 * s, cx - 1 * s, cy - 1 * s, paintFill)
-        // Olho direito
-        canvas.drawRect(cx + 1 * s, cy - 5 * s, cx + 4.5f * s, cy - 1 * s, paintFill)
-        // Brilho (pixel branco no canto superior esquerdo de cada olho)
-        paintFill.color = Color.WHITE
-        canvas.drawRect(cx - 4 * s, cy - 5 * s, cx - 3 * s, cy - 4 * s, paintFill)
-        canvas.drawRect(cx + 1.5f * s, cy - 5 * s, cx + 2.5f * s, cy - 4 * s, paintFill)
-        // Pupila
-        paintFill.color = Color.rgb(5, 5, 5)
-        canvas.drawRect(cx - 3 * s, cy - 4 * s, cx - 2 * s, cy - 1.5f * s, paintFill)
-        canvas.drawRect(cx + 2 * s, cy - 4 * s, cx + 3 * s, cy - 1.5f * s, paintFill)
-
-        // --- Nariz ---
-        paintFill.color = Color.rgb(30, 30, 30)
-        canvas.drawRect(cx - 1.5f * s, cy - 1 * s, cx + 1.5f * s, cy + 1 * s, paintFill)
-        paintFill.color = Color.rgb(255, 160, 160)
-        canvas.drawRect(cx - 0.5f * s, cy - 0.5f * s, cx + 0.5f * s, cy + 0.5f * s, paintFill)
-
-        // --- Efeitos especiais por estado ---
-        when (spikeState) {
-            "FAREJANDO" -> {
-                paintFill.color = Color.argb(110, 220, 220, 220)
-                val sniff = (Math.sin(t * Math.PI * 4) * 3 * s).toFloat()
-                canvas.drawCircle(cx + 6 * s, cy - 2 * s + sniff, 1.5f * s, paintFill)
-                canvas.drawCircle(cx + 8 * s, cy - 4 * s + sniff, 1f * s, paintFill)
+        when (state) {
+            AnimState.IDLE -> {
+                bodyBob  = if (sin(t * 2.0) > 0.3) u * 0.5f else 0f
+                legSwing = 0f
+                armSwing = 0f
             }
-            "CHAMANDO" -> {
-                paintContorno.color = Color.argb(140, 255, 255, 100)
-                paintContorno.strokeWidth = 1.2f * s
-                val raio = (3 + t * 5) * s
-                canvas.drawCircle(cx, cy - 10 * s, raio, paintContorno)
-                paintContorno.strokeWidth = 1.5f
+            AnimState.WALK -> {
+                val phase = sin(t * 6.0).toFloat()
+                bodyBob  = if (abs(phase) > 0.7f) u * 0.5f else 0f
+                legSwing = phase
+                armSwing = -phase
+            }
+            AnimState.RUN -> {
+                val phase = sin(t * 12.0).toFloat()
+                bodyBob  = if ((animTick / 83) % 2 == 0L) u else 0f
+                legSwing = phase * 1.5f
+                armSwing = -phase * 1.2f
             }
         }
+
+        // Tintura de status
+        val currentShirt = when {
+            isFlashingRed -> Color.rgb(255, 50, 50)
+            isFlashingBlue -> Color.rgb(50, 150, 255)
+            else -> heroShirt
+        }
+        val currentPants = when {
+            isFlashingRed -> Color.rgb(180, 30, 30)
+            isFlashingBlue -> Color.rgb(30, 80, 180)
+            else -> heroPants
+        }
+
+        canvas.save()
+        if (facingLeft) canvas.scale(-1f, 1f, cx, cy)
+
+        val hatTop = cy - u * 9f + bodyBob
+        fillRect(canvas, cx - u * 4f, hatTop,          u * 8f, u * 3.5f, heroHat)
+        fillRect(canvas, cx - u * 5f, hatTop + u*3.5f, u*10f,  u * 1f,   heroHatBrim)
+        strokeRect(canvas, cx - u*4f, hatTop,           u*8f,   u*4.5f,  heroOutline, u*0.5f)
+
+        val headTop = cy - u * 7f + bodyBob
+        fillRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroSkin)
+        strokeRect(canvas, cx - u*4f, headTop, u*8f, u*7f, heroOutline, u*0.5f)
+
+        fillRect(canvas, cx - u*2.5f, headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
+        fillRect(canvas, cx + u*1.3f,  headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
+
+        fillRect(canvas, cx - u*1.5f, headTop + u*5f, u*3f, u*0.7f, heroSkinDark)
+
+        val bodyTop = cy - u * 0f + bodyBob
+        fillRect(canvas, cx - u * 4f, bodyTop, u * 8f, u * 7f, currentShirt)
+        strokeRect(canvas, cx - u*4f, bodyTop, u*8f, u*7f, heroOutline, u*0.5f)
+
+        fillRect(canvas, cx - u*0.6f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
+        fillRect(canvas, cx - u*0.6f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
+
+        val armTopY = bodyTop + u * 0.5f
+        val armLen  = u * 5f
+
+        val lArmX = cx - u * 5.5f
+        val lArmSwingPx = armSwing * u * 1.5f
+        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, currentShirt)
+        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
+        fillCircle(canvas, lArmX + u, armTopY + lArmSwingPx + armLen + u, u*1.2f, heroSkin)
+
+        val rArmX = cx + u * 3.5f
+        val rArmSwingPx = -armSwing * u * 1.5f
+        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, currentShirt)
+        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
+        fillCircle(canvas, rArmX + u, armTopY + rArmSwingPx + armLen + u, u*1.2f, heroSkin)
+
+        val legTopY = bodyTop + u * 7f
+        val legLen  = u * 5f
+        val legW    = u * 2.8f
+        val legSwingPx = legSwing * u * 2f
+
+        fillRect(canvas, cx - u * 3.8f, legTopY - legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx - u*3.8f, legTopY - legSwingPx, legW, legLen, heroOutline, u*0.5f)
+        fillRect(canvas, cx - u*4f, legTopY - legSwingPx + legLen, legW + u, u*2f, heroShoes)
+
+        fillRect(canvas, cx + u * 1f, legTopY + legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx + u*1f, legTopY + legSwingPx, legW, legLen, heroOutline, u*0.5f)
+        fillRect(canvas, cx + u*0.8f, legTopY + legSwingPx + legLen, legW + u, u*2f, heroShoes)
+
+        val shadowY = cy + u * 12f
+        drawShadow(canvas, cx, shadowY, u * 5f, u)
+
+        canvas.restore()
     }
 
-    fun createSpikeFrames(state: String, tileW: Int, tileH: Int): List<Bitmap> {
-        return List(12) { i ->
-            val bmp = Bitmap.createBitmap(tileW, tileH * 2, Bitmap.Config.ARGB_8888)
-            renderSpike(Canvas(bmp), tileW / 2f, tileH / 2f, state, i, tileW.toFloat(), tileH.toFloat())
-            bmp
+    // ─────────────────────────────────────────────────────────────────────────
+    // CACHORRO
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fun drawDog(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        tileSize: Float,
+        state: AnimState,
+        facingLeft: Boolean = false
+    ) {
+        val u = tileSize / 20f
+        val t = animTick / 1000f
+
+        val bodyBob: Float
+        val legAnim: Float
+        val tailWag: Float
+        val tongueOut: Boolean
+
+        when (state) {
+            AnimState.IDLE -> {
+                val cycle = (animTick / 500) % 3
+                bodyBob   = 0f
+                legAnim   = 0f
+                tailWag   = if (cycle < 1) u * 1.5f else if (cycle < 2) -u * 1.5f else 0f
+                tongueOut = cycle == 2L
+            }
+            AnimState.WALK -> {
+                val phase = sin(t * 6.0).toFloat()
+                bodyBob   = if (abs(phase) > 0.7f) u * 0.5f else 0f
+                legAnim   = phase
+                tailWag   = phase * u * 2f
+                tongueOut = phase > 0.5f
+            }
+            AnimState.RUN -> {
+                val phase = sin(t * 12.0).toFloat()
+                bodyBob   = if ((animTick / 83) % 2 == 0L) u * 0.8f else 0f
+                legAnim   = phase * 1.5f
+                tailWag   = phase * u * 3f
+                tongueOut = true
+            }
         }
+
+        val yOffset = u * 4f
+        val renderCy = cy + yOffset
+
+        canvas.save()
+        if (facingLeft) canvas.scale(-1f, 1f, cx, renderCy)
+
+        val tailBaseX = cx - u * 7f
+        val tailBaseY = renderCy - u * 2f + bodyBob
+        paint.color = dogWhite
+        paint.strokeWidth = u * 1.5f
+        paint.style = Paint.Style.STROKE
+        canvas.drawLine(
+            tailBaseX, tailBaseY,
+            tailBaseX - u * 3f, tailBaseY - u * 3f + tailWag,
+            paint
+        )
+        paint.style = Paint.Style.FILL
+
+        val bodyLeft = cx - u * 6f
+        val bodyTop  = renderCy - u * 3f + bodyBob
+        val bodyW    = u * 12f
+        val bodyH    = u * 6f
+        fillRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u * 1.5f, dogWhite)
+        strokeRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u*1.5f, dogOutline, u*0.5f)
+
+        fillCircle(canvas, cx - u*2f, bodyTop + u*1.5f, u*1.2f, dogBlack)
+        fillCircle(canvas, cx + u*3f, bodyTop + u*3f,   u*1f,   dogBlack)
+
+        val headCX = cx + u * 7f
+        val headCY = renderCy - u * 2f + bodyBob
+        fillCircle(canvas, headCX, headCY, u * 4f, dogWhite)
+        strokeCircle(canvas, headCX, headCY, u * 4f, dogOutline, u*0.5f)
+
+        fillRoundRect(canvas, headCX + u*1f, headCY - u*5f, u*3f, u*3.5f, u, dogBlack)
+        fillRoundRect(canvas, headCX - u*2f, headCY - u*5f, u*2f, u*3f,   u, dogWhite)
+
+        fillCircle(canvas, headCX + u*1.5f, headCY - u*0.5f, u*0.8f, dogEye)
+        fillCircle(canvas, headCX + u*2f, headCY - u*1f, u*0.3f, 0xFFFFFFFF.toInt())
+
+        fillRoundRect(canvas, headCX - u*2f, headCY + u*0.5f, u*3f, u*2.5f, u, 0xFFF5EDD5.toInt())
+        fillCircle(canvas, headCX - u*0.5f, headCY + u*1f, u*0.8f, dogNose)
+
+        if (tongueOut) {
+            fillRoundRect(canvas, headCX - u*1.5f, headCY + u*2.5f, u*2f, u*2f, u, dogTongue)
+        }
+
+        fillCircle(canvas, headCX - u*1.5f, headCY - u*1.5f, u*1.5f, dogBlack)
+
+        val legTopY = bodyTop + bodyH - u
+        val legH    = u * 4f
+        val legW    = u * 2f
+        val animPx  = legAnim * u * 1.5f
+
+        fillRoundRect(canvas, cx - u*5f,  legTopY - animPx, legW, legH, u*0.5f, dogWhite)
+        fillRoundRect(canvas, cx - u*2.5f, legTopY + animPx, legW, legH, u*0.5f, dogWhite)
+        fillRoundRect(canvas, cx + u*1f,  legTopY + animPx, legW, legH, u*0.5f, dogWhite)
+        fillRoundRect(canvas, cx + u*3.5f, legTopY - animPx, legW, legH, u*0.5f, dogWhite)
+
+        listOf(
+            cx - u*5f, cx - u*2.5f, cx + u*1f, cx + u*3.5f
+        ).forEachIndexed { _, lx ->
+            fillRoundRect(canvas, lx - u*0.3f, legTopY + legH, legW + u*0.6f, u*1.5f, u*0.7f, dogBlack)
+        }
+
+        val shadowY = renderCy + u * 9f
+        drawShadow(canvas, cx, shadowY, u * 4f, u)
+
+        canvas.restore()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS INTERNOS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun fillRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, color: Int) {
+        paint.color = color
+        paint.style = Paint.Style.FILL
+        canvas.drawRect(x, y, x + w, y + h, paint)
+    }
+
+    private fun strokeRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, color: Int, stroke: Float) {
+        paint.color = color
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = stroke
+        canvas.drawRect(x, y, x + w, y + h, paint)
+    }
+
+    private fun fillRoundRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float, color: Int) {
+        paint.color = color
+        paint.style = Paint.Style.FILL
+        canvas.drawRoundRect(RectF(x, y, x + w, y + h), r, r, paint)
+    }
+
+    private fun strokeRoundRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float, color: Int, stroke: Float) {
+        paint.color = color
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = stroke
+        canvas.drawRoundRect(RectF(x, y, x + w, y + h), r, r, paint)
+    }
+
+    private fun fillCircle(canvas: Canvas, cx: Float, cy: Float, radius: Float, color: Int) {
+        paint.color = color
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(cx, cy, radius, paint)
+    }
+
+    private fun strokeCircle(canvas: Canvas, cx: Float, cy: Float, radius: Float, color: Int, stroke: Float) {
+        paint.color = color
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = stroke
+        canvas.drawCircle(cx, cy, radius, paint)
+    }
+
+    private fun drawShadow(canvas: Canvas, cx: Float, cy: Float, rx: Float, u: Float) {
+        paint.color = 0x33000000
+        paint.style = Paint.Style.FILL
+        canvas.drawOval(RectF(cx - rx, cy - u, cx + rx, cy + u), paint)
     }
 
     // -------------------------------------------------------------------------
     // Monsters — silhuetas distintas, paletas quentes, outline escuro
     // -------------------------------------------------------------------------
 
-    /**
-     * Desenha um Monster com aparência procedural, outline 1px e sombra no chão.
-     * 4 variantes de silhueta: redondo, espinhoso, quadrado, alto.
-     */
     fun renderMonster(
         canvas: Canvas,
         x: Float, y: Float,
@@ -408,16 +372,12 @@ class CharacterRenderer {
         val bob = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
         val cx = x
         
-        // Escalonamento Inteligente para Monstros:
-        // Ajusta o Y-Offset para que a base de qualquer forma (redonda, quadrada, etc.) 
-        // toque o chão do tile, evitando que monstros grandes "entrem" nas paredes superiores.
         val yOffset = when (appearance.shapeVariant % 4) {
-            3 -> -4 * s // Monstros altos precisam de mais offset
+            3 -> -4 * s
             else -> -2 * s
         }
         val cy = y + bob + yOffset
 
-        // Sombra dinâmica para Monstros.
         paintFill.color = Color.argb(60, 0, 0, 0)
         canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
 
@@ -428,26 +388,22 @@ class CharacterRenderer {
             3 -> monsterAlto(canvas, cx, cy, s, t, appearance)
         }
 
-        // --- Efeitos de Aura (Requisito: Diferenciação visual) ---
         if (appearance.isBoss) {
-            // Aura Vermelha e Preta Assustadora para o Boss
-            paintFill.color = Color.argb(60, 0, 0, 0) // Sombra preta pulsante
+            paintFill.color = Color.argb(60, 0, 0, 0)
             val auraBase = (14 + Math.sin(t * Math.PI * 3) * 3) * s
             canvas.drawCircle(cx, cy, auraBase.toFloat(), paintFill)
             
-            paintContorno.color = Color.argb(150, 200, 0, 0) // Vermelho intenso
+            paintContorno.color = Color.argb(150, 200, 0, 0)
             paintContorno.strokeWidth = 3f * s
             val auraRaio = (16 + Math.sin(t * Math.PI * 5) * 2) * s
             canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
             paintContorno.strokeWidth = 1.5f
         } else if (appearance.size < 1.0f) {
-            // Aura Amarela com Raios para Monstros Pequenos (Requisito: Identificação fácil)
-            paintContorno.color = Color.argb(180, 255, 255, 0) // Amarelo vibrante
+            paintContorno.color = Color.argb(180, 255, 255, 0)
             paintContorno.strokeWidth = 1.5f * s
             val auraRaio = (10 + Math.sin(t * Math.PI * 6) * 1.5) * s
             canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
             
-            // Desenha pequenos "raios" ao redor
             val numRaios = 4
             for (i in 0 until numRaios) {
                 val ang = (i * (360 / numRaios) + t * 360) * Math.PI / 180.0
@@ -464,33 +420,25 @@ class CharacterRenderer {
     }
 
     private fun monsterRedondo(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
-        // Corpo redondo
         paintFill.color = app.bodyColor
         canvas.drawCircle(cx, cy, 9 * s, paintFill)
-        // Detalhe escuro no topo (profundidade)
         paintFill.color = escurecer(app.bodyColor, 0.20f)
         canvas.drawOval(RectF(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy - 2 * s), paintFill)
-        // Highlight no canto superior esquerdo
         paintFill.color = clarear(app.bodyColor, 0.20f)
         canvas.drawOval(RectF(cx - 8 * s, cy - 8 * s, cx - 2 * s, cy - 3 * s), paintFill)
-        // Olhos grandes
         paintFill.color = app.eyeColor
         canvas.drawCircle(cx - 3.5f * s, cy - 2 * s, 3f * s, paintFill)
         canvas.drawCircle(cx + 3.5f * s, cy - 2 * s, 3f * s, paintFill)
-        // Brilho nos olhos
         paintFill.color = Color.WHITE
         canvas.drawCircle(cx - 2.5f * s, cy - 3 * s, 1.2f * s, paintFill)
         canvas.drawCircle(cx + 4.5f * s, cy - 3 * s, 1.2f * s, paintFill)
-        // Pupila
         paintFill.color = Color.rgb(10, 0, 0)
         canvas.drawCircle(cx - 3 * s, cy - 2 * s, 1.5f * s, paintFill)
         canvas.drawCircle(cx + 4 * s, cy - 2 * s, 1.5f * s, paintFill)
-        // Boca
         paintContorno.color = Color.rgb(20, 0, 0)
         paintContorno.strokeWidth = 1.5f * s
         canvas.drawArc(RectF(cx - 4 * s, cy + 1 * s, cx + 4 * s, cy + 6 * s), 0f, 180f, false, paintContorno)
         paintContorno.strokeWidth = 1.5f
-        // Outline
         paintContorno.color = escurecer(app.bodyColor, 0.50f)
         paintContorno.strokeWidth = 1.2f
         canvas.drawCircle(cx, cy, 9 * s, paintContorno)
@@ -508,20 +456,16 @@ class CharacterRenderer {
         }
         path.close()
         canvas.drawPath(path, paintFill)
-        // Centro mais escuro
         paintFill.color = escurecer(app.bodyColor, 0.15f)
         canvas.drawCircle(cx, cy, 5 * s, paintFill)
-        // Highlight
         paintFill.color = clarear(app.bodyColor, 0.20f)
         canvas.drawCircle(cx - 3 * s, cy - 3 * s, 2 * s, paintFill)
-        // Olhos
         paintFill.color = app.eyeColor
         canvas.drawRect(cx - 4 * s, cy - 3.5f * s, cx - 1 * s, cy + 0.5f * s, paintFill)
         canvas.drawRect(cx + 1 * s, cy - 3.5f * s, cx + 4 * s, cy + 0.5f * s, paintFill)
         paintFill.color = Color.WHITE
         canvas.drawRect(cx - 3.5f * s, cy - 3.5f * s, cx - 2.5f * s, cy - 2.5f * s, paintFill)
         canvas.drawRect(cx + 1.5f * s, cy - 3.5f * s, cx + 2.5f * s, cy - 2.5f * s, paintFill)
-        // Outline
         paintContorno.color = escurecer(app.bodyColor, 0.50f)
         paintContorno.strokeWidth = 1.2f
         canvas.drawPath(path, paintContorno)
@@ -530,13 +474,10 @@ class CharacterRenderer {
     private fun monsterQuadrado(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
         paintFill.color = app.bodyColor
         canvas.drawRect(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy + 9 * s, paintFill)
-        // Faixa escura no topo
         paintFill.color = escurecer(app.bodyColor, 0.22f)
         canvas.drawRect(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy - 5 * s, paintFill)
-        // Highlight
         paintFill.color = clarear(app.bodyColor, 0.18f)
         canvas.drawRect(cx - 8 * s, cy - 8 * s, cx - 3 * s, cy - 5 * s, paintFill)
-        // Olhos quadrados grandes
         paintFill.color = app.eyeColor
         canvas.drawRect(cx - 6.5f * s, cy - 4.5f * s, cx - 1 * s, cy + 1.5f * s, paintFill)
         canvas.drawRect(cx + 1 * s, cy - 4.5f * s, cx + 6.5f * s, cy + 1.5f * s, paintFill)
@@ -546,23 +487,18 @@ class CharacterRenderer {
         paintFill.color = Color.rgb(10, 0, 0)
         canvas.drawRect(cx - 4.5f * s, cy - 3.5f * s, cx - 2.5f * s, cy + 1 * s, paintFill)
         canvas.drawRect(cx + 2.5f * s, cy - 3.5f * s, cx + 4.5f * s, cy + 1 * s, paintFill)
-        // Outline
         paintContorno.color = escurecer(app.bodyColor, 0.50f)
         paintContorno.strokeWidth = 1.2f
         canvas.drawRect(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy + 9 * s, paintContorno)
     }
 
     private fun monsterAlto(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
-        // Corpo alto e fino
         paintFill.color = app.bodyColor
         canvas.drawRect(cx - 5 * s, cy - 13 * s, cx + 5 * s, cy + 8 * s, paintFill)
-        // Cabeça maior
         paintFill.color = clarear(app.bodyColor, 0.08f)
         canvas.drawRect(cx - 7 * s, cy - 17 * s, cx + 7 * s, cy - 9 * s, paintFill)
-        // Highlight
         paintFill.color = clarear(app.bodyColor, 0.22f)
         canvas.drawRect(cx - 6 * s, cy - 16 * s, cx - 2 * s, cy - 13 * s, paintFill)
-        // Olhos grandes
         paintFill.color = app.eyeColor
         canvas.drawCircle(cx - 3 * s, cy - 13.5f * s, 3f * s, paintFill)
         canvas.drawCircle(cx + 3 * s, cy - 13.5f * s, 3f * s, paintFill)
@@ -572,15 +508,10 @@ class CharacterRenderer {
         paintFill.color = Color.rgb(10, 0, 0)
         canvas.drawCircle(cx - 3 * s, cy - 13.5f * s, 1.5f * s, paintFill)
         canvas.drawCircle(cx + 3 * s, cy - 13.5f * s, 1.5f * s, paintFill)
-        // Outline
         paintContorno.color = escurecer(app.bodyColor, 0.50f)
         paintContorno.strokeWidth = 1.2f
         canvas.drawRect(cx - 7 * s, cy - 17 * s, cx + 7 * s, cy + 8 * s, paintContorno)
     }
-
-    // -------------------------------------------------------------------------
-    // Utilitários de cor
-    // -------------------------------------------------------------------------
 
     private fun escurecer(color: Int, factor: Float): Int {
         val f = (factor * 255).toInt()
@@ -600,28 +531,21 @@ class CharacterRenderer {
         )
     }
 
-    /**
-     * Desenha uma Banana ou Cacho de Bananas (Power-up).
-     * O power-up agora é muito maior e mais visível, com efeito de "Glow".
-     */
     fun renderBanana(canvas: Canvas, x: Float, y: Float, frame: Int, tileW: Float) {
-        val s = (tileW / 48f) * 1.8f // Aumentado em 80%
+        val s = (tileW / 48f) * 1.8f
         val t = frame.toFloat() / 15f
         val bob = (Math.sin(t * Math.PI * 2) * 5 * s).toFloat()
         val cx = x
-        val cy = y + bob - 5 * s // Levemente mais alta
+        val cy = y + bob - 5 * s
 
-        // Sombra da banana
         paintFill.color = Color.argb(40, 0, 0, 0)
         canvas.drawOval(RectF(cx - 10 * s, y + 10 * s, cx + 10 * s, y + 16 * s), paintFill)
 
-        // Efeito de Glow (Brilho amarelo flutuante)
         paintFill.color = Color.argb(50, 255, 255, 100)
         canvas.drawCircle(cx, cy, 14 * s + (Math.sin(t * Math.PI * 4) * 2 * s).toFloat(), paintFill)
         paintFill.color = Color.argb(80, 255, 255, 0)
         canvas.drawCircle(cx, cy, 10 * s, paintFill)
 
-        // Corpo da Banana (Amarelo 100% vibrante)
         paintFill.color = Color.rgb(255, 240, 0)
         path.reset()
         path.moveTo(cx - 10 * s, cy - 6 * s)
@@ -629,11 +553,9 @@ class CharacterRenderer {
         path.quadTo(cx, cy + 4 * s, cx - 10 * s, cy - 6 * s)
         canvas.drawPath(path, paintFill)
 
-        // Ponta (Marrom)
         paintFill.color = Color.rgb(80, 50, 10)
         canvas.drawRect(cx - 12 * s, cy - 8 * s, cx - 9 * s, cy - 4 * s, paintFill)
         
-        // Outline forte
         paintContorno.color = Color.rgb(120, 80, 0)
         paintContorno.strokeWidth = 2f * s
         canvas.drawPath(path, paintContorno)
