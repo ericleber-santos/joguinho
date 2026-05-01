@@ -139,35 +139,40 @@ class CharacterRenderer {
 
         val hatTop = cy - u * 9f + bodyBob
         fillRect(canvas, cx - u * 4f, hatTop,          u * 8f, u * 3.5f, heroHat)
-        fillRect(canvas, cx - u * 5f, hatTop + u*3.5f, u*10f,  u * 1f,   heroHatBrim)
+        fillRect(canvas, cx - u * 2f, hatTop + u*3.5f, u * 8f,  u * 1f,   heroHatBrim) // Aba deslocada para frente
         strokeRect(canvas, cx - u*4f, hatTop,           u*8f,   u*4.5f,  heroOutline, u*0.5f)
 
         val headTop = cy - u * 7f + bodyBob
         fillRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroSkin)
         strokeRect(canvas, cx - u*4f, headTop, u*8f, u*7f, heroOutline, u*0.5f)
 
-        fillRect(canvas, cx - u*2.5f, headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
-        fillRect(canvas, cx + u*1.3f,  headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
+        // Olhos deslocados para a direita (perfil)
+        fillRect(canvas, cx + u*0.5f, headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
+        fillRect(canvas, cx + u*2.5f,  headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
 
-        fillRect(canvas, cx - u*1.5f, headTop + u*5f, u*3f, u*0.7f, heroSkinDark)
+        fillRect(canvas, cx + u*1.0f, headTop + u*5f, u*2.5f, u*0.7f, heroSkinDark)
 
         val bodyTop = cy - u * 0f + bodyBob
-        fillRect(canvas, cx - u * 4f, bodyTop, u * 8f, u * 7f, currentShirt)
-        strokeRect(canvas, cx - u*4f, bodyTop, u*8f, u*7f, heroOutline, u*0.5f)
-
-        fillRect(canvas, cx - u*0.6f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
-        fillRect(canvas, cx - u*0.6f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
-
         val armTopY = bodyTop + u * 0.5f
         val armLen  = u * 5f
 
-        val lArmX = cx - u * 5.5f
+        // Braço Esquerdo (atrás no perfil)
+        val lArmX = cx - u * 4.5f
         val lArmSwingPx = armSwing * u * 1.5f
         fillRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, currentShirt)
         strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
         fillCircle(canvas, lArmX + u, armTopY + lArmSwingPx + armLen + u, u*1.2f, heroSkin)
 
-        val rArmX = cx + u * 3.5f
+        // CORPO
+        fillRect(canvas, cx - u * 4f, bodyTop, u * 8f, u * 7f, currentShirt)
+        strokeRect(canvas, cx - u*4f, bodyTop, u*8f, u*7f, heroOutline, u*0.5f)
+
+        // Detalhes da camisa deslocados
+        fillRect(canvas, cx + u*1.8f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
+        fillRect(canvas, cx + u*1.8f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
+
+        // Braço Direito (à frente no perfil)
+        val rArmX = cx + u * 2.5f
         val rArmSwingPx = -armSwing * u * 1.5f
         fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, currentShirt)
         strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2f, armLen, heroOutline, u*0.5f)
