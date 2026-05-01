@@ -55,6 +55,10 @@ class HybridMapGenerator(private val random: Random) {
         // Definir Ponto de Início e Saída baseados em distâncias
         val (startIndex, exitIndex, exitDir) = findStartAndExit(tiles, width, height)
 
+        // Passo 4: Limpeza final (Flood Fill para bolsões isolados e preenchimento de becos sem saída)
+        removeIsolatedPockets(tiles, width, height, startIndex)
+        fillDeadEnds(tiles, width, height, startIndex, exitIndex)
+
         return MazeData(
             width = width,
             height = height,
@@ -197,5 +201,65 @@ class HybridMapGenerator(private val random: Random) {
         }
 
         return Triple(startIndex, exitIndex, exitDir)
+    }
+
+    private fun removeIsolatedPockets(tiles: IntArray, width: Int, height: Int, startIndex: Int) {
+        val reachable = BooleanArray(width * height)
+        val queue = java.util.LinkedList<Int>()
+        
+        if (tiles[startIndex] == TILE_FLOOR) {
+            reachable[startIndex] = true
+            queue.add(startIndex)
+        }
+
+        while (queue.isNotEmpty()) {
+            val curr = queue.poll()
+            val x = curr % width
+            val y = curr / width
+
+            val neighbors = listOf(
+                Pair(x - 1, y), Pair(x + 1, y),
+                Pair(x, y - 1), Pair(x, y + 1)
+            )
+            for ((nx, ny) in neighbors) {
+                if (nx in 0 until width && ny in 0 until height) {
+                    val idx = ny * width + nx
+                    if (!reachable[idx] && tiles[idx] == TILE_FLOOR) {
+                        reachable[idx] = true
+                        queue.add(idx)
+                    }
+                }
+            }
+        }
+
+        for (i in tiles.indices) {
+            if (tiles[i] == TILE_FLOOR && !reachable[i]) {
+                tiles[i] = TILE_WALL
+            }
+        }
+    }
+
+    private fun fillDeadEnds(tiles: IntArray, width: Int, height: Int, startIndex: Int, exitIndex: Int) {
+        var changed = true
+        while (changed) {
+            changed = false
+            for (y in 1 until height - 1) {
+                for (x in 1 until width - 1) {
+                    val idx = y * width + x
+                    if (tiles[idx] == TILE_FLOOR && idx != startIndex && idx != exitIndex) {
+                        var wallCount = 0
+                        if (tiles[(y - 1) * width + x] == TILE_WALL) wallCount++
+                        if (tiles[(y + 1) * width + x] == TILE_WALL) wallCount++
+                        if (tiles[y * width + (x - 1)] == TILE_WALL) wallCount++
+                        if (tiles[y * width + (x + 1)] == TILE_WALL) wallCount++
+
+                        if (wallCount >= 3) {
+                            tiles[idx] = TILE_WALL
+                            changed = true
+                        }
+                    }
+                }
+            }
+        }
     }
 }

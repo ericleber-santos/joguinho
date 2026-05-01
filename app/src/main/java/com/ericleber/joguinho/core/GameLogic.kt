@@ -261,8 +261,11 @@ class GameLogic(private val gameState: GameState) {
                 val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
 
                 // Lógica de Boss: Provocações
-                if (timer % 5f < deltaTimeSec) {
+                val currentTime = System.currentTimeMillis()
+                val lastTauntTime = gameState.monsterCollisionCooldowns["taunt_${monster.id}"] ?: 0L
+                if (currentTime - lastTauntTime > 12000L) { // 12 segundos de cooldown
                     atualizarProvocacaoBoss(monster)
+                    gameState.monsterCollisionCooldowns["taunt_${monster.id}"] = currentTime
                 }
 
                 val accumX = (monsterAccumX[monster.id] ?: 0f) + dx * velocidade * deltaTimeSec
@@ -589,10 +592,10 @@ class GameLogic(private val gameState: GameState) {
             
             val dx = Math.abs(monster.position.x - heroPos.x)
             val dy = Math.abs(monster.position.y - heroPos.y)
-            val isColliding = if (scale > 1.2f) {
-                dx <= 1 && dy <= 1 // Raio de 1 tile para monstros grandes/boss
+            val isColliding = if (monster.isBoss) {
+                dx <= 1 && dy <= 1 // Raio de 1 tile apenas para o Boss
             } else {
-                monster.position == heroPos // Apenas mesmo tile para pequenos/médios
+                monster.position == heroPos // Mesmo tile estrito para todos os outros monstros
             }
 
             if (!isColliding) return@map monster

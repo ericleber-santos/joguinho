@@ -70,47 +70,36 @@ class HudRenderer {
         val padding = w * 0.04f
         val barY = h - barH
 
-        // HUD Inferior Premium (Sombra projetada)
-        bgPaint.color = Color.argb(120, 0, 0, 0)
-        canvas.drawRect(0f, barY - 10f, w.toFloat(), h.toFloat(), bgPaint) // sombra suave
-        bgPaint.color = Color.argb(220, 10, 12, 18) // Fundo profundo
-        canvas.drawRect(0f, barY, w.toFloat(), h.toFloat(), bgPaint)
-
-        val baselineY = barY + barH * 0.65f
-
-        // Score — esquerda
-        textPaint.textSize = barH * 0.5f
+        // Fundo inferior removido para dar lugar ao Fullscreen Immersive.
+        // O Score vai para o canto superior direito.
+        textPaint.textSize = w * 0.05f
         textPaint.color = Color.rgb(220, 220, 200)
-        textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, baselineY, textPaint)
+        textPaint.textAlign = Paint.Align.RIGHT
+        textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
+        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w - padding, h * 0.08f, textPaint)
 
-        // Combo — centro (só se ativo)
+        // Combo — topo direita (só se ativo)
         if (gameState.comboStreak > 0) {
             val comboColor = when {
                 gameState.comboStreak >= 20 -> Color.rgb(255, 80, 80)
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = barH * 0.5f
             textPaint.color = comboColor
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
+            canvas.drawText("x${gameState.comboStreak}", w - padding, h * 0.08f + textPaint.textSize * 1.2f, textPaint)
         }
+        textPaint.clearShadowLayer()
 
-        // Andar e mapa — direita
-        textPaint.textSize = barH * 0.6f
-        textPaint.color = Color.rgb(180, 180, 160)
-        textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("A${gameState.floorNumber} M${gameState.mapIndex + 1}/3", w - padding, baselineY, textPaint)
+        // Andar e mapa inferior removidos pois renderInfoMapaEsquerda já exibe isso.
 
-        // Slowdown — centralizado, com sombra forte
-        if (gameState.heroIsSlowedDown) {
+        // Slowdown — centralizado no topo, com sombra forte
+        if (gameState.heroIsSlowedDown && gameState.heroSlowdownRemainingMs > 0) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = barH * 0.8f
             textPaint.color = Color.argb(255, 255, 80, 80)
             textPaint.setShadowLayer(8f, 0f, 4f, Color.BLACK)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - barH * 0.5f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, h * 0.15f, textPaint)
             textPaint.clearShadowLayer()
         }
         
@@ -178,16 +167,12 @@ class HudRenderer {
         val padding = w * 0.03f
         val barY = h - barH
 
-        bgPaint.color = Color.argb(180, 0, 0, 0)
-        canvas.drawRect(0f, barY, w.toFloat(), h.toFloat(), bgPaint)
-
-        val baselineY = barY + barH * 0.65f
-
-        // Score
-        textPaint.textSize = barH * 0.5f
+        // Score e Combo para o topo direito
+        textPaint.textSize = w * 0.03f
         textPaint.color = Color.rgb(220, 220, 200)
-        textPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("${gameState.accumulatedScore.toInt()}", padding, baselineY, textPaint)
+        textPaint.textAlign = Paint.Align.RIGHT
+        textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
+        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w - padding, h * 0.08f, textPaint)
 
         // Combo
         if (gameState.comboStreak > 0) {
@@ -196,26 +181,21 @@ class HudRenderer {
                 gameState.comboStreak >= 10 -> Color.rgb(255, 160, 50)
                 else -> Color.rgb(255, 220, 80)
             }
-            textPaint.textSize = barH * 0.5f
             textPaint.color = comboColor
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("x${gameState.comboStreak}", w / 2f, baselineY, textPaint)
+            canvas.drawText("x${gameState.comboStreak}", w - padding, h * 0.08f + textPaint.textSize * 1.2f, textPaint)
         }
+        textPaint.clearShadowLayer()
 
-        // Andar e mapa
-        textPaint.textSize = barH * 0.6f
-        textPaint.color = Color.rgb(180, 180, 160)
-        textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("Andar ${gameState.floorNumber}  Mapa ${gameState.mapIndex + 1}/3", w - padding, baselineY, textPaint)
+        // Andar e mapa removidos (redundantes)
 
         // Slowdown
-        if (gameState.heroIsSlowedDown) {
+        if (gameState.heroIsSlowedDown && gameState.heroSlowdownRemainingMs > 0) {
             val seg = gameState.heroSlowdownRemainingMs / 1000f
             textPaint.textSize = barH * 0.9f
             textPaint.color = Color.argb(255, 255, 80, 80)
             textPaint.setShadowLayer(8f, 0f, 4f, Color.BLACK)
             textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, barY - barH * 0.6f, textPaint)
+            canvas.drawText("LENTO %.1fs".format(seg), w / 2f, h * 0.15f, textPaint)
             textPaint.clearShadowLayer()
         }
         

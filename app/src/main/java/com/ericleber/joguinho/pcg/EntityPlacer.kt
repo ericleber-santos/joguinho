@@ -170,7 +170,34 @@ class EntityPlacer(private val random: Random) {
     ): List<TrapState> {
         val count = trapCount(floorNumber)
         val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
-        val selected = candidates.shuffled(random).take(count)
+        
+        // Priorizar posicionamento adjacente a paredes (faz mais sentido visual/design)
+        val wallAdjacentCandidates = candidates.filter { index ->
+            val x = index % maze.width
+            val y = index / maze.width
+            var isNearWall = false
+            for (dy in -1..1) {
+                for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx
+                    val ny = y + dy
+                    if (nx in 0 until maze.width && ny in 0 until maze.height) {
+                        if (maze.tiles[ny * maze.width + nx] == BSPMazeGenerator.TILE_WALL) {
+                            isNearWall = true
+                        }
+                    }
+                }
+            }
+            isNearWall
+        }
+
+        val finalCandidates = if (wallAdjacentCandidates.size >= count) {
+            wallAdjacentCandidates
+        } else {
+            (wallAdjacentCandidates + candidates.shuffled(random)).distinct()
+        }
+        
+        val selected = finalCandidates.shuffled(random).take(count)
 
         return selected.mapIndexed { i, index ->
             TrapState(

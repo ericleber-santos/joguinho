@@ -59,9 +59,8 @@ class Renderer(
      * Chamado quando o mapa muda ou a tela é redimensionada.
      * Fórmula: tileW = min(screenW, screenH*2) / (mapW + mapH) * 2
      */
-    // Altura da área de jogo (retângulo A) — 80% da tela
-    // O retângulo B (20% inferior) é reservado para o HUD
-    private val fracaoAreaJogo = 0.80f
+    // O retângulo B (antigo HUD inferior) não existe mais. Tela cheia (Fullscreen)
+    private val fracaoAreaJogo = 1.00f
 
     /**
      * Recalcula o tile e a câmera para que o mapa preencha a tela de forma responsiva.
@@ -87,9 +86,9 @@ class Renderer(
         
         // Zoom agressivo: poucos tiles visíveis = tudo maior e mais claro
         val tilesVisiveisDesejados = if (isTablet) {
-            18f // Tablet: aprox. 18 tiles visíveis
+            24f // Tablet: aprox. 24 tiles visíveis
         } else {
-            14f // Celular: aprox. 14 tiles visíveis (personagens BEM grandes)
+            20f // Celular: aprox. 20 tiles visíveis (câmera mais afastada)
         }
 
         // Calcula tile para que caibam X tiles na menor dimensão da tela
@@ -209,6 +208,10 @@ class Renderer(
                 if (idx < 0 || idx >= mazeData.tiles.size) continue
                 if (mazeData.tiles[idx] != 0) continue
                 if ((tx == entradaTx && ty == entradaTy) || (tx == saidaTx && ty == saidaTy)) continue
+                
+                // Desativar decorativos para o Bioma Úmido (Gotículas estáticas na tela não ficam boas)
+                if (gameState.currentBiome.name.contains("UMIDO") || gameState.currentBiome.name.contains("PANTANO")) continue
+
                 val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 12
                 if (decorSeed != 0) continue
                 val variant = (tx + ty) % 4
