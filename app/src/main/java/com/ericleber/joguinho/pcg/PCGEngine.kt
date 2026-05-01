@@ -81,11 +81,11 @@ class PCGEngine {
 
                 val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
                 val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
-                val monsterIndices = monsters.map { it.position.y * maze.width + it.position.x }.toSet()
+                val monsterIndices = monsters.map { it.position.iy * maze.width + it.position.ix }.toSet()
                 val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
-                val trapIndices = traps.map { it.position.y * maze.width + it.position.x }.toSet()
+                val trapIndices = traps.map { it.position.iy * maze.width + it.position.ix }.toSet()
                 val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
-                val itemIndices = items.map { it.position.y * maze.width + it.position.x }.toSet()
+                val itemIndices = items.map { it.position.iy * maze.width + it.position.ix }.toSet()
                 val survivalElements = placer.placeSurvivalElements(maze, mapIndex, criticalPath, monsterIndices + trapIndices + itemIndices)
 
                 return GeneratedMap(maze, monsters, traps, items, survivalElements)
@@ -110,7 +110,7 @@ class PCGEngine {
         queue.add(maze.startIndex)
 
         while (queue.isNotEmpty()) {
-            val current = queue.poll()
+            val current = queue.poll() ?: continue
             if (current == maze.exitIndex) break
 
             for (neighbor in getNeighbors(current, maze)) {
@@ -178,11 +178,11 @@ class PCGEngine {
         val placer = EntityPlacer(Random(seed))
         val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
         val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
-        val monsterIndices = monsters.map { it.position.y * w + it.position.x }.toSet()
+        val monsterIndices = monsters.map { it.position.iy * w + it.position.ix }.toSet()
         val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
-        val trapIndices = traps.map { it.position.y * w + it.position.x }.toSet()
+        val trapIndices = traps.map { it.position.iy * w + it.position.ix }.toSet()
         val items = placer.placeItems(maze, mapIndex, criticalPath, monsterIndices + trapIndices)
-        val itemIndices = items.map { it.position.y * w + it.position.x }.toSet()
+        val itemIndices = items.map { it.position.iy * w + it.position.ix }.toSet()
         val survivalElements = placer.placeSurvivalElements(maze, mapIndex, criticalPath, monsterIndices + trapIndices + itemIndices)
 
         return GeneratedMap(maze, monsters, traps, items, survivalElements)

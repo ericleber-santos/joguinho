@@ -15,7 +15,7 @@ object IsometricProjection {
     /**
      * Converte coordenadas de mundo para coordenadas de tela (canto superior esquerdo do tile).
      */
-    fun worldToScreen(worldX: Int, worldY: Int, tileW: Float, tileH: Float): PointF {
+    fun worldToScreen(worldX: Float, worldY: Float, tileW: Float, tileH: Float): PointF {
         return PointF(worldX * tileW, worldY * tileH)
     }
 

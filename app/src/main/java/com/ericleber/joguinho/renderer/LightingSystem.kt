@@ -121,7 +121,7 @@ class LightingSystem {
                         }
                     if (temParedeAdj) continue
 
-                    val screenPos = IsometricProjection.worldToScreen(tx, ty, tileW, tileH)
+                    val screenPos = IsometricProjection.worldToScreen(tx.toFloat(), ty.toFloat(), tileW, tileH)
                     val decorSx = screenPos.x + cameraX + tileW / 2f
                     val decorSy = screenPos.y + cameraY + tileH / 2f
 

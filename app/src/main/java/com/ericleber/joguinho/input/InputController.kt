@@ -69,10 +69,6 @@ class InputController(
     var heroStoppedDurationSec: Float = 0f
         private set
 
-    // Acumulador de movimento sub-tile (para movimento suave)
-    private var moveAccumX: Float = 0f
-    private var moveAccumY: Float = 0f
-
     // Vibrador (lazy para não crashar em dispositivos sem vibração)
     private val vibrator: Vibrator? by lazy {
         val ctx = contextRef.get() ?: return@lazy null
@@ -172,14 +168,6 @@ class InputController(
     // Atualização de movimento (chamada pelo GameLoop a cada frame)
     // -------------------------------------------------------------------------
 
-    /**
-     * Processa o input atual e atualiza a posição do Hero no GameState.
-     * Deve ser chamado dentro do GameLoop (game thread) a cada frame.
-     *
-     * @param deltaTimeSec tempo do frame em segundos
-     * @param mazeData dados do labirinto atual para detecção de colisão
-     * @param hapticEnabled se o feedback háptico está habilitado nas configurações
-     */
     fun update(deltaTimeSec: Float, mazeData: MazeData?, hapticEnabled: Boolean = true) {
         val direction = getActiveDirection()
         val movementVector = if (useDPad) {
@@ -202,7 +190,6 @@ class InputController(
             heroMoved = false
             heroStoppedDurationSec += deltaTimeSec
             gameState.heroStoppedDurationSec = heroStoppedDurationSec
-            // Não zeramos moveAccumX/Y para manter o progresso sub-tile ao parar e voltar a andar
             return
         }
 
@@ -224,55 +211,69 @@ class InputController(
         }
         
         val effectiveSpeed = baseSpeed * speedMultiplier
+        val currentPos = gameState.heroPosition
 
-        // Vetor de movimento por frame usando entrada analógica/normalizada
-        moveAccumX += movementVector.x * effectiveSpeed * deltaTimeSec
-        moveAccumY += movementVector.y * effectiveSpeed * deltaTimeSec
+        // Vetor de movimento por frame
+        val dx = movementVector.x * effectiveSpeed * deltaTimeSec
+        val dy = movementVector.y * effectiveSpeed * deltaTimeSec
 
-        // Aplica movimento em tiles inteiros quando o acumulador ultrapassa 1
-        val tileDx = moveAccumX.toInt()
-        val tileDy = moveAccumY.toInt()
+        if (mazeData == null) {
+            gameState.heroPosition = Position(currentPos.x + dx, currentPos.y + dy)
+            if (direction != null) gameState.heroDirection = direction
+            return
+        }
 
-        if (tileDx != 0 || tileDy != 0) {
-            moveAccumX -= tileDx
-            moveAccumY -= tileDy
+        // Tenta mover nos dois eixos (Diagonal)
+        val nextX = currentPos.x + dx
+        val nextY = currentPos.y + dy
 
-            val currentPos = gameState.heroPosition
-
-            // Tenta mover na diagonal primeiro; se colidir, tenta cada eixo separado (slide)
-            val posCompleta = Position(currentPos.x + tileDx, currentPos.y + tileDy)
-            val posApenasX  = Position(currentPos.x + tileDx, currentPos.y)
-            val posApenasY  = Position(currentPos.x, currentPos.y + tileDy)
+        if (!checkCollision(nextX, nextY, mazeData)) {
+            gameState.heroPosition = Position(nextX, nextY)
+        } else {
+            // Se houver colisão diagonal, tenta mover em cada eixo separadamente (Sliding)
+            val canMoveX = !checkCollision(nextX, currentPos.y, mazeData)
+            val canMoveY = !checkCollision(currentPos.x, nextY, mazeData)
 
             when {
-                mazeData == null -> {
-                    gameState.heroPosition = posCompleta
-                    if (direction != null) gameState.heroDirection = direction
+                canMoveX -> gameState.heroPosition = Position(nextX, currentPos.y)
+                canMoveY -> gameState.heroPosition = Position(currentPos.x, nextY)
+                else -> {
+                    // Totalmente bloqueado
+                    if (hapticEnabled) vibrate(WALL_HAPTIC_MS)
                 }
-                !isWallComMargem(posCompleta, tileDx, tileDy, mazeData) -> {
-                    // Movimento diagonal livre (com verificação de margem lateral)
-                    gameState.heroPosition = posCompleta
-                    if (direction != null) gameState.heroDirection = direction
-                }
-                tileDx != 0 && tileDy != 0 -> {
-                    // Diagonal bloqueada — tenta slide em cada eixo
-                    val moveX = !isWallComMargem(posApenasX, tileDx, 0, mazeData)
-                    val moveY = !isWallComMargem(posApenasY, 0, tileDy, mazeData)
-                    when {
-                        moveX && moveY -> {
-                            gameState.heroPosition = if (kotlin.math.abs(moveAccumX) >= kotlin.math.abs(moveAccumY))
-                                posApenasX else posApenasY
-                            if (direction != null) gameState.heroDirection = direction
-                        }
-                        moveX -> { gameState.heroPosition = posApenasX; if (direction != null) gameState.heroDirection = direction }
-                        moveY -> { gameState.heroPosition = posApenasY; if (direction != null) gameState.heroDirection = direction }
-                        else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
-                    }
-                }
-                else -> { if (hapticEnabled) vibrate(WALL_HAPTIC_MS) }
             }
-        } else {
-            if (direction != null) gameState.heroDirection = direction
+        }
+
+        if (direction != null) gameState.heroDirection = direction
+    }
+
+    /**
+     * Verifica colisão de um círculo (hitbox do herói) contra os tiles do labirinto.
+     * @param radius Raio da hitbox (em frações de tile). 0.35f permite passar em corredores apertados.
+     */
+    private fun checkCollision(x: Float, y: Float, maze: MazeData, radius: Float = 0.35f): Boolean {
+        val left = (x - radius).toInt()
+        val right = (x + radius).toInt()
+        val top = (y - radius).toInt()
+        val bottom = (y + radius).toInt()
+
+        for (ty in top..bottom) {
+            for (tx in left..right) {
+                if (isWallAt(tx, ty, maze)) return true
+            }
+        }
+        return false
+    }
+
+    private fun isWallAt(tx: Int, ty: Int, maze: MazeData): Boolean {
+        if (tx < 0 || ty < 0 || tx >= maze.width || ty >= maze.height) return true
+        if (maze.tiles[ty * maze.width + tx] == 1) return true
+        
+        // Colisão com elementos sólidos (Pilares e Caixas)
+        return gameState.survivalElements.any {
+            it.active && it.position.ix == tx && it.position.iy == ty &&
+            (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR ||
+             it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX)
         }
     }
 
@@ -298,31 +299,6 @@ class InputController(
         Direction.NORTH_WEST  ->  Pair(-1f, -1f)
     }
 
-    /**
-     * Verifica se uma posição é uma parede no labirinto.
-     * tiles[y * width + x] == 1 indica parede.
-     */
-    private fun isWall(pos: Position, maze: MazeData): Boolean {
-        if (pos.x < 0 || pos.y < 0 || pos.x >= maze.width || pos.y >= maze.height) return true
-        if (maze.tiles[pos.y * maze.width + pos.x] == 1) return true
-        
-        // Verifica colisões com Elementos de Sobrevivência Sólidos
-        val solidElement = gameState.survivalElements.find {
-            it.active && it.position == pos &&
-            (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR ||
-             it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX)
-        }
-        
-        return solidElement != null
-    }
-
-    /**
-     * Verifica colisão simples: apenas o tile destino.
-     * Sem margem lateral — corredores de 3 tiles devem ser navegáveis livremente.
-     */
-    private fun isWallComMargem(pos: Position, dx: Int, dy: Int, maze: MazeData): Boolean {
-        return isWall(pos, maze)
-    }
 
     /**
      * Dispara vibração com duração especificada.

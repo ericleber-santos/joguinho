@@ -14,7 +14,22 @@ enum class MovementPattern {
 }
 
 @Serializable
-data class Position(val x: Int, val y: Int)
+data class Position(val x: Float, val y: Float) {
+    /** Retorna a coordenada X como Int para indexação de arrays de tiles. */
+    val ix: Int get() = x.toInt()
+    /** Retorna a coordenada Y como Int para indexação de arrays de tiles. */
+    val iy: Int get() = y.toInt()
+
+    /** Calcula a distância euclidiana até outra posição. */
+    fun dist(other: Position): Float {
+        val dx = x - other.x
+        val dy = y - other.y
+        return kotlin.math.sqrt(dx * dx + dy * dy)
+    }
+
+    /** Construtor secundário para compatibilidade com inteiros. */
+    constructor(ix: Int, iy: Int) : this(ix.toFloat(), iy.toFloat())
+}
 
 data class MazeData(
     val width: Int,

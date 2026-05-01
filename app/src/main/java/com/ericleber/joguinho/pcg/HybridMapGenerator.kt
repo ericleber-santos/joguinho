@@ -213,7 +213,7 @@ class HybridMapGenerator(private val random: Random) {
         }
 
         while (queue.isNotEmpty()) {
-            val curr = queue.poll()
+            val curr = queue.poll() ?: continue
             val x = curr % width
             val y = curr / width
 

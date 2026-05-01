@@ -71,8 +71,8 @@ class Renderer(
     private var tileSizeMinimo = 31f // Reduzido mais 20% para afastar a câmera
 
     // Posição do hero para scroll da câmera
-    private var heroWorldX: Int = 0
-    private var heroWorldY: Int = 0
+    private var heroWorldX: Float = 0f
+    private var heroWorldY: Float = 0f
 
     fun recalcularTile(mapWidth: Int, mapHeight: Int) {
         if (screenWidth <= 0 || screenHeight <= 0) return
@@ -254,7 +254,7 @@ class Renderer(
         for (trap in gameState.traps) {
             val ttx = trap.position.x
             val tty = trap.position.y
-            if (ttx !in minX..maxX || tty !in minY..maxY) continue
+            if (ttx.toInt() !in minX..maxX || tty.toInt() !in minY..maxY) continue
             val sx = ttx * tileW + cameraX
             val sy = tty * tileH + cameraY
             val cx = sx + tileW / 2f
@@ -697,7 +697,7 @@ class Renderer(
         tileW: Float,
         tileH: Float
     ) {
-        val screenPos = IsometricProjection.worldToScreen(saidaTx, saidaTy, tileW, tileH)
+        val screenPos = IsometricProjection.worldToScreen(saidaTx.toFloat(), saidaTy.toFloat(), tileW, tileH)
         val cx = screenPos.x + cameraX + tileW / 2f
         val baseSy = screenPos.y + cameraY + tileH / 2f
 

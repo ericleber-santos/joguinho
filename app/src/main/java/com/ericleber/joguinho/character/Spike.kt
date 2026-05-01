@@ -35,8 +35,8 @@ class Spike(
         val distance = Math.sqrt((dx * dx + dy * dy).toDouble())
         if (distance > 2.0) {
             // Move em direção ao Hero (pathfinding simples)
-            val stepX = if (dx != 0) dx / Math.abs(dx) else 0
-            val stepY = if (dy != 0) dy / Math.abs(dy) else 0
+            val stepX = if (dx != 0f) dx / Math.abs(dx) else 0f
+            val stepY = if (dy != 0f) dy / Math.abs(dy) else 0f
             position = Position(position.x + stepX, position.y + stepY)
         }
     }

@@ -59,11 +59,7 @@ class GameLogic(private val gameState: GameState) {
         private const val BOSS_SPEED_SCALING_PER_FLOOR = 0.015f
     }
 
-    // Acumuladores de movimento sub-tile para Spike e Monsters
-    private var spikeAccumX = 0f
-    private var spikeAccumY = 0f
-    private val monsterAccumX = mutableMapOf<String, Float>()
-    private val monsterAccumY = mutableMapOf<String, Float>()
+    // REMOVIDO: Acumuladores de movimento sub-tile (Agora usamos movimento fluído direto)
 
     // Timers de padrão de movimento dos Monsters (para patrulha circular/aleatória)
     private val monsterTimers = mutableMapOf<String, Float>()
@@ -252,7 +248,7 @@ class GameLogic(private val gameState: GameState) {
                 val mudSlowMult = if (inMud && state.elapsedMs < 80000L) 0.6f else 1.0f // 40% slow
                 
                 val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
-                var baseVel = MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult * mudSlowMult
+                val baseVel = MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult * mudSlowMult
                 val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
                 
                 val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
@@ -260,33 +256,13 @@ class GameLogic(private val gameState: GameState) {
 
                 val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
 
-                // Lógica de Boss: Provocações
-                val currentTime = System.currentTimeMillis()
-                val lastTauntTime = gameState.monsterCollisionCooldowns["taunt_${monster.id}"] ?: 0L
-                if (currentTime - lastTauntTime > 12000L) { // 12 segundos de cooldown
-                    atualizarProvocacaoBoss(monster)
-                    gameState.monsterCollisionCooldowns["taunt_${monster.id}"] = currentTime
-                }
+                val nextX = (monster.position.x + dx * velocidade * deltaTimeSec).coerceIn(0f, maze.width - 1f)
+                val nextY = (monster.position.y + dy * velocidade * deltaTimeSec).coerceIn(0f, maze.height - 1f)
 
-                val accumX = (monsterAccumX[monster.id] ?: 0f) + dx * velocidade * deltaTimeSec
-                val accumY = (monsterAccumY[monster.id] ?: 0f) + dy * velocidade * deltaTimeSec
-
-                val tileDx = accumX.toInt()
-                val tileDy = accumY.toInt()
-                monsterAccumX[monster.id] = accumX - tileDx
-                monsterAccumY[monster.id] = accumY - tileDy
-
-                if (tileDx == 0 && tileDy == 0) return@map monster
-
-                val novaPos = Position(
-                    (monster.position.x + tileDx).coerceIn(0, maze.width - 1),
-                    (monster.position.y + tileDy).coerceIn(0, maze.height - 1)
-                )
-
-                // Verifica colisão com Pilar de Pedra ou Caixa para destruir
+                // Verifica colisão com Pilar de Pedra ou Caixa para destruir (usando ix/iy para o tile)
                 val hitElement = gameState.survivalElements.find { 
                     (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR || it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX) 
-                    && it.position == novaPos && it.active
+                    && it.position.ix == nextX.toInt() && it.position.iy == nextY.toInt() && it.active
                 }
                 
                 if (hitElement != null) {
@@ -304,15 +280,18 @@ class GameLogic(private val gameState: GameState) {
                             if (it.id == hitElement.id) it.copy(durability = newDurability, active = newDurability > 0) else it 
                         }
                     }
-                    return@map monster // Não avança o tile, gasta o movimento atacando
+                    return@map monster // Não avança, gasta o movimento atacando
                 }
 
-                // Não atravessa paredes nem ocupa a posição do Hero
-                val indice = novaPos.y * maze.width + novaPos.x
-                if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL || novaPos == heroPos) {
+                // Não atravessa paredes (checa o tile central do Boss)
+                val indice = nextY.toInt() * maze.width + nextX.toInt()
+                // Evita ficar EXATAMENTE em cima do herói (mantém pequena distância)
+                val distToHero = monster.position.dist(heroPos)
+
+                if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL || distToHero < 0.5f) {
                     return@map monster
                 } else {
-                    return@map monster.copy(position = novaPos)
+                    return@map monster.copy(position = Position(nextX, nextY))
                 }
             }
 
@@ -330,30 +309,16 @@ class GameLogic(private val gameState: GameState) {
             monsterTimers[monster.id] = timer
 
             val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
-            
 
+            val nextX = (monster.position.x + dx * velocidade * deltaTimeSec).coerceIn(0f, maze.width - 1f)
+            val nextY = (monster.position.y + dy * velocidade * deltaTimeSec).coerceIn(0f, maze.height - 1f)
 
-            val accumX = (monsterAccumX[monster.id] ?: 0f) + dx * velocidade * deltaTimeSec
-            val accumY = (monsterAccumY[monster.id] ?: 0f) + dy * velocidade * deltaTimeSec
-
-            val tileDx = accumX.toInt()
-            val tileDy = accumY.toInt()
-            monsterAccumX[monster.id] = accumX - tileDx
-            monsterAccumY[monster.id] = accumY - tileDy
-
-            if (tileDx == 0 && tileDy == 0) return@map monster
-
-            val novaPos = Position(
-                (monster.position.x + tileDx).coerceIn(0, maze.width - 1),
-                (monster.position.y + tileDy).coerceIn(0, maze.height - 1)
-            )
-
-            // Não atravessa paredes nem ocupa a posição do Hero
-            val indice = novaPos.y * maze.width + novaPos.x
-            if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL || novaPos == heroPos) {
+            // Não atravessa paredes (checa o tile destino)
+            val indice = nextY.toInt() * maze.width + nextX.toInt()
+            if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL) {
                 monster
             } else {
-                monster.copy(position = novaPos)
+                monster.copy(position = Position(nextX, nextY))
             }
         }
     }
@@ -375,12 +340,11 @@ class GameLogic(private val gameState: GameState) {
     private fun verificarColisaoItens() {
         val heroPos = gameState.heroPosition
         gameState.items = gameState.items.map { item ->
-            if (item.isActive && item.position == heroPos) {
+            if (item.isActive && item.position.dist(heroPos) < 0.6f) {
                 when (item.type) {
                     com.ericleber.joguinho.core.ItemType.SPEED_BOOTS -> {
                         gameState.heroHasSpeedBuff = true
                         gameState.heroSpeedBuffRemainingMs = 7000L
-                        // Evento de áudio: Power-up coletado
                         onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                     }
                 }
@@ -399,17 +363,17 @@ class GameLogic(private val gameState: GameState) {
         gameState.survivalElements = gameState.survivalElements.map { elem ->
             if (!elem.active) return@map elem
             
-            // Tocha de Gelo (Overlap)
-            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH && elem.position == heroPos && elem.cooldownRemainingMs <= 0) {
+            // Tocha de Gelo (Proximidade)
+            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH && elem.position.dist(heroPos) < 0.8f && elem.cooldownRemainingMs <= 0) {
                 gameState.bossFightState = gameState.bossFightState.copy(
                     bossStunRemainingMs = gameState.bossFightState.bossStunRemainingMs + 4000L // 4s Stun
                 )
-                onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO) // Reutilizando som
+                onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                 return@map elem.copy(cooldownRemainingMs = 20000L) // 20s cooldown
             }
             
-            // Sino de Distração (Overlap)
-            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL && elem.position == heroPos && !gameState.bossFightState.bellUsed) {
+            // Sino de Distração (Proximidade)
+            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL && elem.position.dist(heroPos) < 0.8f && !gameState.bossFightState.bellUsed) {
                 gameState.bossFightState = gameState.bossFightState.copy(
                     bossDistractedMs = 6000L,
                     bellUsed = true
@@ -423,22 +387,25 @@ class GameLogic(private val gameState: GameState) {
                 val dx = elem.position.x - heroPos.x
                 val dy = elem.position.y - heroPos.y
                 
-                // Se o herói estiver adjacente (distância 1) e estiver tentando ir na direção da caixa
-                if (Math.abs(dx) + Math.abs(dy) == 1) {
+                // Se o herói estiver adjacente (distância < 1.2f) e estiver tentando ir na direção da caixa
+                if (Math.abs(dx) + Math.abs(dy) < 1.2f) {
                     val directionMatch = when (gameState.heroDirection) {
-                        com.ericleber.joguinho.core.Direction.NORTH -> dy == -1 && dx == 0
-                        com.ericleber.joguinho.core.Direction.SOUTH -> dy == 1 && dx == 0
-                        com.ericleber.joguinho.core.Direction.EAST -> dx == 1 && dy == 0
-                        com.ericleber.joguinho.core.Direction.WEST -> dx == -1 && dy == 0
+                        com.ericleber.joguinho.core.Direction.NORTH -> dy < -0.4f && Math.abs(dx) < 0.4f
+                        com.ericleber.joguinho.core.Direction.SOUTH -> dy > 0.4f && Math.abs(dx) < 0.4f
+                        com.ericleber.joguinho.core.Direction.EAST -> dx > 0.4f && Math.abs(dy) < 0.4f
+                        com.ericleber.joguinho.core.Direction.WEST -> dx < -0.4f && Math.abs(dy) < 0.4f
                         else -> false
                     }
                     
                     if (directionMatch) {
-                        val pushPos = Position(elem.position.x + dx, elem.position.y + dy)
+                        val pushX = if (Math.abs(dx) > 0.5f) elem.position.x + (if (dx > 0) 1f else -1f) else elem.position.x
+                        val pushY = if (Math.abs(dy) > 0.5f) elem.position.y + (if (dy > 0) 1f else -1f) else elem.position.y
+                        val pushPos = Position(pushX, pushY)
+                        
                         // Verifica se o tile atrás da caixa está livre
-                        val pushIdx = pushPos.y * maze.width + pushPos.x
-                        val isWall = pushPos.x < 0 || pushPos.y < 0 || pushPos.x >= maze.width || pushPos.y >= maze.height || maze.tiles[pushIdx] == 1
-                        val hasElement = gameState.survivalElements.any { it.active && it.position == pushPos && it.type != com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP }
+                        val pushIdx = pushPos.iy * maze.width + pushPos.ix
+                        val isWall = pushPos.ix < 0 || pushPos.iy < 0 || pushPos.ix >= maze.width || pushPos.iy >= maze.height || maze.tiles[pushIdx] == 1
+                        val hasElement = gameState.survivalElements.any { it.active && it.position.ix == pushPos.ix && it.position.iy == pushPos.iy && it.type != com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP }
                         
                         if (!isWall && !hasElement) {
                             return@map elem.copy(position = pushPos)
@@ -484,15 +451,15 @@ class GameLogic(private val gameState: GameState) {
             if (gameState.bossFightState.bossDistractedMs > 0) {
                 val bell = gameState.survivalElements.find { it.type == com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL && it.active }
                 if (bell != null) {
-                    targetX = bell.position.x.toFloat()
-                    targetY = bell.position.y.toFloat()
+                targetX = bell.position.x
+                targetY = bell.position.y
                 }
             }
 
             // Persegue continuamente (sem susto na Fase 5)
-            val dx = (targetX - monster.position.x).toFloat()
-            val dy = (targetY - monster.position.y).toFloat()
-            val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+            val dx = targetX - monster.position.x
+            val dy = targetY - monster.position.y
+            val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
             if (dist > 0) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
         }
 
@@ -509,16 +476,16 @@ class GameLogic(private val gameState: GameState) {
         }
 
         MovementPattern.CHASE, MovementPattern.TANK_SLOW -> {
-            val dx = (heroPos.x - monster.position.x).toFloat()
-            val dy = (heroPos.y - monster.position.y).toFloat()
-            val dist = sqrt(dx * dx + dy * dy)
+            val dx = heroPos.x - monster.position.x
+            val dy = heroPos.y - monster.position.y
+            val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
             if (dist < 10f && dist > 0f) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
         }
 
         MovementPattern.AMBUSH -> {
-            val dx = (heroPos.x - monster.position.x).toFloat()
-            val dy = (heroPos.y - monster.position.y).toFloat()
-            val dist = sqrt(dx * dx + dy * dy)
+            val dx = heroPos.x - monster.position.x
+            val dy = heroPos.y - monster.position.y
+            val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
             // Só se move se o jogador chegar perto (aggro radius de 4 tiles)
             if (dist < 4f && dist > 0f) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
         }
@@ -532,9 +499,9 @@ class GameLogic(private val gameState: GameState) {
             
             if (distHeroToAnchor < 5f) {
                 // Hero invadiu a zona, persegue o hero
-                val dx = (heroPos.x - monster.position.x).toFloat()
-                val dy = (heroPos.y - monster.position.y).toFloat()
-                val dist = sqrt(dx * dx + dy * dy)
+                val dx = heroPos.x - monster.position.x
+                val dy = heroPos.y - monster.position.y
+                val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
                 if (dist > 0f) Pair(dx / dist, dy / dist) else Pair(0f, 0f)
             } else {
                 // Retorna ao ponto âncora de forma circular
@@ -543,8 +510,8 @@ class GameLogic(private val gameState: GameState) {
                     Math.pow((monster.position.y - anchor.y).toDouble(), 2.0)
                 ).toFloat()
                 if (distToAnchor > 2f) {
-                    val dx = (anchor.x - monster.position.x).toFloat()
-                    val dy = (anchor.y - monster.position.y).toFloat()
+                    val dx = anchor.x - monster.position.x
+                    val dy = anchor.y - monster.position.y
                     Pair(dx / distToAnchor, dy / distToAnchor)
                 } else {
                     val angulo = timer * 0.8f
@@ -592,19 +559,15 @@ class GameLogic(private val gameState: GameState) {
             
             val dx = Math.abs(monster.position.x - heroPos.x)
             val dy = Math.abs(monster.position.y - heroPos.y)
-            val isColliding = if (monster.isBoss) {
-                dx <= 1 && dy <= 1 // Raio de 1 tile apenas para o Boss
-            } else {
-                monster.position == heroPos // Mesmo tile estrito para todos os outros monstros
-            }
+            
+            // Colisão baseada em distância (raio)
+            val collisionRadius = if (monster.isBoss) 1.2f else 0.6f
+            val isColliding = monster.position.dist(heroPos) < collisionRadius
 
             if (!isColliding) return@map monster
 
             // Proteção: Impedir dano de monstros que estejam longe demais (invisíveis/fora da tela)
-            val monsterDistToHero = sqrt(
-                ((monster.position.x - heroPos.x).toFloat().let { it * it }) +
-                ((monster.position.y - heroPos.y).toFloat().let { it * it })
-            )
+            val monsterDistToHero = monster.position.dist(heroPos)
             if (monsterDistToHero > 6f) return@map monster // Ignora monstros fora de alcance visível
 
             // Verifica cooldown de 2 segundos para o mesmo monstro
@@ -646,11 +609,11 @@ class GameLogic(private val gameState: GameState) {
             gameState.resetComboStreak()
 
             // Recua Monster 2 tiles na direção oposta ao Hero
-            val recuoX = (monster.position.x - heroPos.x).coerceIn(-1, 1) * 2
-            val recuoY = (monster.position.y - heroPos.y).coerceIn(-1, 1) * 2
-            val novaPosX = (monster.position.x + recuoX).coerceIn(0, maze.width - 1)
-            val novaPosY = (monster.position.y + recuoY).coerceIn(0, maze.height - 1)
-            val novoIndice = novaPosY * maze.width + novaPosX
+            val recuoX = (if (monster.position.x > heroPos.x) 1f else -1f) * 2f
+            val recuoY = (if (monster.position.y > heroPos.y) 1f else -1f) * 2f
+            val novaPosX = (monster.position.x + recuoX).coerceIn(0f, maze.width - 1f)
+            val novaPosY = (monster.position.y + recuoY).coerceIn(0f, maze.height - 1f)
+            val novoIndice = novaPosY.toInt() * maze.width + novaPosX.toInt()
             val novaPos = if (maze.tiles[novoIndice] == BSPMazeGenerator.TILE_FLOOR) {
                 Position(novaPosX, novaPosY)
             } else {
@@ -677,8 +640,8 @@ class GameLogic(private val gameState: GameState) {
         gameState.traps = gameState.traps.map { trap ->
             if (trap.isActivated) return@map trap
 
-            val distancia = abs(trap.position.x - heroPos.x) + abs(trap.position.y - heroPos.y)
-            if (distancia > TRAP_ACTIVATION_RADIUS) return@map trap
+            val distancia = trap.position.dist(heroPos)
+            if (distancia > 0.7f) return@map trap // Raio de ativação fluído
 
             // Ativa a Trap
             gameState.heroIsSlowedDown = true
@@ -718,9 +681,9 @@ class GameLogic(private val gameState: GameState) {
         val heroPos = gameState.heroPosition
         val spikePos = gameState.spikePosition
 
-        val dx = (heroPos.x - spikePos.x).toFloat()
-        val dy = (heroPos.y - spikePos.y).toFloat()
-        val distancia = sqrt(dx * dx + dy * dy)
+        val dx = heroPos.x - spikePos.x
+        val dy = heroPos.y - spikePos.y
+        val distancia = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
         // Rastreamento de travamento
         if (spikeLastPosition == spikePos) {
@@ -743,8 +706,6 @@ class GameLogic(private val gameState: GameState) {
         }
 
         if (distancia <= SPIKE_MAX_DISTANCE) {
-            spikeAccumX = 0f
-            spikeAccumY = 0f
             return
         }
 
@@ -752,47 +713,32 @@ class GameLogic(private val gameState: GameState) {
         val velocidade = if (gameState.spikeIsSlowedDown) SPIKE_SPEED_TILES_PER_SEC * 0.4f
                          else SPIKE_SPEED_TILES_PER_SEC
 
-        // Normaliza direção
-        val normX = dx / distancia
-        val normY = dy / distancia
+        // Movimento fluído em direção ao Herói
+        val vx = (dx / distancia) * velocidade * deltaTimeSec
+        val vy = (dy / distancia) * velocidade * deltaTimeSec
 
-        spikeAccumX += normX * velocidade * deltaTimeSec
-        spikeAccumY += normY * velocidade * deltaTimeSec
+        val nextX = spikePos.x + vx
+        val nextY = spikePos.y + vy
 
-        val tileDx = spikeAccumX.toInt()
-        val tileDy = spikeAccumY.toInt()
+        // Spike desliza em paredes (simples)
+        val indiceX = spikePos.y.toInt() * maze.width + nextX.toInt()
+        val indiceY = nextY.toInt() * maze.width + spikePos.x.toInt()
+        
+        var finalX = spikePos.x
+        var finalY = spikePos.y
 
-        if (tileDx == 0 && tileDy == 0) return
+        if (nextX >= 0 && nextX < maze.width && maze.tiles[spikePos.iy * maze.width + nextX.toInt()] == BSPMazeGenerator.TILE_FLOOR) {
+            finalX = nextX
+        }
+        if (nextY >= 0 && nextY < maze.height && maze.tiles[nextY.toInt() * maze.width + spikePos.ix] == BSPMazeGenerator.TILE_FLOOR) {
+            finalY = nextY
+        }
 
-        spikeAccumX -= tileDx
-        spikeAccumY -= tileDy
-
-        // Tenta mover na direção combinada primeiro, depois nos eixos separados,
-        // e agora também tenta diagonais alternativas para contornar paredes
-        val candidatos = listOf(
-            Position(spikePos.x + tileDx, spikePos.y + tileDy),
-            Position(spikePos.x + tileDx, spikePos.y),
-            Position(spikePos.x, spikePos.y + tileDy),
-            // Diagonais alternativas para contornar obstáculos
-            Position(spikePos.x + tileDx, spikePos.y + 1),
-            Position(spikePos.x + tileDx, spikePos.y - 1),
-            Position(spikePos.x + 1, spikePos.y + tileDy),
-            Position(spikePos.x - 1, spikePos.y + tileDy)
-        )
-
-        for (candidato in candidatos) {
-            if (candidato.x < 0 || candidato.y < 0 ||
-                candidato.x >= maze.width || candidato.y >= maze.height) continue
-            val indice = candidato.y * maze.width + candidato.x
-            if (maze.tiles[indice] == BSPMazeGenerator.TILE_FLOOR) {
-                gameState.spikePosition = candidato
-                gameState.spikeCompanionState = when {
-                    gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
-                    distancia > 5f -> "CHAMANDO"
-                    else -> "SEGUINDO"
-                }
-                return
-            }
+        gameState.spikePosition = Position(finalX, finalY)
+        gameState.spikeCompanionState = when {
+            gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
+            distancia > 5f -> "CHAMANDO"
+            else -> "SEGUINDO"
         }
     }
 
@@ -806,12 +752,12 @@ class GameLogic(private val gameState: GameState) {
             Pair(-1, -1), Pair(1, -1), Pair(-1, 1), Pair(1, 1)
         )
         for ((ox, oy) in offsets) {
-            val nx = alvo.x + ox
-            val ny = alvo.y + oy
+            val nx = (alvo.x + ox).toInt()
+            val ny = (alvo.y + oy).toInt()
             if (nx < 0 || ny < 0 || nx >= maze.width || ny >= maze.height) continue
             val idx = ny * maze.width + nx
             if (maze.tiles[idx] == BSPMazeGenerator.TILE_FLOOR) {
-                return Position(nx, ny)
+                return Position(nx.toFloat(), ny.toFloat())
             }
         }
         return null
