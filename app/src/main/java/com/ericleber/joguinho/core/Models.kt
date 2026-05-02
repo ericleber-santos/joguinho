@@ -14,6 +14,21 @@ enum class MovementPattern {
 }
 
 @Serializable
+enum class VfxType {
+    WATER_SPLASH, WATER_JET_MUZZLE
+}
+
+@Serializable
+data class VfxState(
+    val id: String,
+    val position: Position,
+    val type: VfxType,
+    val createdAtMs: Long,
+    val durationMs: Long = 300L,
+    val angle: Float = 0f
+)
+
+@Serializable
 data class Position(val x: Float, val y: Float) {
     /** Retorna a coordenada X como Int para indexação de arrays de tiles. */
     val ix: Int get() = x.toInt()

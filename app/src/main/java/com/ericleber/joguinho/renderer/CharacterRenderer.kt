@@ -177,7 +177,36 @@ class CharacterRenderer {
         val rArmSwingPx = -armSwing * u * 1.5f
         fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, currentShirt)
         strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, heroOutline, u*0.5f)
-        fillCircle(canvas, rArmX + u*1.1f, armTopY + rArmSwingPx + armLen + u, u*1.3f, heroSkin)
+        
+        val handX = rArmX + u*1.1f
+        val handY = armTopY + rArmSwingPx + armLen + u
+        fillCircle(canvas, handX, handY, u*1.3f, heroSkin)
+
+        // PISTOLINHA D'ÁGUA (Wap Style / Super Soaker)
+        // Só aparece se não estiver em Idle ou se estiver atirando (aqui mostramos sempre para dar o "Wow")
+        canvas.save()
+        val gunAngle = if (state == AnimState.IDLE) 10f else -10f
+        canvas.rotate(gunAngle, handX, handY)
+        
+        // Corpo da arma (Translúcido / Plástico)
+        val gunW = u * 8f
+        val gunH = u * 3f
+        paint.color = Color.argb(180, 200, 230, 255) // Azul claro translúcido
+        canvas.drawRoundRect(RectF(handX - u, handY - u*2, handX + gunW, handY + u), u, u, paint)
+        
+        // Tanque de água (Verde limão néon)
+        paint.color = Color.rgb(173, 255, 47) 
+        canvas.drawRoundRect(RectF(handX, handY - u*3.5f, handX + u*5f, handY - u*1.5f), u, u, paint)
+        
+        // Cano da arma (Cinza escuro / Wap nozzle)
+        paint.color = Color.DKGRAY
+        canvas.drawRect(handX + gunW - u, handY - u*1.2f, handX + gunW + u*2f, handY - u*0.3f, paint)
+        
+        // Detalhes (Gatilho e listras)
+        paint.color = Color.RED
+        canvas.drawRect(handX + u*2, handY, handX + u*3, handY + u*1.5f, paint)
+        
+        canvas.restore()
 
         val legTopY = bodyTop + u * 7f
         val legLen  = u * 5f
@@ -577,7 +606,6 @@ class CharacterRenderer {
 
     fun renderWaterProjectile(canvas: Canvas, x: Float, y: Float, tileW: Float, direction: com.ericleber.joguinho.core.Direction) {
         val s = tileW / 40f
-        paintFill.color = Color.argb(200, 100, 200, 255) // Azul água translúcido
         
         canvas.save()
         val angle = when (direction) {
@@ -592,17 +620,49 @@ class CharacterRenderer {
         }
         canvas.rotate(angle, x, y)
         
-        // Desenha uma gota aerodinâmica
-        path.reset()
-        path.moveTo(x + 5 * s, y)
-        path.lineTo(x - 3 * s, y - 2 * s)
-        path.lineTo(x - 3 * s, y + 2 * s)
-        path.close()
-        canvas.drawPath(path, paintFill)
+        // Jato de alta pressão (Wap style): Longo e fino com núcleo branco
+        paintFill.color = Color.argb(150, 100, 200, 255) // Azul água
+        canvas.drawRoundRect(RectF(x - 8 * s, y - 1.5f * s, x + 8 * s, y + 1.5f * s), 1f * s, 1f * s, paintFill)
         
-        // Brilho na gota
-        paintFill.color = Color.WHITE
-        canvas.drawCircle(x + 2 * s, y - 1 * s, 1 * s, paintFill)
+        paintFill.color = Color.WHITE // Núcleo de pressão
+        canvas.drawRoundRect(RectF(x - 6 * s, y - 0.5f * s, x + 6 * s, y + 0.5f * s), 0.5f * s, 0.5f * s, paintFill)
+        
+        canvas.restore()
+    }
+
+    fun renderWaterSplash(canvas: Canvas, x: Float, y: Float, tileW: Float, progress: Float) {
+        val s = tileW / 40f
+        val alpha = (255 * (1f - progress)).toInt()
+        val radius = 5 * s + progress * 15 * s
+        
+        paintFill.color = Color.argb(alpha, 150, 220, 255)
+        
+        // Desenha várias gotas saindo do centro
+        val numDrops = 6
+        for (i in 0 until numDrops) {
+            val ang = (i * (360 / numDrops)) * Math.PI / 180.0
+            val dx = (Math.cos(ang) * radius).toFloat()
+            val dy = (Math.sin(ang) * radius).toFloat()
+            val dropSize = 3 * s * (1f - progress)
+            canvas.drawCircle(x + dx, y + dy, dropSize, paintFill)
+        }
+        
+        // Centro do splash
+        paintFill.color = Color.argb(alpha, 255, 255, 255)
+        canvas.drawCircle(x, y, 4 * s * (1f - progress), paintFill)
+    }
+
+    fun renderWaterMuzzle(canvas: Canvas, x: Float, y: Float, tileW: Float, progress: Float, angle: Float) {
+        val s = tileW / 40f
+        val alpha = (200 * (1f - progress)).toInt()
+        
+        canvas.save()
+        canvas.rotate(angle, x, y)
+        
+        paintFill.color = Color.argb(alpha, 200, 240, 255)
+        val w = 15 * s * progress
+        val h = 8 * s * progress
+        canvas.drawOval(RectF(x, y - h/2, x + w, y + h/2), paintFill)
         
         canvas.restore()
     }

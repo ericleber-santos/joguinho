@@ -95,6 +95,7 @@ class GameState {
     var bossFightState: BossFightState = BossFightState()
     var survivalElements: List<SurvivalElementState> = emptyList()
     var bossAoeZones: List<AoeZone> = emptyList()
+    var vfxList: List<VfxState> = emptyList()
 
     // --- Timers ---
     /** Tempo acumulado no Floor atual em milissegundos. */

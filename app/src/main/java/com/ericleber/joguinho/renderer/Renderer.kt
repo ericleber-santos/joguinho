@@ -553,6 +553,22 @@ class Renderer(
             characterRenderer.renderWaterProjectile(canvas, px, py, tileW, proj.direction)
         }
 
+        // VFX (Splash, Muzzle) - Phase 8
+        val currentTimeVfx = System.currentTimeMillis()
+        for (vfx in gameState.vfxList) {
+            val vx = vfx.position.x * tileW + cameraX + tileW / 2f
+            val vy = vfx.position.y * tileH + cameraY + tileH / 2f
+            val elapsed = currentTimeVfx - vfx.createdAtMs
+            val progress = (elapsed.toFloat() / vfx.durationMs).coerceIn(0f, 1f)
+            
+            if (progress < 1.0f) {
+                when (vfx.type) {
+                    com.ericleber.joguinho.core.VfxType.WATER_SPLASH -> characterRenderer.renderWaterSplash(canvas, vx, vy, tileW, progress)
+                    com.ericleber.joguinho.core.VfxType.WATER_JET_MUZZLE -> characterRenderer.renderWaterMuzzle(canvas, vx, vy, tileW, progress, vfx.angle)
+                }
+            }
+        }
+
         val facingLeft = when (gameState.heroDirection) {
             com.ericleber.joguinho.core.Direction.WEST,
             com.ericleber.joguinho.core.Direction.NORTH_WEST,

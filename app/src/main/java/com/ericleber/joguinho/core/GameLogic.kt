@@ -148,6 +148,7 @@ class GameLogic(private val gameState: GameState) {
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
         atualizarProjeteis(deltaTimeSec, maze)
+        atualizarVfx(deltaMs)
         
         // Atualiza timer do mapa (5 minutos)
         gameState.mapTimerMs -= deltaMs
@@ -905,6 +906,13 @@ class GameLogic(private val gameState: GameState) {
             onHeroReachedExit?.invoke()
         }
     }
+    private fun atualizarVfx(deltaMs: Long) {
+        val currentTime = System.currentTimeMillis()
+        gameState.vfxList = gameState.vfxList.filter { 
+            (currentTime - it.createdAtMs) < it.durationMs
+        }
+    }
+
     private fun atualizarProjeteis(deltaTimeSec: Float, maze: MazeData) {
         val deltaMs = (deltaTimeSec * 1000).toLong()
         
@@ -920,11 +928,33 @@ class GameLogic(private val gameState: GameState) {
                 id = id,
                 position = gameState.heroPosition,
                 direction = gameState.heroDirection,
-                speed = 12f // Velocidade rápida
+                speed = 15f // Velocidade ainda mais rápida para sensação de jato
             )
             gameState.projectiles = gameState.projectiles + newProjectile
-            gameState.projectileCooldownMs = 150L // Rate of fire (aprox 6.6 tiros/seg)
-            onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO) // Placeholder para som de tiro
+            gameState.projectileCooldownMs = 120L // Rate of fire mais frenético
+            
+            // MUZZLE FLASH VFX
+            val angle = when (gameState.heroDirection) {
+                Direction.NORTH -> 270f
+                Direction.SOUTH -> 90f
+                Direction.EAST -> 0f
+                Direction.WEST -> 180f
+                Direction.NORTH_EAST -> 315f
+                Direction.NORTH_WEST -> 225f
+                Direction.SOUTH_EAST -> 45f
+                Direction.SOUTH_WEST -> 135f
+            }
+            val muzzleVfx = VfxState(
+                id = "muzzle_${id}",
+                position = gameState.heroPosition,
+                type = VfxType.WATER_JET_MUZZLE,
+                createdAtMs = System.currentTimeMillis(),
+                durationMs = 100L,
+                angle = angle
+            )
+            gameState.vfxList = gameState.vfxList + muzzleVfx
+            
+            onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO) 
         }
 
         if (gameState.projectiles.isEmpty()) return
@@ -956,6 +986,17 @@ class GameLogic(private val gameState: GameState) {
             val iy = nextY.toInt()
             if (ix < 0 || iy < 0 || ix >= maze.width || iy >= maze.height || maze.tiles[iy * maze.width + ix] == 1) {
                 projectilesToRemove.add(proj.id)
+                
+                // SPLASH VFX NA PAREDE
+                val splashVfx = VfxState(
+                    id = "splash_wall_${proj.id}",
+                    position = nextPos,
+                    type = VfxType.WATER_SPLASH,
+                    createdAtMs = System.currentTimeMillis(),
+                    durationMs = 250L
+                )
+                gameState.vfxList = gameState.vfxList + splashVfx
+                
                 return@map proj.copy(isActive = false)
             }
 
@@ -977,6 +1018,17 @@ class GameLogic(private val gameState: GameState) {
 
             if (hitMonster) {
                 projectilesToRemove.add(proj.id)
+                
+                // SPLASH VFX NO MONSTRO
+                val splashVfx = VfxState(
+                    id = "splash_monster_${proj.id}",
+                    position = nextPos,
+                    type = VfxType.WATER_SPLASH,
+                    createdAtMs = System.currentTimeMillis(),
+                    durationMs = 350L
+                )
+                gameState.vfxList = gameState.vfxList + splashVfx
+                
                 return@map proj.copy(isActive = false)
             }
 
