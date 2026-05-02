@@ -87,13 +87,16 @@ class EntityPlacer(private val random: Random) {
             }.shuffled(random).firstOrNull()
             
             bossTile?.let {
+                val bossHp = 50 + (floorNumber * 5)
                 monsters.add(MonsterState(
                     id = "boss_${floorNumber}",
                     position = Position(it % maze.width, it / maze.width),
                     movementPattern = MovementPattern.BOSS_STALKER,
                     isActive = true,
                     isBoss = true,
-                    bossType = (floorNumber / 10) % 3 // Varia o tipo por bioma
+                    bossType = (floorNumber / 10) % 3, // Varia o tipo por bioma
+                    hp = bossHp,
+                    maxHp = bossHp
                 ))
                 candidates.remove(it)
             }
@@ -116,12 +119,15 @@ class EntityPlacer(private val random: Random) {
         monsters.addAll(selected.mapIndexed { i, index ->
             val pos = Position(index % maze.width, index / maze.width)
             val pattern = patterns[random.nextInt(patterns.size)]
+            val monsterHp = 1 + (floorNumber / 15)
             MonsterState(
                 id = "monster_${floorNumber}_${mapIndex}_$i",
                 position = pos,
                 movementPattern = pattern,
                 isActive = true,
-                anchorPosition = if (pattern == MovementPattern.ZONING_DEFENDER) pos else null
+                anchorPosition = if (pattern == MovementPattern.ZONING_DEFENDER) pos else null,
+                hp = monsterHp,
+                maxHp = monsterHp
             )
         })
         

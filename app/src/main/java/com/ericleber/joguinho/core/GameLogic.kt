@@ -147,6 +147,7 @@ class GameLogic(private val gameState: GameState) {
         verificarAtivacaoTraps(maze)
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
+        atualizarProjeteis(deltaTimeSec, maze)
         
         // Atualiza timer do mapa (5 minutos)
         gameState.mapTimerMs -= deltaMs
@@ -645,9 +646,20 @@ class GameLogic(private val gameState: GameState) {
                 }
             } else {
                 // Monstro Normal: Aplica slowdown padrão
-                gameState.heroIsSlowedDown = true
-                gameState.heroSlowdownRemainingMs = (gameState.heroSlowdownRemainingMs + SLOWDOWN_MONSTER_MS).coerceAtMost(SLOWDOWN_MAX_ACUMULADO_MS)
-                onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+                // MECH-04: Letalidade de Lacaios - Se o herói estiver em "Lentidão Severa", perde vida
+                if (gameState.heroIsSlowedDown && (currentTime - gameState.heroLastSlowdownTimeMs) < SLOWDOWN_BOSS_MS) {
+                    gameState.heroLives--
+                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+                    
+                    if (gameState.heroLives <= 0) {
+                        gameState.heroLives = 0
+                        gameState.phase = GamePhase.GAME_OVER
+                    }
+                } else {
+                    gameState.heroIsSlowedDown = true
+                    gameState.heroSlowdownRemainingMs = (gameState.heroSlowdownRemainingMs + SLOWDOWN_MONSTER_MS).coerceAtMost(SLOWDOWN_MAX_ACUMULADO_MS)
+                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+                }
             }
             
             gameState.currentMapClean = false
@@ -892,5 +904,83 @@ class GameLogic(private val gameState: GameState) {
             onMapCompleted?.invoke()
             onHeroReachedExit?.invoke()
         }
+    }
+    private fun atualizarProjeteis(deltaTimeSec: Float, maze: MazeData) {
+        val deltaMs = (deltaTimeSec * 1000).toLong()
+        
+        // Cooldown de disparo
+        if (gameState.projectileCooldownMs > 0) {
+            gameState.projectileCooldownMs = (gameState.projectileCooldownMs - deltaMs).coerceAtLeast(0L)
+        }
+
+        // Criar novo projétil se estiver atirando e cooldown zerado
+        if (gameState.isShooting && gameState.projectileCooldownMs <= 0) {
+            val id = "proj_${System.currentTimeMillis()}"
+            val newProjectile = ProjectileState(
+                id = id,
+                position = gameState.heroPosition,
+                direction = gameState.heroDirection,
+                speed = 12f // Velocidade rápida
+            )
+            gameState.projectiles = gameState.projectiles + newProjectile
+            gameState.projectileCooldownMs = 150L // Rate of fire (aprox 6.6 tiros/seg)
+            onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO) // Placeholder para som de tiro
+        }
+
+        if (gameState.projectiles.isEmpty()) return
+
+        val projectilesToRemove = mutableListOf<String>()
+        val currentTime = System.currentTimeMillis()
+
+        // Atualizar posição e colisão
+        gameState.projectiles = gameState.projectiles.map { proj ->
+            if (!proj.isActive) return@map proj
+
+            val (dx, dy) = when (proj.direction) {
+                Direction.NORTH -> Pair(0f, -1f)
+                Direction.SOUTH -> Pair(0f, 1f)
+                Direction.EAST -> Pair(1f, 0f)
+                Direction.WEST -> Pair(-1f, 0f)
+                Direction.NORTH_EAST -> Pair(0.7f, -0.7f)
+                Direction.NORTH_WEST -> Pair(-0.7f, -0.7f)
+                Direction.SOUTH_EAST -> Pair(0.7f, 0.7f)
+                Direction.SOUTH_WEST -> Pair(-0.7f, 0.7f)
+            }
+
+            val nextX = proj.position.x + dx * proj.speed * deltaTimeSec
+            val nextY = proj.position.y + dy * proj.speed * deltaTimeSec
+            val nextPos = Position(nextX, nextY)
+
+            // Colisão com parede
+            val ix = nextX.toInt()
+            val iy = nextY.toInt()
+            if (ix < 0 || iy < 0 || ix >= maze.width || iy >= maze.height || maze.tiles[iy * maze.width + ix] == 1) {
+                projectilesToRemove.add(proj.id)
+                return@map proj.copy(isActive = false)
+            }
+
+            // Colisão com monstros
+            var hitMonster = false
+            gameState.monsters = gameState.monsters.map { monster ->
+                if (!monster.isActive) return@map monster
+                val dist = monster.position.dist(nextPos)
+                val radius = if (monster.isBoss) 1.2f else 0.6f
+                
+                if (dist < radius) {
+                    hitMonster = true
+                    val newHp = (monster.hp - 1).coerceAtLeast(0)
+                    monster.copy(hp = newHp, isActive = newHp > 0, lastHitTimeMs = currentTime)
+                } else {
+                    monster
+                }
+            }
+
+            if (hitMonster) {
+                projectilesToRemove.add(proj.id)
+                return@map proj.copy(isActive = false)
+            }
+
+            proj.copy(position = nextPos)
+        }.filter { it.isActive && it.id !in projectilesToRemove }
     }
 }

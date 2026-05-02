@@ -83,8 +83,13 @@ class GameState {
 
     // --- Entidades do mapa ---
     var monsters: List<MonsterState> = emptyList()
+    var projectiles: List<ProjectileState> = emptyList()
     var traps: List<TrapState> = emptyList()
     var items: List<ItemState> = emptyList()
+
+    // --- Controle de Combate ---
+    var isShooting: Boolean = false
+    var projectileCooldownMs: Long = 0L
 
     // --- Boss Fight & Sobrevivência ---
     var bossFightState: BossFightState = BossFightState()
@@ -238,7 +243,9 @@ class GameState {
         spikeState = SpikeState(
             position = spikePosition,
             isSlowedDown = spikeIsSlowedDown,
-            slowdownRemainingMs = spikeSlowdownRemainingMs
+            slowdownRemainingMs = spikeSlowdownRemainingMs,
+            hp = 100, // Spike é imortal por enquanto, mas mantemos o campo
+            maxHp = 100
         ),
         monsters = monsters,
         traps = traps,

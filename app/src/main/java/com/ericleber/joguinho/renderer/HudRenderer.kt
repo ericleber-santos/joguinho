@@ -158,7 +158,10 @@ class HudRenderer {
         // Timer de Sobrevivência do Boss
         if (gameState.bossFightState.isActive) {
             renderBossTimer(canvas, gameState, w.toFloat())
+            renderBossHealthBar(canvas, gameState, w.toFloat())
         }
+
+        renderShootButton(canvas, gameState, w.toFloat(), h.toFloat())
     }
 
     /**
@@ -287,7 +290,10 @@ class HudRenderer {
         // Timer de Sobrevivência do Boss
         if (gameState.bossFightState.isActive) {
             renderBossTimer(canvas, gameState, w.toFloat())
+            renderBossHealthBar(canvas, gameState, w.toFloat())
         }
+
+        renderShootButton(canvas, gameState, w.toFloat(), h.toFloat())
     }
 
     /**
@@ -774,6 +780,79 @@ class HudRenderer {
     // -------------------------------------------------------------------------
     // Utilitários
     // -------------------------------------------------------------------------
+
+    private fun renderShootButton(canvas: Canvas, gameState: GameState, w: Float, h: Float) {
+        val buttonSize = w * 0.15f
+        val margin = w * 0.05f
+        val bx = w - margin - buttonSize / 2
+        val by = h - margin - buttonSize / 2
+        
+        // Fundo do botão
+        bgPaint.color = if (gameState.isShooting) Color.argb(200, 0, 150, 255) else Color.argb(150, 0, 100, 200)
+        canvas.drawCircle(bx, by, buttonSize / 2, bgPaint)
+        
+        // Borda
+        bgPaint.color = Color.WHITE
+        bgPaint.style = Paint.Style.STROKE
+        bgPaint.strokeWidth = 4f
+        canvas.drawCircle(bx, by, buttonSize / 2, bgPaint)
+        bgPaint.style = Paint.Style.FILL
+        
+        // Ícone de Gota (Pistolinha d'Água)
+        paint.color = Color.WHITE
+        val dropSize = buttonSize * 0.4f
+        val path = android.graphics.Path()
+        path.moveTo(bx, by - dropSize / 2)
+        path.quadTo(bx + dropSize / 2, by + dropSize / 4, bx, by + dropSize / 2)
+        path.quadTo(bx - dropSize / 2, by + dropSize / 4, bx, by - dropSize / 2)
+        canvas.drawPath(path, paint)
+        
+        // Texto "SHOT" ou símbolo
+        textPaint.textSize = buttonSize * 0.2f
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = Color.WHITE
+        canvas.drawText("TIRO", bx, by + buttonSize / 2 + 30f, textPaint)
+        textPaint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun renderBossHealthBar(canvas: Canvas, gameState: GameState, screenWidth: Float) {
+        val boss = gameState.monsters.find { it.isBoss && it.isActive } ?: return
+        
+        val barW = screenWidth * 0.7f
+        val barH = 20f
+        val x = (screenWidth - barW) / 2f
+        val y = 130f // Abaixo do timer do Boss
+        
+        val progress = (boss.hp.toFloat() / boss.maxHp.toFloat()).coerceIn(0f, 1f)
+        
+        // Fundo (Sombra)
+        bgPaint.color = Color.argb(100, 0, 0, 0)
+        canvas.drawRect(x + 5f, y + 5f, x + barW + 5f, y + barH + 5f, bgPaint)
+        
+        // Fundo (Barra vazia)
+        bgPaint.color = Color.argb(180, 50, 0, 0)
+        canvas.drawRect(x, y, x + barW, y + barH, bgPaint)
+        
+        // Preenchimento (HP) - Vermelho neon
+        bgPaint.color = Color.rgb(255, 30, 30)
+        canvas.drawRect(x, y, x + barW * progress, y + barH, bgPaint)
+        
+        // Borda metálica
+        bgPaint.color = Color.rgb(200, 200, 200)
+        bgPaint.style = Paint.Style.STROKE
+        bgPaint.strokeWidth = 3f
+        canvas.drawRect(x, y, x + barW, y + barH, bgPaint)
+        bgPaint.style = Paint.Style.FILL
+        
+        // Nome do Boss
+        textPaint.textSize = 24f
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = Color.WHITE
+        textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+        canvas.drawText("O GUARDIÃO DO BIOMA", screenWidth / 2f, y - 10f, textPaint)
+        textPaint.clearShadowLayer()
+        textPaint.textAlign = Paint.Align.LEFT
+    }
 
     private fun lerpColor(start: Int, end: Int, t: Float): Int {
         val r = (Color.red(start) + (Color.red(end) - Color.red(start)) * t).toInt()

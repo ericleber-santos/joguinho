@@ -56,7 +56,18 @@ data class HeroState(
 data class SpikeState(
     val position: Position,
     val isSlowedDown: Boolean,
-    val slowdownRemainingMs: Long
+    val slowdownRemainingMs: Long,
+    val hp: Int = 100,
+    val maxHp: Int = 100
+)
+
+@Serializable
+data class ProjectileState(
+    val id: String,
+    val position: Position,
+    val direction: Direction,
+    val speed: Float = 10f,
+    val isActive: Boolean = true
 )
 
 @Serializable
@@ -68,7 +79,10 @@ data class MonsterState(
     val isBoss: Boolean = false,
     val bossType: Int = 0, // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
     val anchorPosition: Position? = null, // Ponto central para Zoning Defenders
-    val rageMultiplier: Float = 1.0f
+    val rageMultiplier: Float = 1.0f,
+    val hp: Int = 3,
+    val maxHp: Int = 3,
+    val lastHitTimeMs: Long = 0L
 )
 
 @Serializable

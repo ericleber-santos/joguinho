@@ -533,15 +533,24 @@ class Renderer(
                 Color.rgb(255, 200 + (seed and 0x3F), 0)
             }
 
+            val isHit = (System.currentTimeMillis() - monster.lastHitTimeMs) < 150L
             val appearance = MonsterAppearance(
                 bodyColor = bodyColor,
                 eyeColor = eyeColor,
                 size = finalScale,
                 shapeVariant = seed and 0x3, 
                 animVariant = seed shr 4 and 0x3,
-                isBoss = monster.isBoss
+                isBoss = monster.isBoss,
+                isHit = isHit
             )
             characterRenderer.renderMonster(canvas, mx, my, appearance, monsterAnimFrame, tileW, tileH)
+        }
+
+        // Projéteis de Água (MECH-03)
+        for (proj in gameState.projectiles) {
+            val px = proj.position.x * tileW + cameraX + tileW / 2f
+            val py = proj.position.y * tileH + cameraY + tileH / 2f
+            characterRenderer.renderWaterProjectile(canvas, px, py, tileW, proj.direction)
         }
 
         val facingLeft = when (gameState.heroDirection) {

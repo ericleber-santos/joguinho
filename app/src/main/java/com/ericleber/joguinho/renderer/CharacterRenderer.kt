@@ -29,7 +29,8 @@ data class MonsterAppearance(
     val size: Float,
     val shapeVariant: Int,
     val animVariant: Int,
-    val isBoss: Boolean = false
+    val isBoss: Boolean = false,
+    val isHit: Boolean = false
 )
 
 class CharacterRenderer {
@@ -380,6 +381,10 @@ class CharacterRenderer {
         val bob = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
         val cx = x
         
+        // Feedback de dano: flash vermelho (MECH-04 / UI-04)
+        val actualBodyColor = if (appearance.isHit) Color.RED else appearance.bodyColor
+        val actualAppearance = appearance.copy(bodyColor = actualBodyColor)
+        
         val yOffset = when (appearance.shapeVariant % 4) {
             3 -> -4 * s
             else -> -2 * s
@@ -390,10 +395,10 @@ class CharacterRenderer {
         canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
 
         when (appearance.shapeVariant % 4) {
-            0 -> monsterRedondo(canvas, cx, cy, s, t, appearance)
-            1 -> monsterEspinhoso(canvas, cx, cy, s, t, appearance)
-            2 -> monsterQuadrado(canvas, cx, cy, s, t, appearance)
-            3 -> monsterAlto(canvas, cx, cy, s, t, appearance)
+            0 -> monsterRedondo(canvas, cx, cy, s, t, actualAppearance)
+            1 -> monsterEspinhoso(canvas, cx, cy, s, t, actualAppearance)
+            2 -> monsterQuadrado(canvas, cx, cy, s, t, actualAppearance)
+            3 -> monsterAlto(canvas, cx, cy, s, t, actualAppearance)
         }
 
         if (appearance.isBoss) {
@@ -568,5 +573,37 @@ class CharacterRenderer {
         paintContorno.strokeWidth = 2f * s
         canvas.drawPath(path, paintContorno)
         paintContorno.strokeWidth = 1.5f
+    }
+
+    fun renderWaterProjectile(canvas: Canvas, x: Float, y: Float, tileW: Float, direction: com.ericleber.joguinho.core.Direction) {
+        val s = tileW / 40f
+        paintFill.color = Color.argb(200, 100, 200, 255) // Azul água translúcido
+        
+        canvas.save()
+        val angle = when (direction) {
+            com.ericleber.joguinho.core.Direction.NORTH -> 270f
+            com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+            com.ericleber.joguinho.core.Direction.EAST -> 0f
+            com.ericleber.joguinho.core.Direction.WEST -> 180f
+            com.ericleber.joguinho.core.Direction.NORTH_EAST -> 315f
+            com.ericleber.joguinho.core.Direction.NORTH_WEST -> 225f
+            com.ericleber.joguinho.core.Direction.SOUTH_EAST -> 45f
+            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 135f
+        }
+        canvas.rotate(angle, x, y)
+        
+        // Desenha uma gota aerodinâmica
+        path.reset()
+        path.moveTo(x + 5 * s, y)
+        path.lineTo(x - 3 * s, y - 2 * s)
+        path.lineTo(x - 3 * s, y + 2 * s)
+        path.close()
+        canvas.drawPath(path, paintFill)
+        
+        // Brilho na gota
+        paintFill.color = Color.WHITE
+        canvas.drawCircle(x + 2 * s, y - 1 * s, 1 * s, paintFill)
+        
+        canvas.restore()
     }
 }

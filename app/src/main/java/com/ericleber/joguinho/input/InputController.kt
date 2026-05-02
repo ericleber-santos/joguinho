@@ -63,6 +63,9 @@ class InputController(
     private var runButtonPressed: Boolean = false
     private var runButtonPointerId: Int = -1
 
+    // Botão de tiro
+    private var shootButtonPointerId: Int = -1
+
     // Rastreamento de movimento para SpikeAI
     var heroMoved: Boolean = false
         private set
@@ -137,9 +140,17 @@ class InputController(
                 // Metade esquerda: joystick flutuante (Requisito 4.7)
                 joystick.onTouchDown(x, y, id)
             } else {
-                // Metade direita: botão de corrida (Requisito 4.4)
-                runButtonPressed = true
-                runButtonPointerId = id
+                // Metade direita dividida:
+                val screenHeight = (contextRef.get()?.resources?.displayMetrics?.heightPixels ?: 2000).toFloat()
+                if (y > screenHeight * 0.6f) {
+                    // Canto inferior direito: Botão de Tiro (MECH-03)
+                    gameState.isShooting = true
+                    shootButtonPointerId = id
+                } else {
+                    // Canto superior direito: Botão de Corrida (Requisito 4.4)
+                    runButtonPressed = true
+                    runButtonPointerId = id
+                }
             }
         }
     }
@@ -160,6 +171,10 @@ class InputController(
             if (id == runButtonPointerId) {
                 runButtonPressed = false
                 runButtonPointerId = -1
+            }
+            if (id == shootButtonPointerId) {
+                gameState.isShooting = false
+                shootButtonPointerId = -1
             }
         }
     }
