@@ -924,16 +924,30 @@ class GameLogic(private val gameState: GameState) {
         // Criar novo projétil se estiver atirando e cooldown zerado
         if (gameState.isShooting && gameState.projectileCooldownMs <= 0) {
             val id = "proj_${System.currentTimeMillis()}"
+            
+            // Calcula offset para o tiro sair da ponta da arma (Muzzle Position)
+            val (offX, offY) = when (gameState.heroDirection) {
+                Direction.NORTH -> Pair(0.1f, -0.6f)
+                Direction.SOUTH -> Pair(0.1f, 0.6f)
+                Direction.EAST -> Pair(0.6f, 0.1f)
+                Direction.WEST -> Pair(-0.6f, 0.1f)
+                Direction.NORTH_EAST -> Pair(0.5f, -0.4f)
+                Direction.NORTH_WEST -> Pair(-0.5f, -0.4f)
+                Direction.SOUTH_EAST -> Pair(0.5f, 0.5f)
+                Direction.SOUTH_WEST -> Pair(-0.5f, 0.5f)
+            }
+            val spawnPos = Position(gameState.heroPosition.x + offX, gameState.heroPosition.y + offY)
+
             val newProjectile = ProjectileState(
                 id = id,
-                position = gameState.heroPosition,
+                position = spawnPos,
                 direction = gameState.heroDirection,
-                speed = 15f // Velocidade ainda mais rápida para sensação de jato
+                speed = 18f // Mais rápido para parecer jato
             )
             gameState.projectiles = gameState.projectiles + newProjectile
-            gameState.projectileCooldownMs = 120L // Rate of fire mais frenético
+            gameState.projectileCooldownMs = 50L // 20 jatos/seg = Fluxo contínuo de mangueira
             
-            // MUZZLE FLASH VFX
+            // MUZZLE FLASH VFX na ponta da arma
             val angle = when (gameState.heroDirection) {
                 Direction.NORTH -> 270f
                 Direction.SOUTH -> 90f
@@ -946,10 +960,10 @@ class GameLogic(private val gameState: GameState) {
             }
             val muzzleVfx = VfxState(
                 id = "muzzle_${id}",
-                position = gameState.heroPosition,
+                position = spawnPos,
                 type = VfxType.WATER_JET_MUZZLE,
                 createdAtMs = System.currentTimeMillis(),
-                durationMs = 100L,
+                durationMs = 80L,
                 angle = angle
             )
             gameState.vfxList = gameState.vfxList + muzzleVfx

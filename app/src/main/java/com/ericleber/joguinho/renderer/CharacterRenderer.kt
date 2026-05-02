@@ -91,10 +91,16 @@ class CharacterRenderer {
         cy: Float,
         tileSize: Float,
         state: AnimState,
-        facingLeft: Boolean = false,
+        direction: com.ericleber.joguinho.core.Direction,
         isFlashingRed: Boolean = false,
         isFlashingBlue: Boolean = false
     ) {
+        val facingLeft = when (direction) {
+            com.ericleber.joguinho.core.Direction.WEST,
+            com.ericleber.joguinho.core.Direction.NORTH_WEST,
+            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+            else -> false
+        }
         val u = tileSize / 20f
 
         val t = animTick / 1000f
@@ -183,10 +189,21 @@ class CharacterRenderer {
         fillCircle(canvas, handX, handY, u*1.3f, heroSkin)
 
         // PISTOLINHA D'ÁGUA (Wap Style / Super Soaker)
-        // Só aparece se não estiver em Idle ou se estiver atirando (aqui mostramos sempre para dar o "Wow")
         canvas.save()
-        val gunAngle = if (state == AnimState.IDLE) 10f else -10f
-        canvas.rotate(gunAngle, handX, handY)
+        
+        // Calcula o ângulo da arma baseado na direção real
+        // Como o canvas já está flipado se facingLeft for true, lidamos com ângulos relativos ao "frente"
+        val rotationAngle = when (direction) {
+            com.ericleber.joguinho.core.Direction.NORTH -> -90f
+            com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+            com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
+            com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
+            else -> 0f
+        }
+        
+        // Ajuste fino para Idle
+        val idleBob = if (state == AnimState.IDLE) 5f else 0f
+        canvas.rotate(rotationAngle + idleBob, handX, handY)
         
         // Corpo da arma (Translúcido / Plástico)
         val gunW = u * 8f
@@ -620,12 +637,16 @@ class CharacterRenderer {
         }
         canvas.rotate(angle, x, y)
         
-        // Jato de alta pressão (Wap style): Longo e fino com núcleo branco
-        paintFill.color = Color.argb(150, 100, 200, 255) // Azul água
-        canvas.drawRoundRect(RectF(x - 8 * s, y - 1.5f * s, x + 8 * s, y + 1.5f * s), 1f * s, 1f * s, paintFill)
+        // Fluxo contínuo (Wap style): Mais longo e com variação de espessura
+        val streamLength = 16 * s // Aumentado para parecer um fluxo
+        val timePhase = (animTick % 200) / 200f
+        val thickness = (1.5f + sin(timePhase * Math.PI.toFloat() * 2f) * 0.5f) * s
         
-        paintFill.color = Color.WHITE // Núcleo de pressão
-        canvas.drawRoundRect(RectF(x - 6 * s, y - 0.5f * s, x + 6 * s, y + 0.5f * s), 0.5f * s, 0.5f * s, paintFill)
+        paintFill.color = Color.argb(160, 100, 200, 255) // Azul água
+        canvas.drawRoundRect(RectF(x - streamLength/2, y - thickness, x + streamLength/2, y + thickness), thickness, thickness, paintFill)
+        
+        paintFill.color = Color.WHITE // Núcleo de pressão cavitando
+        canvas.drawRoundRect(RectF(x - streamLength/2 + 2*s, y - thickness/3f, x + streamLength/2 - 2*s, y + thickness/3f), thickness/3f, thickness/3f, paintFill)
         
         canvas.restore()
     }
