@@ -174,44 +174,8 @@ class EntityPlacer(private val random: Random) {
         criticalPath: Set<Int>,
         occupiedIndices: Set<Int> = emptySet()
     ): List<TrapState> {
-        val count = trapCount(floorNumber)
-        val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
-        
-        // Priorizar posicionamento adjacente a paredes (faz mais sentido visual/design)
-        val wallAdjacentCandidates = candidates.filter { index ->
-            val x = index % maze.width
-            val y = index / maze.width
-            var isNearWall = false
-            for (dy in -1..1) {
-                for (dx in -1..1) {
-                    if (dx == 0 && dy == 0) continue
-                    val nx = x + dx
-                    val ny = y + dy
-                    if (nx in 0 until maze.width && ny in 0 until maze.height) {
-                        if (maze.tiles[ny * maze.width + nx] == BSPMazeGenerator.TILE_WALL) {
-                            isNearWall = true
-                        }
-                    }
-                }
-            }
-            isNearWall
-        }
-
-        val finalCandidates = if (wallAdjacentCandidates.size >= count) {
-            wallAdjacentCandidates
-        } else {
-            (wallAdjacentCandidates + candidates.shuffled(random)).distinct()
-        }
-        
-        val selected = finalCandidates.shuffled(random).take(count)
-
-        return selected.mapIndexed { i, index ->
-            TrapState(
-                id = "trap_${floorNumber}_$i",
-                position = Position(index % maze.width, index / maze.width),
-                isActivated = false
-            )
-        }
+        // Obstáculos removidos conforme pedido do usuário: "não ficou bom nem bonito"
+        return emptyList()
     }
 
     /**
@@ -228,36 +192,8 @@ class EntityPlacer(private val random: Random) {
         criticalPath: Set<Int>,
         occupiedIndices: Set<Int> = emptySet()
     ): List<SurvivalElementState> {
-        // Apenas para Boss fights
-        if (mapIndex != 2) return emptyList()
-
-        val elements = mutableListOf<SurvivalElementState>()
-        val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices).toMutableList()
-
-        // Regras de quantitativo - REMOVIDO ICE_TORCH e DISTRACTION_BELL para Fase 6
-        val elementCounts = mapOf(
-            SurvivalElementType.STONE_PILLAR to random.nextInt(5, 8), // Aumentado
-            SurvivalElementType.MUD_SWAMP to random.nextInt(10, 15), // Mais lama
-            SurvivalElementType.PUSHABLE_BOX to random.nextInt(3, 5)
-        )
-
-        var idCounter = 0
-        for ((type, count) in elementCounts) {
-            val selected = candidates.shuffled(random).take(count)
-            for (index in selected) {
-                elements.add(
-                    SurvivalElementState(
-                        id = "surv_element_${maze.seed}_${idCounter++}",
-                        position = Position(index % maze.width, index / maze.width),
-                        type = type,
-                        durability = if (type == SurvivalElementType.STONE_PILLAR) 2 else 0
-                    )
-                )
-                candidates.remove(index)
-            }
-        }
-
-        return elements
+        // Obstáculos removidos conforme pedido do usuário: "não ficou bom nem bonito"
+        return emptyList()
     }
 
     /**

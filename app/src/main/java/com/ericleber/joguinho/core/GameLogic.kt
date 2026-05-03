@@ -113,7 +113,6 @@ class GameLogic(private val gameState: GameState) {
 
         // Verifica colisão com itens
         verificarColisaoItens()
-        verificarInteracaoHeroiElementos(maze)
 
         // Atualiza timer de Buff de Velocidade
         if (gameState.heroHasSpeedBuff) {
@@ -151,7 +150,6 @@ class GameLogic(private val gameState: GameState) {
         atualizarBossFight(deltaMs, maze)
         atualizarMovimentoMonsters(deltaTimeSec, maze)
         verificarColisaoHeroMonster(maze)
-        verificarAtivacaoTraps(maze)
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
         atualizarWaterStream(deltaTimeSec, maze)
@@ -197,47 +195,6 @@ class GameLogic(private val gameState: GameState) {
         if (newDistracted > 0) newDistracted -= deltaMs
 
         // Lógica de AoE na Fase 2 e 3 (Após 40s)
-        if (newElapsed >= 40000L && newElapsed >= newNextAoe) {
-            // Cria um AoE no jogador
-            val newAoe = com.ericleber.joguinho.core.AoeZone(
-                position = gameState.heroPosition,
-                createdAtMs = newElapsed,
-                explodesAtMs = newElapsed + 2000L // 2 segundos para explodir
-            )
-            gameState.bossAoeZones = gameState.bossAoeZones + newAoe
-            newNextAoe = newElapsed + 5000L // cooldown de 5 segundos
-            onSoundEffectRequested?.invoke(TipoEfeito.BOSS_PROVOCACAO) // Toca um som de aviso
-        }
-
-        // Processa explosões de AoE
-        val currentZones = gameState.bossAoeZones.toMutableList()
-        val zonesToRemove = mutableListOf<com.ericleber.joguinho.core.AoeZone>()
-        for (zone in currentZones) {
-            if (newElapsed >= zone.explodesAtMs) {
-                // Explode!
-                val dx = Math.abs(gameState.heroPosition.x - zone.position.x)
-                val dy = Math.abs(gameState.heroPosition.y - zone.position.y)
-                if (dx <= 1 && dy <= 1) { // 3x3 área
-                    gameState.heroIsSlowedDown = true
-                    gameState.heroSlowdownRemainingMs = 4000L // Slowdown Crítico
-                    gameState.resetComboStreak()
-                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
-                }
-                zonesToRemove.add(zone)
-            }
-        }
-        if (zonesToRemove.isNotEmpty()) {
-            gameState.bossAoeZones = currentZones - zonesToRemove
-        }
-
-        // Atualiza cooldowns de elementos de sobrevivência
-        gameState.survivalElements = gameState.survivalElements.map { elem ->
-            if (elem.cooldownRemainingMs > 0) {
-                elem.copy(cooldownRemainingMs = Math.max(0L, elem.cooldownRemainingMs - deltaMs))
-            } else {
-                elem
-            }
-        }
 
         gameState.bossFightState = state.copy(
             elapsedMs = newElapsed,
@@ -268,17 +225,10 @@ class GameLogic(private val gameState: GameState) {
                 // Boss atordoado (gelo) não se move
                 if (state.bossStunRemainingMs > 0) return@map monster
                 
-                // Verifica se está na Lama (reduz velocidade) e não está na Fase 3 (ignora lama)
-                val inMud = gameState.survivalElements.any { 
-                    it.type == com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP && it.position == monster.position 
-                }
-                
-                // Calcula velocidade base do Boss com bônus de andar e Fase 3
+                // Calcula velocidade base do Boss com bônus de andar e Fase 3 (sem lama)
                 val phase3SpeedMult = if (state.elapsedMs >= 80000L) 1.5f else 1.0f
-                val mudSlowMult = if (inMud && state.elapsedMs < 80000L) 0.6f else 1.0f // 40% slow
-                
                 val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
-                val baseVel = MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult * mudSlowMult
+                val baseVel = MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult
                 val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
                 
                 val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
@@ -298,30 +248,6 @@ class GameLogic(private val gameState: GameState) {
                 val velocidadeFinal = velocidade * newRage
                 val nextX = (monster.position.x + dx * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.width - 1f)
                 val nextY = (monster.position.y + dy * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.height - 1f)
-
-                // Verifica colisão com Pilar de Pedra ou Caixa para destruir (usando ix/iy para o tile)
-                val hitElement = gameState.survivalElements.find { 
-                    (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR || it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX) 
-                    && it.position.ix == nextX.toInt() && it.position.iy == nextY.toInt() && it.active
-                }
-                
-                if (hitElement != null) {
-                    // Boss colidiu com elemento destrutível!
-                    gameState.bossFightState = gameState.bossFightState.copy(bossStunRemainingMs = gameState.bossFightState.bossStunRemainingMs + 1000L) // Delay de 1s
-                    onSoundEffectRequested?.invoke(TipoEfeito.BOSS_PROVOCACAO) // Som de destruição
-
-                    if (hitElement.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX) {
-                        // Caixa é destruída na hora e dá delay de 2s
-                        gameState.bossFightState = gameState.bossFightState.copy(bossStunRemainingMs = gameState.bossFightState.bossStunRemainingMs + 2000L)
-                        gameState.survivalElements = gameState.survivalElements.map { if (it.id == hitElement.id) it.copy(active = false) else it }
-                    } else if (hitElement.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR) {
-                        val newDurability = hitElement.durability - 1
-                        gameState.survivalElements = gameState.survivalElements.map { 
-                            if (it.id == hitElement.id) it.copy(durability = newDurability, active = newDurability > 0) else it 
-                        }
-                    }
-                    return@map monster // Não avança, gasta o movimento atacando
-                }
 
                 // Não atravessa paredes (checa com raio de 0.3 para evitar atravessamento lateral)
                 val isWall = checkMonsterCollision(nextX, nextY, maze, 0.3f)
@@ -396,68 +322,6 @@ class GameLogic(private val gameState: GameState) {
         }
     }
 
-    private fun verificarInteracaoHeroiElementos(maze: MazeData) {
-        if (!gameState.bossFightState.isActive) return
-        
-        val heroPos = gameState.heroPosition
-        
-        gameState.survivalElements = gameState.survivalElements.map { elem ->
-            if (!elem.active) return@map elem
-            
-            // Tocha de Gelo (Proximidade)
-            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH && elem.position.dist(heroPos) < 0.8f && elem.cooldownRemainingMs <= 0) {
-                gameState.bossFightState = gameState.bossFightState.copy(
-                    bossStunRemainingMs = gameState.bossFightState.bossStunRemainingMs + 4000L // 4s Stun
-                )
-                onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
-                return@map elem.copy(cooldownRemainingMs = 20000L) // 20s cooldown
-            }
-            
-            // Sino de Distração (Proximidade)
-            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL && elem.position.dist(heroPos) < 0.8f && !gameState.bossFightState.bellUsed) {
-                gameState.bossFightState = gameState.bossFightState.copy(
-                    bossDistractedMs = 6000L,
-                    bellUsed = true
-                )
-                onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
-                return@map elem.copy(active = false)
-            }
-            
-            // Empurrar Caixas
-            if (elem.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX) {
-                val dx = elem.position.x - heroPos.x
-                val dy = elem.position.y - heroPos.y
-                
-                // Se o herói estiver adjacente (distância < 1.2f) e estiver tentando ir na direção da caixa
-                if (Math.abs(dx) + Math.abs(dy) < 1.2f) {
-                    val directionMatch = when (gameState.heroDirection) {
-                        com.ericleber.joguinho.core.Direction.NORTH -> dy < -0.4f && Math.abs(dx) < 0.4f
-                        com.ericleber.joguinho.core.Direction.SOUTH -> dy > 0.4f && Math.abs(dx) < 0.4f
-                        com.ericleber.joguinho.core.Direction.EAST -> dx > 0.4f && Math.abs(dy) < 0.4f
-                        com.ericleber.joguinho.core.Direction.WEST -> dx < -0.4f && Math.abs(dy) < 0.4f
-                        else -> false
-                    }
-                    
-                    if (directionMatch) {
-                        val pushX = if (Math.abs(dx) > 0.5f) elem.position.x + (if (dx > 0) 1f else -1f) else elem.position.x
-                        val pushY = if (Math.abs(dy) > 0.5f) elem.position.y + (if (dy > 0) 1f else -1f) else elem.position.y
-                        val pushPos = Position(pushX, pushY)
-                        
-                        // Verifica se o tile atrás da caixa está livre
-                        val pushIdx = pushPos.iy * maze.width + pushPos.ix
-                        val isWall = pushPos.ix < 0 || pushPos.iy < 0 || pushPos.ix >= maze.width || pushPos.iy >= maze.height || maze.tiles[pushIdx] == 1
-                        val hasElement = gameState.survivalElements.any { it.active && it.position.ix == pushPos.ix && it.position.iy == pushPos.iy && it.type != com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP }
-                        
-                        if (!isWall && !hasElement) {
-                            return@map elem.copy(position = pushPos)
-                        }
-                    }
-                }
-            }
-
-            elem
-        }
-    }
 
     /**
      * Verifica colisão de um monstro contra as paredes.
@@ -514,14 +378,6 @@ class GameLogic(private val gameState: GameState) {
             
             var targetX = heroPos.x.toFloat()
             var targetY = heroPos.y.toFloat()
-            
-            if (gameState.bossFightState.bossDistractedMs > 0) {
-                val bell = gameState.survivalElements.find { it.type == com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL && it.active }
-                if (bell != null) {
-                    targetX = bell.position.x
-                    targetY = bell.position.y
-                }
-            }
 
             val dx = targetX - monster.position.x
             val dy = targetY - monster.position.y
@@ -703,35 +559,6 @@ class GameLogic(private val gameState: GameState) {
     // Ativação de Traps (Requisito 5.2)
     // -------------------------------------------------------------------------
 
-    /**
-     * Verifica se o Hero está dentro do raio de ativação de alguma Trap inativa.
-     * Ativa a Trap e aplica Slowdown ao Hero por 2 segundos.
-     */
-    private fun verificarAtivacaoTraps(maze: MazeData) {
-        if (gameState.heroIsSlowedDown) return
-
-        val heroPos = gameState.heroPosition
-
-        gameState.traps = gameState.traps.map { trap ->
-            if (trap.isActivated) return@map trap
-
-            val distancia = trap.position.dist(heroPos)
-            if (distancia > 0.7f) return@map trap // Raio de ativação fluído
-
-            // Ativa a Trap
-            gameState.heroIsSlowedDown = true
-            gameState.heroSlowdownRemainingMs = SLOWDOWN_TRAP_MS
-            gameState.currentMapClean = false
-            
-            // Incrementa contador de lentidões no mapa (estatística apenas agora)
-            gameState.mapSlowdownCount++
-            
-            gameState.emitEvent(GameEvent.HeroReceivedSlowdown)
-            gameState.resetComboStreak()
-
-            trap.copy(isActivated = true)
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Movimento do Spike (Requisito 4.5)
