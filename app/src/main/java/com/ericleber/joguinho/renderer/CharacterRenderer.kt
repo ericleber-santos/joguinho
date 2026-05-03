@@ -148,10 +148,16 @@ class CharacterRenderer {
             else -> heroPants
         }
 
+        // --- SOMBRA (Desenhar antes para ficar atrás dos pés) ---
+        val shadowY = cy + u * 5.2f
+        drawShadow(canvas, cx, shadowY, u * 5f, u)
+
         canvas.save()
         if (facingLeft) canvas.scale(-1f, 1f, cx, cy)
 
-        val hatTop = cy - u * 9f + bodyBob
+        // Shift vertical para alinhar com monstros e cachorro (vShift total -9u)
+        val vShift = -u * 9f
+        val hatTop = cy - u * 9f + bodyBob + vShift
         fillRect(canvas, cx - u * 4f, hatTop, u * 8f, u * 3.5f, heroHat)
         fillRect(
             canvas,
@@ -163,7 +169,7 @@ class CharacterRenderer {
         ) // Aba deslocada para frente
         strokeRect(canvas, cx - u * 4f, hatTop, u * 8f, u * 4.5f, heroOutline, u * 0.5f)
 
-        val headTop = cy - u * 7f + bodyBob
+        val headTop = cy - u * 7f + bodyBob + vShift
         fillRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroSkin)
         strokeRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroOutline, u * 0.5f)
 
@@ -173,7 +179,7 @@ class CharacterRenderer {
 
         fillRect(canvas, cx + u * 1.0f, headTop + u * 5f, u * 2.5f, u * 0.7f, heroSkinDark)
 
-        val bodyTop = cy - u * 0f + bodyBob
+        val bodyTop = cy + bodyBob + vShift
         val armTopY = bodyTop + u * 0.5f
         val armLen = u * 5f
 
@@ -310,9 +316,6 @@ class CharacterRenderer {
             canvas.restore() // Restaura braço
         }
 
-        val shadowY = cy + u * 12f
-        drawShadow(canvas, cx, shadowY, u * 5f, u)
-
         canvas.restore()
     }
 
@@ -351,7 +354,8 @@ class CharacterRenderer {
             AnimState.RUN -> -sin(t * 12.0).toFloat() * 1.2f
         }
 
-        val bodyTop = cy + bodyBob
+        val vShift = -u * 9f
+        val bodyTop = cy + bodyBob + vShift
         val armTopY = bodyTop + u * 0.5f
         val armLen = u * 5f
         val rArmX = cx - u * 1.5f
@@ -426,6 +430,10 @@ class CharacterRenderer {
         val u = tileSize / 20f
         val t = animTick / 1000f
 
+        // --- SOMBRA ---
+        val shadowY = cy + u * 5.2f
+        drawShadow(canvas, cx, shadowY, u * 4f, u)
+
         val bodyBob: Float
         val legAnim: Float
         val tailWag: Float
@@ -457,7 +465,7 @@ class CharacterRenderer {
             }
         }
 
-        val yOffset = u * 4f
+        val yOffset = -u * 2f
         val renderCy = cy + yOffset
 
         canvas.save()
@@ -544,9 +552,6 @@ class CharacterRenderer {
                 dogBlack
             )
         }
-
-        val shadowY = renderCy + u * 9f
-        drawShadow(canvas, cx, shadowY, u * 4f, u)
 
         canvas.restore()
     }
