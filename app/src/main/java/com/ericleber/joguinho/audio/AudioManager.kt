@@ -42,7 +42,8 @@ enum class TipoEfeito(
     LENTIDAO_INICIO(200f, 500, FormaOnda.QUADRADA),
     BOSS_PROVOCACAO(400f, 600, FormaOnda.QUADRADA),
     BOSS_RISADA(100f, 1000, FormaOnda.QUADRADA),
-    POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL)
+    POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL),
+    ESGUICHO_AGUA(4000f, -1, FormaOnda.SENOIDAL) // Frequência base ignorada, síntese específica
 }
 
 /** Forma de onda para síntese de áudio procedural. */
@@ -98,6 +99,11 @@ class AudioManager(context: Context) {
     // --- Jobs de coroutines ---
     private var jobFade: Job? = null
     private var jobAmbiente: Job? = null
+    private var jobEsguicho: Job? = null
+
+    // --- AudioTrack persistente para o esguicho contínuo ---
+    private var audioTrackEsguicho: AudioTrack? = null
+    private var isWaterStreamActive = false
 
     // --- Cache de IDs de sons no SoundPool (gerados proceduralmente via AudioTrack) ---
     private val cacheSons: MutableMap<TipoEfeito, Int> = mutableMapOf()
@@ -121,6 +127,9 @@ class AudioManager(context: Context) {
     private fun carregarEfeitos() {
         escopo.launch {
             TipoEfeito.entries.forEach { tipo ->
+                // O esguicho contínuo é processado separadamente por síntese em tempo real
+                if (tipo == TipoEfeito.ESGUICHO_AGUA) return@forEach
+
                 val pcm = gerarTomPCM(tipo.frequenciaHz, tipo.duracaoMs, tipo.formaOnda)
                 // SoundPool não aceita PCM diretamente; usamos AudioTrack para reprodução
                 // e registramos o tipo para reprodução posterior
@@ -157,6 +166,42 @@ class AudioManager(context: Context) {
             amostras[i] = (amostra * Short.MAX_VALUE).toInt().toShort()
         }
         return amostras
+    }
+
+    /**
+     * Gera amostras de ruído de alta pressão para o som de água.
+     * Implementa a especificação de ruído branco filtrado + whoosh grave + modulação.
+     */
+    private fun generateHighPressureWaterSamples(numSamples: Int): ShortArray {
+        val samples = ShortArray(numSamples)
+        val random = java.util.Random()
+        val sampleRate = 44100
+        
+        // Parâmetros de whoosh (80-120Hz)
+        val whooshFreq = 100.0
+        val whooshAngularFreq = 2.0 * PI * whooshFreq / sampleRate
+        
+        // Parâmetros de modulação (8Hz)
+        val modFreq = 8.0
+        val modAngularFreq = 2.0 * PI * modFreq / sampleRate
+
+        for (i in 0 until numSamples) {
+            // 1. Ruído Branco (base)
+            val whiteNoise = random.nextFloat() * 2.0 - 1.0
+            
+            // 2. Whoosh Grave
+            val whoosh = sin(whooshAngularFreq * i) * 0.3
+            
+            // 3. Modulação de Amplitude (simula variação de pressão)
+            val modulation = 0.8 + 0.2 * sin(modAngularFreq * i)
+            
+            // 4. Mixagem e Simulação de High-Pass (ênfase em agudos via ruído)
+            // (O ruído branco já contém altas frequências; o whoosh dá o corpo)
+            val combined = (whiteNoise * 0.6 + whoosh * 0.4) * modulation
+            
+            samples[i] = (combined * Short.MAX_VALUE * 0.5).toInt().toShort()
+        }
+        return samples
     }
 
     /**
@@ -264,14 +309,96 @@ class AudioManager(context: Context) {
         }
     }
 
-    /**
-     * Reproduz PCM com atributos de áudio espacial (Android 12+).
-     * Simula posicionamento 3D ajustando o volume por canal.
-     */
     private fun reproduzirPCMEspacial(amostras: ShortArray, volume: Float, distancia: Float) {
         // Para simplificação, usa o mesmo caminho de reprodução mono com volume ajustado
         // Em uma implementação completa, usaria Spatializer API do Android 12+
         reproduzirPCM(amostras, volume)
+    }
+
+    // =========================================================================
+    // API pública — Esguicho de Água (Contínuo)
+    // =========================================================================
+
+    /**
+     * Inicia a síntese e reprodução do som de esguicho contínuo.
+     * Usa um envelope de Attack de 30ms.
+     */
+    fun startWaterStream() {
+        if (isWaterStreamActive) return
+        isWaterStreamActive = true
+        
+        jobEsguicho?.cancel()
+        jobEsguicho = escopo.launch(Dispatchers.IO) {
+            val sampleRate = 44100
+            val bufferSize = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build())
+                .setAudioFormat(AudioFormat.Builder()
+                    .setSampleRate(sampleRate)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build())
+                .setBufferSizeInBytes(max(bufferSize, 8192))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+            
+            audioTrackEsguicho = track
+            track.play()
+            
+            val attackSamples = (sampleRate * 0.030).toInt() // 30ms Attack
+            val chunkSamples = 2048
+            var samplesGenerated = 0
+            
+            try {
+                while (isActive && isWaterStreamActive) {
+                    val pcm = generateHighPressureWaterSamples(chunkSamples)
+                    
+                    // Aplica Attack Envelope se estiver no início
+                    if (samplesGenerated < attackSamples) {
+                        for (i in 0 until chunkSamples) {
+                            val currentSampleIdx = samplesGenerated + i
+                            if (currentSampleIdx < attackSamples) {
+                                val gain = currentSampleIdx.toFloat() / attackSamples
+                                pcm[i] = (pcm[i] * gain).toInt().toShort()
+                            }
+                        }
+                    }
+                    
+                    track.write(pcm, 0, pcm.size)
+                    samplesGenerated += chunkSamples
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                // Release Envelope (80ms)
+                val releaseSamples = (sampleRate * 0.080).toInt()
+                val releasePcm = generateHighPressureWaterSamples(releaseSamples)
+                for (i in 0 until releaseSamples) {
+                    val gain = 1.0f - (i.toFloat() / releaseSamples)
+                    releasePcm[i] = (releasePcm[i] * gain).toInt().toShort()
+                }
+                track.write(releasePcm, 0, releasePcm.size)
+                
+                track.stop()
+                track.release()
+                if (audioTrackEsguicho == track) audioTrackEsguicho = null
+            }
+        }
+    }
+
+    /**
+     * Para a reprodução do som de esguicho.
+     */
+    fun stopWaterStream() {
+        isWaterStreamActive = false
     }
 
     // =========================================================================

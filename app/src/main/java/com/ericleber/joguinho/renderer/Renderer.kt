@@ -11,14 +11,15 @@ import com.ericleber.joguinho.core.MazeData
 import kotlin.math.sin
 
 /**
+ * Interface para objetos que podem ser ordenados por profundidade.
+ */
+interface Renderable {
+    val ySort: Float
+    fun render(canvas: android.graphics.Canvas)
+}
+
+/**
  * Orquestrador de renderização isométrica.
- *
- * Coordena todos os sub-renderers e aplica culling de tiles (máximo 200 draw calls/frame).
- * Ordem de renderização: chão → paredes → decorativos → monsters → spike → hero → partículas → HUD.
- *
- * Suporta modo de alto contraste quando gameState.highContrastMode = true.
- *
- * Requisitos: 8.3, 8.7
  */
 class Renderer(
     private val spriteCache: SpriteCache,
@@ -187,16 +188,14 @@ class Renderer(
         val saidaTy = mazeData.exitIndex / mazeData.width
 
         // =====================================================================
-        // PIPELINE TOP-DOWN — linha por linha, coluna por coluna
-        // Ordem: chão → decorativos → personagens → paredes
+        // CÁLCULO DA VIEWPORT (CULLING)
         // =====================================================================
-
         val minX = ((-cameraX) / tileW).toInt().coerceAtLeast(0)
         val maxX = ((screenWidth - cameraX) / tileW).toInt().coerceAtMost(mazeData.width - 1)
         val minY = ((-cameraY) / tileH).toInt().coerceAtLeast(0)
         val maxY = ((screenHeight * fracaoAreaJogo - cameraY) / tileH).toInt().coerceAtMost(mazeData.height - 1)
 
-        // Passo 1: Chão
+        // Passo 1: Chão (Base Estática)
         for (ty in minY..maxY) {
             for (tx in minX..maxX) {
                 val idx = ty * mazeData.width + tx
@@ -208,7 +207,7 @@ class Renderer(
             }
         }
 
-        // Passo 2: Decorativos (Otimizado: renderiza apenas 1 a cada 12 tiles)
+        // Passo 2: Decorativos (Base Estática)
         for (ty in minY..maxY) {
             for (tx in minX..maxX) {
                 val idx = ty * mazeData.width + tx
@@ -216,10 +215,10 @@ class Renderer(
                 if (mazeData.tiles[idx] != 0) continue
                 if ((tx == entradaTx && ty == entradaTy) || (tx == saidaTx && ty == saidaTy)) continue
                 
-                // Desativar decorativos para o Bioma Úmido (Gotículas estáticas na tela não ficam boas)
+                // Desativar decorativos para o Bioma Úmido
                 if (gameState.currentBiome.name.contains("UMIDO") || gameState.currentBiome.name.contains("PANTANO")) continue
 
-                val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 12
+                val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 15
                 if (decorSeed != 0) continue
                 val variant = (tx + ty) % 4
                 val sx = tx * tileW + cameraX
@@ -237,17 +236,43 @@ class Renderer(
             }
         }
 
-        // Passo 2.5: Itens (Power-ups)
+        // =====================================================================
+        // PIPELINE DE RENDERIZAÇÃO ORDENADA (Y-SORTING)
+        // Resolve problemas de profundidade e oclusão (2.5D Real)
+        // =====================================================================
+        val renderList = mutableListOf<Renderable>()
+
+        // 1. Paredes (Base do tile + 1.0f para garantir que cubram quem está atrás)
+        for (ty in minY..maxY) {
+            for (tx in minX..maxX) {
+                val idx = ty * mazeData.width + tx
+                if (idx < 0 || idx >= mazeData.tiles.size) continue
+                if (mazeData.tiles[idx] != 1) continue
+                val sx = tx * tileW + cameraX
+                val sy = ty * tileH + cameraY
+                renderList.add(object : Renderable {
+                    override val ySort: Float = ty + 1.0f
+                    override fun render(c: Canvas) {
+                        tileRenderer.renderWallTile(c, sx, sy, tileW, tileH, palette, tx, ty)
+                    }
+                })
+            }
+        }
+
+        // 2. Itens (Power-ups)
         for (item in gameState.items) {
             if (!item.isActive) continue
             val sx = item.position.x * tileW + cameraX + tileW / 2f
             val sy = item.position.y * tileH + cameraY + tileH / 2f
-            
-            // Requisito: O power up deveria se parecer com uma banana ou cacho de banana
-            characterRenderer.renderBanana(canvas, sx, sy, heroAnimFrame, tileW)
+            renderList.add(object : Renderable {
+                override val ySort: Float = item.position.y + 0.4f // Levemente atrás do pé
+                override fun render(c: Canvas) {
+                    characterRenderer.renderBanana(c, sx, sy, heroAnimFrame, tileW)
+                }
+            })
         }
 
-        // Passo 2.6: Armadilhas variadas por bioma (GRANDES e visíveis)
+        // 3. Armadilhas
         val trapPaint = Paint().apply { isAntiAlias = false; style = Paint.Style.FILL }
         val trapPath = Path()
         val biomeName = gameState.currentBiome.name
@@ -262,349 +287,213 @@ class Renderer(
             val phase = (System.currentTimeMillis() % 2000L) / 2000f
             val anim = if (!trap.isActivated) (sin(phase * Math.PI * 2).toFloat() * 0.5f + 0.5f) else 1f
 
-            when {
-                // JARDIM/FLORESTA: Cobra que dá bote
-                biomeName.contains("JARDIM") || biomeName.contains("FLORESTA") || biomeName.contains("PLANTACAO") || biomeName.contains("RAIZES") || biomeName.contains("POMAR") -> {
-                    // Corpo da cobra (enrolada)
-                    trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(50, 150, 50)
-                    val bodyR = tileW * 0.30f
-                    canvas.drawCircle(cx, cy + tileH * 0.1f, bodyR, trapPaint)
-                    // Escamas
-                    trapPaint.color = if (trap.isActivated) Color.rgb(160, 30, 20) else Color.rgb(30, 110, 30)
-                    canvas.drawCircle(cx, cy + tileH * 0.1f, bodyR * 0.7f, trapPaint)
-                    // Cabeça (sobe quando ativada)
-                    val headY = cy - tileH * 0.15f - (anim * tileH * 0.25f)
-                    trapPaint.color = if (trap.isActivated) Color.rgb(220, 60, 30) else Color.rgb(60, 170, 60)
-                    canvas.drawOval(RectF(cx - tileW * 0.15f, headY - tileH * 0.1f, cx + tileW * 0.15f, headY + tileH * 0.1f), trapPaint)
-                    // Olhos
-                    trapPaint.color = Color.YELLOW
-                    canvas.drawRect(cx - tileW * 0.08f, headY - tileH * 0.04f, cx - tileW * 0.03f, headY + tileH * 0.02f, trapPaint)
-                    canvas.drawRect(cx + tileW * 0.03f, headY - tileH * 0.04f, cx + tileW * 0.08f, headY + tileH * 0.02f, trapPaint)
-                    // Língua bifurcada
-                    if (anim > 0.5f) {
-                        trapPaint.color = Color.RED
-                        trapPaint.style = Paint.Style.STROKE; trapPaint.strokeWidth = 1.5f
-                        canvas.drawLine(cx, headY + tileH * 0.08f, cx - tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
-                        canvas.drawLine(cx, headY + tileH * 0.08f, cx + tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
-                        trapPaint.style = Paint.Style.FILL
+            renderList.add(object : Renderable {
+                override val ySort: Float = tty + 0.8f // Quase na base do tile
+                override fun render(c: Canvas) {
+                    when {
+                        // JARDIM/FLORESTA: Cobra que dá bote
+                        biomeName.contains("JARDIM") || biomeName.contains("FLORESTA") || biomeName.contains("PLANTACAO") || biomeName.contains("RAIZES") || biomeName.contains("POMAR") -> {
+                            trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(50, 150, 50)
+                            val bodyR = tileW * 0.30f
+                            c.drawCircle(cx, cy + tileH * 0.1f, bodyR, trapPaint)
+                            trapPaint.color = if (trap.isActivated) Color.rgb(160, 30, 20) else Color.rgb(30, 110, 30)
+                            c.drawCircle(cx, cy + tileH * 0.1f, bodyR * 0.7f, trapPaint)
+                            val headY = cy - tileH * 0.15f - (anim * tileH * 0.25f)
+                            trapPaint.color = if (trap.isActivated) Color.rgb(220, 60, 30) else Color.rgb(60, 170, 60)
+                            c.drawOval(RectF(cx - tileW * 0.15f, headY - tileH * 0.1f, cx + tileW * 0.15f, headY + tileH * 0.1f), trapPaint)
+                            trapPaint.color = Color.YELLOW
+                            c.drawRect(cx - tileW * 0.08f, headY - tileH * 0.04f, cx - tileW * 0.03f, headY + tileH * 0.02f, trapPaint)
+                            c.drawRect(cx + tileW * 0.03f, headY - tileH * 0.04f, cx + tileW * 0.08f, headY + tileH * 0.02f, trapPaint)
+                            if (anim > 0.5f) {
+                                trapPaint.color = Color.RED
+                                trapPaint.style = Paint.Style.STROKE; trapPaint.strokeWidth = 1.5f
+                                c.drawLine(cx, headY + tileH * 0.08f, cx - tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
+                                c.drawLine(cx, headY + tileH * 0.08f, cx + tileW * 0.06f, headY + tileH * 0.18f, trapPaint)
+                                trapPaint.style = Paint.Style.FILL
+                            }
+                        }
+                        // VULCÂNICA: Poça de lava
+                        biomeName.contains("VULCANICO") || biomeName.contains("LAVA") || biomeName.contains("FOGO") -> {
+                            trapPaint.color = Color.rgb(200, 60, 10)
+                            c.drawOval(RectF(sx + tileW * 0.1f, sy + tileH * 0.2f, sx + tileW * 0.9f, sy + tileH * 0.85f), trapPaint)
+                            trapPaint.color = Color.rgb(255, 150, 30)
+                            c.drawOval(RectF(sx + tileW * 0.25f, sy + tileH * 0.35f, sx + tileW * 0.75f, sy + tileH * 0.7f), trapPaint)
+                            trapPaint.color = Color.rgb(255, 200, 50)
+                            val bubbleY = cy - tileH * 0.1f * anim
+                            c.drawCircle(cx - tileW * 0.1f, bubbleY, tileW * 0.06f, trapPaint)
+                            c.drawCircle(cx + tileW * 0.15f, bubbleY - tileH * 0.05f, tileW * 0.04f, trapPaint)
+                        }
+                        // DARDO: Ruínas
+                        biomeName.contains("RUINA") || biomeName.contains("TEMPLO") -> {
+                            trapPaint.color = Color.rgb(40, 30, 20)
+                            c.drawRect(sx + tileW * 0.05f, cy - tileH * 0.12f, sx + tileW * 0.2f, cy + tileH * 0.12f, trapPaint)
+                            val dartLen = tileW * 0.6f * anim
+                            trapPaint.color = if (trap.isActivated) Color.rgb(180, 40, 40) else Color.rgb(120, 100, 60)
+                            c.drawRect(sx + tileW * 0.2f, cy - tileH * 0.03f, sx + tileW * 0.2f + dartLen, cy + tileH * 0.03f, trapPaint)
+                        }
+                        // MINA (default): Espinhos
+                        else -> {
+                            trapPaint.color = Color.rgb(100, 90, 80)
+                            c.drawRect(sx + tileW * 0.05f, sy + tileH * 0.7f, sx + tileW * 0.95f, sy + tileH * 0.95f, trapPaint)
+                            trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(200, 170, 50)
+                            val spikeH = tileH * 0.6f * anim
+                            val numSpikes = 3
+                            val sw = tileW * 0.85f / numSpikes
+                            for (i in 0 until numSpikes) {
+                                val bx = sx + tileW * 0.075f + sw * i
+                                val by = sy + tileH * 0.7f
+                                trapPath.reset()
+                                trapPath.moveTo(bx, by); trapPath.lineTo(bx + sw, by); trapPath.lineTo(bx + sw / 2f, by - spikeH); trapPath.close()
+                                c.drawPath(trapPath, trapPaint)
+                            }
+                        }
                     }
                 }
-
-                // VULCÂNICA: Poça de lava borbulhante
-                biomeName.contains("VULCANICO") || biomeName.contains("LAVA") || biomeName.contains("FOGO") || biomeName.contains("DINOSSAURO") || biomeName.contains("FORJA") -> {
-                    // Poça de lava
-                    trapPaint.color = Color.rgb(200, 60, 10)
-                    canvas.drawOval(RectF(sx + tileW * 0.1f, sy + tileH * 0.2f, sx + tileW * 0.9f, sy + tileH * 0.85f), trapPaint)
-                    // Centro mais brilhante
-                    trapPaint.color = Color.rgb(255, 150, 30)
-                    canvas.drawOval(RectF(sx + tileW * 0.25f, sy + tileH * 0.35f, sx + tileW * 0.75f, sy + tileH * 0.7f), trapPaint)
-                    // Bolhas animadas
-                    trapPaint.color = Color.rgb(255, 200, 50)
-                    val bubbleY = cy - tileH * 0.1f * anim
-                    canvas.drawCircle(cx - tileW * 0.1f, bubbleY, tileW * 0.06f, trapPaint)
-                    canvas.drawCircle(cx + tileW * 0.15f, bubbleY - tileH * 0.05f, tileW * 0.04f, trapPaint)
-                    // Glow
-                    trapPaint.color = Color.argb((40 + (anim * 40).toInt()), 255, 100, 0)
-                    canvas.drawCircle(cx, cy, tileW * 0.45f, trapPaint)
-                }
-
-                // CONSTRUÇÃO/RUÍNAS: Dardos na parede (flechas)
-                biomeName.contains("CONSTRUCAO") || biomeName.contains("RUINA") || biomeName.contains("TEMPLO") || biomeName.contains("SALOES") || biomeName.contains("TUMULO") -> {
-                    // Buraco na parede (de onde saem os dardos)
-                    trapPaint.color = Color.rgb(40, 30, 20)
-                    canvas.drawRect(sx + tileW * 0.05f, cy - tileH * 0.12f, sx + tileW * 0.2f, cy + tileH * 0.12f, trapPaint)
-                    // Flecha/dardo saindo
-                    val dartLen = tileW * 0.6f * anim
-                    trapPaint.color = if (trap.isActivated) Color.rgb(180, 40, 40) else Color.rgb(120, 100, 60)
-                    canvas.drawRect(sx + tileW * 0.2f, cy - tileH * 0.03f, sx + tileW * 0.2f + dartLen, cy + tileH * 0.03f, trapPaint)
-                    // Ponta
-                    trapPath.reset()
-                    val tipX = sx + tileW * 0.2f + dartLen
-                    trapPath.moveTo(tipX, cy - tileH * 0.08f)
-                    trapPath.lineTo(tipX + tileW * 0.1f, cy)
-                    trapPath.lineTo(tipX, cy + tileH * 0.08f)
-                    trapPath.close()
-                    canvas.drawPath(trapPath, trapPaint)
-                    // Penas da flecha
-                    trapPaint.color = Color.rgb(200, 180, 100)
-                    canvas.drawRect(sx + tileW * 0.18f, cy - tileH * 0.06f, sx + tileW * 0.25f, cy + tileH * 0.06f, trapPaint)
-                }
-
-                // RIACHO/ÁGUA: Geyser de água
-                biomeName.contains("RIACHO") || biomeName.contains("LAGO") || biomeName.contains("AQUATICO") || biomeName.contains("ABISMO") -> {
-                    // Buraco no chão
-                    trapPaint.color = Color.rgb(30, 60, 100)
-                    canvas.drawOval(RectF(sx + tileW * 0.2f, sy + tileH * 0.5f, sx + tileW * 0.8f, sy + tileH * 0.9f), trapPaint)
-                    // Jato de água subindo
-                    val jetH = tileH * 0.7f * anim
-                    trapPaint.color = Color.argb(180, 100, 180, 255)
-                    canvas.drawRect(cx - tileW * 0.08f, cy - jetH * 0.5f, cx + tileW * 0.08f, sy + tileH * 0.6f, trapPaint)
-                    // Gotas
-                    trapPaint.color = Color.argb(200, 140, 200, 255)
-                    canvas.drawCircle(cx - tileW * 0.12f, cy - jetH * 0.4f, tileW * 0.04f, trapPaint)
-                    canvas.drawCircle(cx + tileW * 0.1f, cy - jetH * 0.3f, tileW * 0.03f, trapPaint)
-                }
-
-                // MINA (default): Espinhos grandes estilo Mario
-                else -> {
-                    // Espinhos GRANDES com base metálica
-                    trapPaint.color = Color.rgb(100, 90, 80) // Base metálica
-                    canvas.drawRect(sx + tileW * 0.05f, sy + tileH * 0.7f, sx + tileW * 0.95f, sy + tileH * 0.95f, trapPaint)
-                    // Espinhos
-                    trapPaint.color = if (trap.isActivated) Color.rgb(200, 50, 30) else Color.rgb(200, 170, 50)
-                    val spikeH = tileH * 0.6f * anim
-                    val numSpikes = 3
-                    val sw = tileW * 0.85f / numSpikes
-                    for (i in 0 until numSpikes) {
-                        val bx = sx + tileW * 0.075f + sw * i
-                        val by = sy + tileH * 0.7f
-                        trapPath.reset()
-                        trapPath.moveTo(bx, by)
-                        trapPath.lineTo(bx + sw, by)
-                        trapPath.lineTo(bx + sw / 2f, by - spikeH)
-                        trapPath.close()
-                        canvas.drawPath(trapPath, trapPaint)
-                    }
-                    // Outline
-                    trapPaint.color = Color.rgb(60, 30, 10)
-                    trapPaint.style = Paint.Style.STROKE; trapPaint.strokeWidth = 1.5f
-                    for (i in 0 until numSpikes) {
-                        val bx = sx + tileW * 0.075f + sw * i
-                        val by = sy + tileH * 0.7f
-                        trapPath.reset()
-                        trapPath.moveTo(bx, by)
-                        trapPath.lineTo(bx + sw, by)
-                        trapPath.lineTo(bx + sw / 2f, by - spikeH)
-                        trapPath.close()
-                        canvas.drawPath(trapPath, trapPaint)
-                    }
-                    trapPaint.style = Paint.Style.FILL
-                }
-            }
+            })
         }
 
-        // Passo 2.7: Zonas de AoE do Boss
-        for (zone in gameState.bossAoeZones) {
-            val sx = zone.position.x * tileW + cameraX
-            val sy = zone.position.y * tileH + cameraY
-            val cx = sx + tileW / 2f
-            val cy = sy + tileH / 2f
-            
-            // Desenha um círculo de aviso pulsante
-            val tempoAteExplodir = zone.explodesAtMs - gameState.bossFightState.elapsedMs
-            val proporcao = 1f - (tempoAteExplodir.toFloat() / 2000f).coerceIn(0f, 1f)
-            
-            trapPaint.style = android.graphics.Paint.Style.FILL
-            trapPaint.color = android.graphics.Color.argb(50 + (proporcao * 100).toInt(), 255, 0, 0)
-            canvas.drawCircle(cx, cy, tileW * 1.5f * proporcao, trapPaint) // Cobre uma área 3x3
-
-            trapPaint.style = android.graphics.Paint.Style.STROKE
-            trapPaint.strokeWidth = 5f
-            trapPaint.color = android.graphics.Color.RED
-            canvas.drawCircle(cx, cy, tileW * 1.5f, trapPaint)
-            trapPaint.style = android.graphics.Paint.Style.FILL
-        }
-
-        // Passo 2.8: Elementos de Sobrevivência
+        // 4. Elementos de Sobrevivência (Pilares, Caixas)
         for (elem in gameState.survivalElements) {
-            if (!elem.active && elem.type != com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR) continue // Pilares inativos não somem, mas ficam quebrados
+            if (!elem.active && elem.type != com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR) continue
             val sx = elem.position.x * tileW + cameraX
             val sy = elem.position.y * tileH + cameraY
             val cx = sx + tileW / 2f
             val cy = sy + tileH / 2f
 
-            when (elem.type) {
-                com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH -> {
-                    trapPaint.color = android.graphics.Color.rgb(100, 150, 255)
-                    canvas.drawRect(cx - tileW * 0.1f, cy - tileH * 0.4f, cx + tileW * 0.1f, cy, trapPaint) // Pilar
-                    
-                    if (elem.cooldownRemainingMs <= 0) {
-                        trapPaint.color = android.graphics.Color.CYAN // Chama de gelo
-                        canvas.drawCircle(cx, cy - tileH * 0.5f, tileW * 0.2f, trapPaint)
-                    } else {
-                        trapPaint.color = android.graphics.Color.GRAY // Apagada
-                        canvas.drawCircle(cx, cy - tileH * 0.5f, tileW * 0.1f, trapPaint)
-                    }
-                }
-                com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR -> {
-                    if (elem.active) {
-                        trapPaint.color = android.graphics.Color.rgb(80, 80, 80)
-                        canvas.drawRect(sx + tileW * 0.1f, sy - tileH * 0.5f, sx + tileW * 0.9f, sy + tileH * 0.9f, trapPaint)
-                        // Rachaduras se durabilidade estiver baixa
-                        if (elem.durability == 1) {
-                            trapPaint.color = android.graphics.Color.BLACK
-                            trapPaint.style = android.graphics.Paint.Style.STROKE; trapPaint.strokeWidth = 3f
-                            canvas.drawLine(sx + tileW * 0.2f, sy - tileH * 0.3f, sx + tileW * 0.6f, sy + tileH * 0.2f, trapPaint)
-                            trapPaint.style = android.graphics.Paint.Style.FILL
+            renderList.add(object : Renderable {
+                override val ySort: Float = elem.position.y + 0.9f
+                override fun render(c: Canvas) {
+                    when (elem.type) {
+                        com.ericleber.joguinho.core.SurvivalElementType.ICE_TORCH -> {
+                            trapPaint.color = Color.rgb(100, 150, 255)
+                            c.drawRect(cx - tileW * 0.1f, cy - tileH * 0.4f, cx + tileW * 0.1f, cy, trapPaint)
                         }
-                    } else {
-                        // Pilar destruído (escombros)
-                        trapPaint.color = android.graphics.Color.rgb(100, 100, 100)
-                        canvas.drawRect(sx + tileW * 0.1f, sy + tileH * 0.5f, sx + tileW * 0.9f, sy + tileH * 0.9f, trapPaint)
+                        com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR -> {
+                            trapPaint.color = if (elem.active) Color.rgb(80, 80, 80) else Color.rgb(100, 100, 100)
+                            val pH = if (elem.active) tileH * 1.4f else tileH * 0.4f
+                            c.drawRect(sx + tileW * 0.1f, sy + tileH * 0.9f - pH, sx + tileW * 0.9f, sy + tileH * 0.9f, trapPaint)
+                        }
+                        com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX -> {
+                            trapPaint.color = Color.rgb(139, 69, 19)
+                            c.drawRect(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
+                        }
+                        else -> {}
                     }
                 }
-                com.ericleber.joguinho.core.SurvivalElementType.MUD_SWAMP -> {
-                    trapPaint.color = android.graphics.Color.rgb(70, 50, 30) // Marrom escuro
-                    canvas.drawOval(android.graphics.RectF(sx, sy + tileH * 0.2f, sx + tileW, sy + tileH * 0.8f), trapPaint)
-                }
-                com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX -> {
-                    trapPaint.color = android.graphics.Color.rgb(139, 69, 19) // Madeira
-                    canvas.drawRect(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
-                    trapPaint.color = android.graphics.Color.rgb(101, 42, 14)
-                    trapPaint.style = android.graphics.Paint.Style.STROKE; trapPaint.strokeWidth = 4f
-                    canvas.drawRect(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
-                    canvas.drawLine(sx + tileW * 0.2f, sy + tileH * 0.2f, sx + tileW * 0.8f, sy + tileH * 0.8f, trapPaint)
-                    trapPaint.style = android.graphics.Paint.Style.FILL
-                }
-                com.ericleber.joguinho.core.SurvivalElementType.DISTRACTION_BELL -> {
-                    trapPaint.color = android.graphics.Color.YELLOW
-                    canvas.drawCircle(cx, cy, tileW * 0.3f, trapPaint) // Sino
-                }
-            }
+            })
         }
 
-        // Passo 3: Paredes (Agora desenhadas ANTES dos personagens para evitar sobreposição de cabeças)
-        for (ty in minY..maxY) {
-            for (tx in minX..maxX) {
-                val idx = ty * mazeData.width + tx
-                if (idx < 0 || idx >= mazeData.tiles.size) continue
-                if (mazeData.tiles[idx] != 1) continue
-                val sx = tx * tileW + cameraX
-                val sy = ty * tileH + cameraY
-                tileRenderer.renderWallTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
-            }
-        }
-
-        // Passo 4: Personagens (centro do tile)
-        val heroSx = gameState.heroPosition.x * tileW + cameraX + tileW / 2f
-        val heroSy = gameState.heroPosition.y * tileH + cameraY + tileH / 2f
-        val spikeSx = gameState.spikePosition.x * tileW + cameraX + tileW / 2f
-        val spikeSy = gameState.spikePosition.y * tileH + cameraY + tileH / 2f
-
+        // 5. Monstros (+0.5f para ySort nos pés)
         for (monster in gameState.monsters) {
             if (!monster.isActive) continue
             val mx = monster.position.x * tileW + cameraX + tileW / 2f
             val my = monster.position.y * tileH + cameraY + tileH / 2f
             val seed = monster.id.hashCode()
-            val finalScale = if (monster.isBoss) {
-                3.00f
-            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.TANK_SLOW) {
-                2.50f
-            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.AMBUSH) {
-                0.80f
-            } else {
-                when (seed % 3) {
-                    0 -> 1.0f
-                    1 -> 1.4f
-                    else -> 1.8f
-                }
-            }
-
-            // Garante alto contraste visual (MOB-01)
-            val bodyColor = if (monster.isBoss) {
-                Color.rgb(200, 40, 40)
-            } else if (gameState.floorNumber > 25) {
-                // Em andares profundos (escuros e frios), força cores "Neon/Quentes" para destacar do fundo
-                val neonColors = listOf(
-                    Color.rgb(255, 105, 180), // Rosa Choque
-                    Color.rgb(255, 140, 0),   // Laranja Vibrante
-                    Color.rgb(173, 255, 47),  // Verde Limão
-                    Color.rgb(0, 255, 255),   // Ciano Brilhante
-                    Color.rgb(255, 215, 0)    // Amarelo Ouro
-                )
-                neonColors[(seed and 0x7FFFFFFF) % neonColors.size]
-            } else {
-                val r = 150 + (seed and 0xFF) % 100
-                val g = 50 + (seed shr 8 and 0xFF) % 80
-                val b = 50 + (seed shr 16 and 0xFF) % 80
-                // Se for pequeno e muito cinza, força um tom mais vibrante
-                if (finalScale < 1.0f && (r - g < 20 && r - b < 20)) {
-                    Color.rgb(255, 100, 100) // Força vermelho vibrante
-                } else {
-                    Color.rgb(r, g, b)
-                }
-            }
-
-            val eyeColor = if (monster.isBoss) {
-                Color.YELLOW 
-            } else if (monster.movementPattern == com.ericleber.joguinho.core.MovementPattern.AMBUSH) {
-                Color.RED // Olhos vermelhos brilhantes e assustadores para Emboscada
-            } else {
-                Color.rgb(255, 200 + (seed and 0x3F), 0)
-            }
-
+            val finalScale = if (monster.isBoss) 3.00f else 1.2f
+            
+            val bodyColor = if (monster.isBoss) Color.rgb(200, 40, 40) else Color.rgb(150 + (seed % 100), 50, 50)
+            val eyeColor = if (monster.isBoss) Color.YELLOW else Color.RED
             val isHit = (System.currentTimeMillis() - monster.lastHitTimeMs) < 150L
-            val appearance = MonsterAppearance(
-                bodyColor = bodyColor,
-                eyeColor = eyeColor,
-                size = finalScale,
-                shapeVariant = seed and 0x3, 
-                animVariant = seed shr 4 and 0x3,
-                isBoss = monster.isBoss,
-                isHit = isHit
-            )
-            characterRenderer.renderMonster(canvas, mx, my, appearance, monsterAnimFrame, tileW, tileH)
+            val appearance = MonsterAppearance(bodyColor, eyeColor, finalScale, seed and 0x3, seed shr 4 and 0x3, monster.isBoss, isHit)
+
+            renderList.add(object : Renderable {
+                override val ySort: Float = monster.position.y + 0.5f
+                override fun render(c: Canvas) {
+                    characterRenderer.renderMonster(c, mx, my, appearance, monsterAnimFrame, tileW, tileH)
+                }
+            })
         }
 
-        val facingLeft = when (gameState.heroDirection) {
-            com.ericleber.joguinho.core.Direction.WEST,
-            com.ericleber.joguinho.core.Direction.NORTH_WEST,
-            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
-            else -> false
+        // 6. Spike & Hero (+0.5f para ySort nos pés)
+        val heroSx = gameState.heroPosition.x * tileW + cameraX + tileW / 2f
+        val heroSy = gameState.heroPosition.y * tileH + cameraY + tileH / 2f
+        val spikeSx = gameState.spikePosition.x * tileW + cameraX + tileW / 2f
+        val spikeSy = gameState.spikePosition.y * tileH + cameraY + tileH / 2f
+
+        renderList.add(object : Renderable {
+            override val ySort: Float = gameState.spikePosition.y + 0.5f
+            override fun render(c: Canvas) {
+                val facingLeft = when (gameState.heroDirection) {
+                    com.ericleber.joguinho.core.Direction.WEST, com.ericleber.joguinho.core.Direction.NORTH_WEST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+                    else -> false
+                }
+                characterRenderer.drawDog(c, spikeSx, spikeSy, tileW, AnimState.WALK, facingLeft)
+            }
+        })
+
+        renderList.add(object : Renderable {
+            override val ySort: Float = gameState.heroPosition.y + 0.5f
+            override fun render(c: Canvas) {
+                var drawHeroSy = heroSy
+                if (gameState.isExiting) {
+                    val progress = (gameState.exitAnimationTimerMs.toFloat() / 800f).coerceIn(0f, 1f)
+                    drawHeroSy -= progress * tileH * 1.2f
+                }
+                val heroAnimState = when {
+                    gameState.heroIsSlowedDown -> AnimState.WALK
+                    gameState.heroHasSpeedBuff -> AnimState.RUN
+                    gameState.heroStoppedDurationSec > 0.05f -> AnimState.IDLE
+                    else -> AnimState.WALK
+                }
+                characterRenderer.drawHero(c, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection, gameState.heroIsSlowedDown, gameState.heroHasSpeedBuff)
+            }
+        })
+
+        // 7. Projéteis (Legado removido)
+
+        // 8. Water Stream (Esguicho Contínuo)
+        if (gameState.isShooting && gameState.waterStreamImpactPos != null) {
+            val impact = gameState.waterStreamImpactPos!!
+            
+            // Origem baseada na direção (ponta da arma)
+            val (offX, offY) = when (gameState.heroDirection) {
+                com.ericleber.joguinho.core.Direction.NORTH -> Pair(0.1f, -0.6f)
+                com.ericleber.joguinho.core.Direction.SOUTH -> Pair(0.1f, 0.6f)
+                com.ericleber.joguinho.core.Direction.EAST -> Pair(0.6f, 0.1f)
+                com.ericleber.joguinho.core.Direction.WEST -> Pair(-0.6f, 0.1f)
+                else -> Pair(0.3f, 0.3f)
+            }
+            
+            val ox = (gameState.heroPosition.x + offX) * tileW + cameraX + tileW / 2f
+            val oy = (gameState.heroPosition.y + offY) * tileH + cameraY + tileH / 2f
+            val tx = impact.x * tileW + cameraX + tileW / 2f
+            val ty = impact.y * tileH + cameraY + tileH / 2f
+
+            renderList.add(object : Renderable {
+                override val ySort: Float = gameState.heroPosition.y + 0.75f
+                override fun render(c: Canvas) {
+                    characterRenderer.drawWaterStream(c, ox, oy, tx, ty, tileW)
+                }
+            })
         }
 
-        val dogState = when (gameState.spikeCompanionState) {
-            "IDLE" -> AnimState.IDLE
-            "ATACANDO" -> AnimState.RUN
-            else -> AnimState.WALK
-        }
-        characterRenderer.drawDog(canvas, spikeSx, spikeSy, tileW, dogState, facingLeft)
-
-        // Se estiver em animação de saída, sobe o herói
-        var drawHeroSy = heroSy
-        if (gameState.isExiting) {
-            val progress = (gameState.exitAnimationTimerMs.toFloat() / 800f).coerceIn(0f, 1f)
-            drawHeroSy -= progress * tileH * 1.2f // Sobe até o teto
-        }
-
-        val heroAnimState = when {
-            gameState.isExiting -> AnimState.WALK
-            gameState.heroIsSlowedDown -> AnimState.WALK
-            gameState.heroHasSpeedBuff -> AnimState.RUN
-            gameState.heroStoppedDurationSec > 0.05f -> AnimState.IDLE
-            else -> AnimState.WALK
-        }
-
-        characterRenderer.drawHero(
-            canvas, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection,
-            isFlashingRed = gameState.heroIsSlowedDown,
-            isFlashingBlue = gameState.heroHasSpeedBuff
-        )
-
-        // Projéteis de Água (MECH-03) - Renderizado DEPOIS do herói (Z-Order corrigido)
-        for (proj in gameState.projectiles) {
-            val px = proj.position.x * tileW + cameraX + tileW / 2f
-            val py = proj.position.y * tileH + cameraY + tileH / 2f
-            characterRenderer.renderWaterProjectile(canvas, px, py, tileW, proj.direction)
-        }
-
-        // VFX (Splash, Muzzle) - Phase 8
+        // 9. VFX (Muzzle, Splash)
         val currentTimeVfx = System.currentTimeMillis()
         for (vfx in gameState.vfxList) {
             val vx = vfx.position.x * tileW + cameraX + tileW / 2f
             val vy = vfx.position.y * tileH + cameraY + tileH / 2f
             val elapsed = currentTimeVfx - vfx.createdAtMs
             val progress = (elapsed.toFloat() / vfx.durationMs).coerceIn(0f, 1f)
-            
-            if (progress < 1.0f) {
-                when (vfx.type) {
-                    com.ericleber.joguinho.core.VfxType.WATER_SPLASH -> characterRenderer.renderWaterSplash(canvas, vx, vy, tileW, progress)
-                    com.ericleber.joguinho.core.VfxType.WATER_JET_MUZZLE -> characterRenderer.renderWaterMuzzle(canvas, vx, vy, tileW, progress, vfx.angle)
+            if (progress >= 1.0f) continue
+
+            renderList.add(object : Renderable {
+                override val ySort: Float = vfx.position.y + 0.65f
+                override fun render(c: Canvas) {
+                    when (vfx.type) {
+                        com.ericleber.joguinho.core.VfxType.WATER_SPLASH -> characterRenderer.renderWaterSplash(c, vx, vy, tileW, progress)
+                        com.ericleber.joguinho.core.VfxType.WATER_JET_MUZZLE -> characterRenderer.renderWaterMuzzle(c, vx, vy, tileW, progress, vfx.angle)
+                    }
                 }
-            }
+            })
         }
 
-        // Passo 5: Placa de Saída e Escada
+        // EXECUÇÃO DA RENDERIZAÇÃO ORDENADA
+        renderList.sortBy { it.ySort }
+        for (item in renderList) {
+            item.render(canvas)
+        }
+
+        // Passo FINAL: Elementos de HUD fixos (Z-Index Máximo)
         if (saidaTx in minX..maxX && saidaTy in minY..maxY) {
             renderizarPlacaSaida(canvas, mazeData, saidaTx, saidaTy, tileW, tileH)
         }

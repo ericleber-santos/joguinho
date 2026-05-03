@@ -90,6 +90,9 @@ class GameState {
     // --- Controle de Combate ---
     var isShooting: Boolean = false
     var projectileCooldownMs: Long = 0L
+    var waterStreamDistance: Float = 0f
+    var waterStreamVisualDistance: Float = 0f
+    var waterStreamImpactPos: Position? = null
 
     // --- Boss Fight & Sobrevivência ---
     var bossFightState: BossFightState = BossFightState()

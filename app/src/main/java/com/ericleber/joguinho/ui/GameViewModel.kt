@@ -101,6 +101,12 @@ class GameViewModel : ViewModel() {
         gameLogic.onSoundEffectRequested = { tipo: TipoEfeito ->
             audioManager?.reproduzirEfeito(tipo)
         }
+        gameLogic.onWaterStreamStarted = {
+            audioManager?.startWaterStream()
+        }
+        gameLogic.onWaterStreamStopped = {
+            audioManager?.stopWaterStream()
+        }
     }
 
     // =========================================================================

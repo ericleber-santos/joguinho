@@ -82,6 +82,13 @@ class GameLogic(private val gameState: GameState) {
 
     // Callback para solicitar reprodução de efeito sonoro
     var onSoundEffectRequested: ((TipoEfeito) -> Unit)? = null
+    
+    // Callbacks para o esguicho contínuo
+    var onWaterStreamStarted: (() -> Unit)? = null
+    var onWaterStreamStopped: (() -> Unit)? = null
+
+    private var wasShootingLastFrame = false
+    private var damageAccumulatorMs = 0L
 
     /**
      * Atualiza toda a lógica de jogo para o frame atual.
@@ -147,7 +154,7 @@ class GameLogic(private val gameState: GameState) {
         verificarAtivacaoTraps(maze)
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
-        atualizarProjeteis(deltaTimeSec, maze)
+        atualizarWaterStream(deltaTimeSec, maze)
         atualizarVfx(deltaMs)
         
         // Atualiza timer do mapa (5 minutos)
@@ -913,140 +920,125 @@ class GameLogic(private val gameState: GameState) {
         }
     }
 
-    private fun atualizarProjeteis(deltaTimeSec: Float, maze: MazeData) {
-        val deltaMs = (deltaTimeSec * 1000).toLong()
+    private fun atualizarWaterStream(deltaTimeSec: Float, maze: MazeData) {
+        val isShooting = gameState.isShooting
         
-        // Cooldown de disparo
-        if (gameState.projectileCooldownMs > 0) {
-            gameState.projectileCooldownMs = (gameState.projectileCooldownMs - deltaMs).coerceAtLeast(0L)
+        // --- Gerenciamento de Som ---
+        if (isShooting && !wasShootingLastFrame) {
+            onWaterStreamStarted?.invoke()
+        } else if (!isShooting && wasShootingLastFrame) {
+            onWaterStreamStopped?.invoke()
+        }
+        wasShootingLastFrame = isShooting
+
+        if (!isShooting) {
+            gameState.waterStreamDistance = 0f
+            gameState.waterStreamVisualDistance = 0f
+            gameState.waterStreamImpactPos = null
+            return
         }
 
-        // Criar novo projétil se estiver atirando e cooldown zerado
-        if (gameState.isShooting && gameState.projectileCooldownMs <= 0) {
-            val id = "proj_${System.currentTimeMillis()}"
-            
-            // Calcula offset para o tiro sair da ponta da arma (Muzzle Position)
-            val (offX, offY) = when (gameState.heroDirection) {
-                Direction.NORTH -> Pair(0.1f, -0.6f)
-                Direction.SOUTH -> Pair(0.1f, 0.6f)
-                Direction.EAST -> Pair(0.6f, 0.1f)
-                Direction.WEST -> Pair(-0.6f, 0.1f)
-                Direction.NORTH_EAST -> Pair(0.5f, -0.4f)
-                Direction.NORTH_WEST -> Pair(-0.5f, -0.4f)
-                Direction.SOUTH_EAST -> Pair(0.5f, 0.5f)
-                Direction.SOUTH_WEST -> Pair(-0.5f, 0.5f)
-            }
-            val spawnPos = Position(gameState.heroPosition.x + offX, gameState.heroPosition.y + offY)
-
-            val newProjectile = ProjectileState(
-                id = id,
-                position = spawnPos,
-                direction = gameState.heroDirection,
-                speed = 18f // Mais rápido para parecer jato
-            )
-            gameState.projectiles = gameState.projectiles + newProjectile
-            gameState.projectileCooldownMs = 50L // 20 jatos/seg = Fluxo contínuo de mangueira
-            
-            // MUZZLE FLASH VFX na ponta da arma
-            val angle = when (gameState.heroDirection) {
-                Direction.NORTH -> 270f
-                Direction.SOUTH -> 90f
-                Direction.EAST -> 0f
-                Direction.WEST -> 180f
-                Direction.NORTH_EAST -> 315f
-                Direction.NORTH_WEST -> 225f
-                Direction.SOUTH_EAST -> 45f
-                Direction.SOUTH_WEST -> 135f
-            }
-            val muzzleVfx = VfxState(
-                id = "muzzle_${id}",
-                position = spawnPos,
-                type = VfxType.WATER_JET_MUZZLE,
-                createdAtMs = System.currentTimeMillis(),
-                durationMs = 80L,
-                angle = angle
-            )
-            gameState.vfxList = gameState.vfxList + muzzleVfx
-            
-            onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO) 
+        // --- Raycasting para o Esguicho ---
+        val maxDistance = 7.0f // Distância máxima do esguicho
+        val step = 0.2f // Precisão do raio
+        
+        val (dx, dy) = when (gameState.heroDirection) {
+            Direction.NORTH -> Pair(0f, -1f)
+            Direction.SOUTH -> Pair(0f, 1f)
+            Direction.EAST -> Pair(1f, 0f)
+            Direction.WEST -> Pair(-1f, 0f)
+            Direction.NORTH_EAST -> Pair(0.707f, -0.707f)
+            Direction.NORTH_WEST -> Pair(-0.707f, -0.707f)
+            Direction.SOUTH_EAST -> Pair(0.707f, 0.707f)
+            Direction.SOUTH_WEST -> Pair(-0.707f, 0.707f)
         }
 
-        if (gameState.projectiles.isEmpty()) return
+        // Origem (ponta da arma)
+        val (offX, offY) = when (gameState.heroDirection) {
+            Direction.NORTH -> Pair(0.1f, -0.6f)
+            Direction.SOUTH -> Pair(0.1f, 0.6f)
+            Direction.EAST -> Pair(0.6f, 0.1f)
+            Direction.WEST -> Pair(-0.6f, 0.1f)
+            else -> Pair(0.5f * dx, 0.5f * dy)
+        }
+        val origin = Position(gameState.heroPosition.x + offX, gameState.heroPosition.y + offY)
+        
+        var currentDist = 0f
+        var impactPos = origin
+        var hitMonsterId: String? = null
 
-        val projectilesToRemove = mutableListOf<String>()
-        val currentTime = System.currentTimeMillis()
+        while (currentDist < maxDistance) {
+            currentDist += step
+            val checkX = origin.x + dx * currentDist
+            val checkY = origin.y + dy * currentDist
+            val checkPos = Position(checkX, checkY)
 
-        // Atualizar posição e colisão
-        gameState.projectiles = gameState.projectiles.map { proj ->
-            if (!proj.isActive) return@map proj
-
-            val (dx, dy) = when (proj.direction) {
-                Direction.NORTH -> Pair(0f, -1f)
-                Direction.SOUTH -> Pair(0f, 1f)
-                Direction.EAST -> Pair(1f, 0f)
-                Direction.WEST -> Pair(-1f, 0f)
-                Direction.NORTH_EAST -> Pair(0.7f, -0.7f)
-                Direction.NORTH_WEST -> Pair(-0.7f, -0.7f)
-                Direction.SOUTH_EAST -> Pair(0.7f, 0.7f)
-                Direction.SOUTH_WEST -> Pair(-0.7f, 0.7f)
-            }
-
-            val nextX = proj.position.x + dx * proj.speed * deltaTimeSec
-            val nextY = proj.position.y + dy * proj.speed * deltaTimeSec
-            val nextPos = Position(nextX, nextY)
-
-            // Colisão com parede
-            val ix = nextX.toInt()
-            val iy = nextY.toInt()
+            // 1. Colisão com Parede
+            val ix = checkX.toInt()
+            val iy = checkY.toInt()
             if (ix < 0 || iy < 0 || ix >= maze.width || iy >= maze.height || maze.tiles[iy * maze.width + ix] == 1) {
-                projectilesToRemove.add(proj.id)
-                
-                // SPLASH VFX NA PAREDE
-                val splashVfx = VfxState(
-                    id = "splash_wall_${proj.id}",
-                    position = nextPos,
-                    type = VfxType.WATER_SPLASH,
-                    createdAtMs = System.currentTimeMillis(),
-                    durationMs = 250L
-                )
-                gameState.vfxList = gameState.vfxList + splashVfx
-                
-                return@map proj.copy(isActive = false)
+                impactPos = checkPos
+                break
             }
 
-            // Colisão com monstros
-            var hitMonster = false
-            gameState.monsters = gameState.monsters.map { monster ->
-                if (!monster.isActive) return@map monster
-                val dist = monster.position.dist(nextPos)
-                val radius = if (monster.isBoss) 1.2f else 0.6f
-                
-                if (dist < radius) {
-                    hitMonster = true
-                    val newHp = (monster.hp - 1).coerceAtLeast(0)
-                    monster.copy(hp = newHp, isActive = newHp > 0, lastHitTimeMs = currentTime)
-                } else {
-                    monster
+            // 2. Colisão com Monstros
+            val monster = gameState.monsters.find { m ->
+                if (!m.isActive) return@find false
+                val dist = m.position.dist(checkPos)
+                val radius = if (m.isBoss) 1.2f else 0.6f
+                dist < radius
+            }
+            if (monster != null) {
+                impactPos = checkPos
+                hitMonsterId = monster.id
+                break
+            }
+            
+            impactPos = checkPos
+        }
+
+        gameState.waterStreamDistance = currentDist
+        
+        // Extensão progressiva (cresce 30 tiles por segundo)
+        if (gameState.waterStreamVisualDistance < currentDist) {
+            gameState.waterStreamVisualDistance = (gameState.waterStreamVisualDistance + deltaTimeSec * 30f).coerceAtMost(currentDist)
+        } else {
+            gameState.waterStreamVisualDistance = currentDist
+        }
+        
+        // Calcula a posição de impacto visual (onde o jato termina no frame atual)
+        val visualImpactX = origin.x + dx * gameState.waterStreamVisualDistance
+        val visualImpactY = origin.y + dy * gameState.waterStreamVisualDistance
+        gameState.waterStreamImpactPos = Position(visualImpactX, visualImpactY)
+
+        // --- Dano Contínuo (apenas se o jato visual atingiu o alvo) ---
+        if (hitMonsterId != null && gameState.waterStreamVisualDistance >= currentDist - 0.1f) {
+            damageAccumulatorMs += (deltaTimeSec * 1000).toLong()
+            if (damageAccumulatorMs >= 150) {
+                damageAccumulatorMs = 0
+                gameState.monsters = gameState.monsters.map { m ->
+                    if (m.id == hitMonsterId && m.isActive) {
+                        val newHp = (m.hp - 1).coerceAtLeast(0)
+                        m.copy(hp = newHp, isActive = newHp > 0, lastHitTimeMs = System.currentTimeMillis())
+                    } else {
+                        m
+                    }
                 }
             }
+        } else {
+            damageAccumulatorMs = 0
+        }
 
-            if (hitMonster) {
-                projectilesToRemove.add(proj.id)
-                
-                // SPLASH VFX NO MONSTRO
-                val splashVfx = VfxState(
-                    id = "splash_monster_${proj.id}",
-                    position = nextPos,
-                    type = VfxType.WATER_SPLASH,
-                    createdAtMs = System.currentTimeMillis(),
-                    durationMs = 350L
-                )
-                gameState.vfxList = gameState.vfxList + splashVfx
-                
-                return@map proj.copy(isActive = false)
-            }
-
-            proj.copy(position = nextPos)
-        }.filter { it.isActive && it.id !in projectilesToRemove }
+        // --- VFX de Respingo no Impacto ---
+        if (System.currentTimeMillis() % 100 < 50) { // Gera partículas intermitentes para economia
+            val splashVfx = VfxState(
+                id = "stream_splash_${System.currentTimeMillis()}",
+                position = impactPos,
+                type = VfxType.WATER_SPLASH,
+                createdAtMs = System.currentTimeMillis(),
+                durationMs = 200L
+            )
+            gameState.vfxList = gameState.vfxList + splashVfx
+        }
     }
 }

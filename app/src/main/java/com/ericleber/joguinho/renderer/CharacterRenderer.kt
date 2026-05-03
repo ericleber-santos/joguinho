@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import kotlin.math.abs
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.math.roundToInt
 
 /**
@@ -36,28 +37,28 @@ data class MonsterAppearance(
 class CharacterRenderer {
 
     // ── Paleta do Herói ───────────────────────────────────────────────────────
-    private val heroSkin        = 0xFFE8B87A.toInt()
-    private val heroSkinDark    = 0xFFC9944A.toInt()
-    private val heroHat         = 0xFF7A5230.toInt()
-    private val heroHatBrim     = 0xFF5C3A1A.toInt()
-    private val heroShirt       = 0xFF4A7EC7.toInt()
-    private val heroShirtDark   = 0xFF2E5FA8.toInt()
-    private val heroPants       = 0xFF3A2E22.toInt()
-    private val heroShoes       = 0xFF2A1A0A.toInt()
-    private val heroOutline     = 0xFF1A0A00.toInt()
-    private val heroEye         = 0xFF1A0A00.toInt()
+    private val heroSkin = 0xFFE8B87A.toInt()
+    private val heroSkinDark = 0xFFC9944A.toInt()
+    private val heroHat = 0xFF7A5230.toInt()
+    private val heroHatBrim = 0xFF5C3A1A.toInt()
+    private val heroShirt = 0xFF4A7EC7.toInt()
+    private val heroShirtDark = 0xFF2E5FA8.toInt()
+    private val heroPants = 0xFF3A2E22.toInt()
+    private val heroShoes = 0xFF2A1A0A.toInt()
+    private val heroOutline = 0xFF1A0A00.toInt()
+    private val heroEye = 0xFF1A0A00.toInt()
 
     // ── Paleta do Cachorro ────────────────────────────────────────────────────
-    private val dogWhite        = 0xFFF0EEE8.toInt()
-    private val dogBlack        = 0xFF2A2520.toInt()
-    private val dogNose         = 0xFF2A1A1A.toInt()
-    private val dogEye          = 0xFF1A0A00.toInt()
-    private val dogTongue       = 0xFFE06060.toInt()
-    private val dogOutline      = 0xFF1A0A00.toInt()
+    private val dogWhite = 0xFFF0EEE8.toInt()
+    private val dogBlack = 0xFF2A2520.toInt()
+    private val dogNose = 0xFF2A1A1A.toInt()
+    private val dogEye = 0xFF1A0A00.toInt()
+    private val dogTongue = 0xFFE06060.toInt()
+    private val dogOutline = 0xFF1A0A00.toInt()
 
     // ── Estado de animação ────────────────────────────────────────────────────
-    private var animTick        = 0L      // tick global acumulado
-    private val paint           = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var animTick = 0L      // tick global acumulado
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     // Paints antigos (para compatibilidade com monstros e bananas)
     private val paintFill = Paint().apply {
@@ -99,6 +100,7 @@ class CharacterRenderer {
             com.ericleber.joguinho.core.Direction.WEST,
             com.ericleber.joguinho.core.Direction.NORTH_WEST,
             com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+
             else -> false
         }
         val u = tileSize / 20f
@@ -111,19 +113,21 @@ class CharacterRenderer {
 
         when (state) {
             AnimState.IDLE -> {
-                bodyBob  = if (sin(t * 2.0) > 0.3) u * 0.5f else 0f
+                bodyBob = if (sin(t * 2.0) > 0.3) u * 0.5f else 0f
                 legSwing = 0f
                 armSwing = 0f
             }
+
             AnimState.WALK -> {
                 val phase = sin(t * 6.0).toFloat()
-                bodyBob  = if (abs(phase) > 0.7f) u * 0.5f else 0f
+                bodyBob = if (abs(phase) > 0.7f) u * 0.5f else 0f
                 legSwing = phase
                 armSwing = -phase
             }
+
             AnimState.RUN -> {
                 val phase = sin(t * 12.0).toFloat()
-                bodyBob  = if ((animTick / 83) % 2 == 0L) u else 0f
+                bodyBob = if ((animTick / 83) % 2 == 0L) u else 0f
                 legSwing = phase * 1.5f
                 armSwing = -phase * 1.2f
             }
@@ -145,52 +149,59 @@ class CharacterRenderer {
         if (facingLeft) canvas.scale(-1f, 1f, cx, cy)
 
         val hatTop = cy - u * 9f + bodyBob
-        fillRect(canvas, cx - u * 4f, hatTop,          u * 8f, u * 3.5f, heroHat)
-        fillRect(canvas, cx - u * 2f, hatTop + u*3.5f, u * 8f,  u * 1f,   heroHatBrim) // Aba deslocada para frente
-        strokeRect(canvas, cx - u*4f, hatTop,           u*8f,   u*4.5f,  heroOutline, u*0.5f)
+        fillRect(canvas, cx - u * 4f, hatTop, u * 8f, u * 3.5f, heroHat)
+        fillRect(
+            canvas,
+            cx - u * 2f,
+            hatTop + u * 3.5f,
+            u * 8f,
+            u * 1f,
+            heroHatBrim
+        ) // Aba deslocada para frente
+        strokeRect(canvas, cx - u * 4f, hatTop, u * 8f, u * 4.5f, heroOutline, u * 0.5f)
 
         val headTop = cy - u * 7f + bodyBob
         fillRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroSkin)
-        strokeRect(canvas, cx - u*4f, headTop, u*8f, u*7f, heroOutline, u*0.5f)
+        strokeRect(canvas, cx - u * 4f, headTop, u * 8f, u * 7f, heroOutline, u * 0.5f)
 
         // Olhos deslocados para a direita (perfil)
-        fillRect(canvas, cx + u*0.5f, headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
-        fillRect(canvas, cx + u*2.5f,  headTop + u*2.5f, u*1.2f, u*1.2f, heroEye)
+        fillRect(canvas, cx + u * 0.5f, headTop + u * 2.5f, u * 1.2f, u * 1.2f, heroEye)
+        fillRect(canvas, cx + u * 2.5f, headTop + u * 2.5f, u * 1.2f, u * 1.2f, heroEye)
 
-        fillRect(canvas, cx + u*1.0f, headTop + u*5f, u*2.5f, u*0.7f, heroSkinDark)
+        fillRect(canvas, cx + u * 1.0f, headTop + u * 5f, u * 2.5f, u * 0.7f, heroSkinDark)
 
         val bodyTop = cy - u * 0f + bodyBob
         val armTopY = bodyTop + u * 0.5f
-        val armLen  = u * 5f
+        val armLen = u * 5f
 
         // Braço Esquerdo (atrás no perfil - sombra)
         val lArmX = cx - u * 3.8f
         val lArmSwingPx = armSwing * u * 1.5f
-        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u*2.2f, armLen, currentShirt)
-        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u*2.2f, armLen, heroOutline, u*0.5f)
-        fillCircle(canvas, lArmX + u*1.1f, armTopY + lArmSwingPx + armLen + u, u*1.3f, heroSkin)
+        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, currentShirt)
+        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
+        fillCircle(canvas, lArmX + u * 1.1f, armTopY + lArmSwingPx + armLen + u, u * 1.3f, heroSkin)
 
         // CORPO (Perfil 3/4: mais estreito para dar profundidade)
         fillRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, currentShirt)
-        strokeRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, heroOutline, u*0.5f)
+        strokeRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, heroOutline, u * 0.5f)
 
         // Detalhes da camisa (botões/gola)
-        fillRect(canvas, cx + u*1.0f, bodyTop + u*1f, u*1.2f, u*1.2f, heroShirtDark)
-        fillRect(canvas, cx + u*1.0f, bodyTop + u*3f, u*1.2f, u*1.2f, heroShirtDark)
+        fillRect(canvas, cx + u * 1.0f, bodyTop + u * 1f, u * 1.2f, u * 1.2f, heroShirtDark)
+        fillRect(canvas, cx + u * 1.0f, bodyTop + u * 3f, u * 1.2f, u * 1.2f, heroShirtDark)
 
         // Braço Direito (à frente no perfil)
         val rArmX = cx - u * 1.5f // Recuado para alinhar com a nuca, não com o nariz
         val rArmSwingPx = -armSwing * u * 1.5f
-        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, currentShirt)
-        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u*2.2f, armLen, heroOutline, u*0.5f)
-        
-        val handX = rArmX + u*1.1f
+        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, currentShirt)
+        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
+
+        val handX = rArmX + u * 1.1f
         val handY = armTopY + rArmSwingPx + armLen + u
-        fillCircle(canvas, handX, handY, u*1.3f, heroSkin)
+        fillCircle(canvas, handX, handY, u * 1.3f, heroSkin)
 
         // PISTOLINHA D'ÁGUA (Wap Style / Super Soaker)
         canvas.save()
-        
+
         // Calcula o ângulo da arma baseado na direção real
         // Como o canvas já está flipado se facingLeft for true, lidamos com ângulos relativos ao "frente"
         val rotationAngle = when (direction) {
@@ -200,46 +211,71 @@ class CharacterRenderer {
             com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
             else -> 0f
         }
-        
+
         // Ajuste fino para Idle
         val idleBob = if (state == AnimState.IDLE) 5f else 0f
         canvas.rotate(rotationAngle + idleBob, handX, handY)
-        
+
         // Corpo da arma (Translúcido / Plástico)
         val gunW = u * 8f
         val gunH = u * 3f
         paint.color = Color.argb(180, 200, 230, 255) // Azul claro translúcido
-        canvas.drawRoundRect(RectF(handX - u, handY - u*2, handX + gunW, handY + u), u, u, paint)
-        
+        canvas.drawRoundRect(RectF(handX - u, handY - u * 2, handX + gunW, handY + u), u, u, paint)
+
         // Tanque de água (Verde limão néon)
-        paint.color = Color.rgb(173, 255, 47) 
-        canvas.drawRoundRect(RectF(handX, handY - u*3.5f, handX + u*5f, handY - u*1.5f), u, u, paint)
-        
+        paint.color = Color.rgb(173, 255, 47)
+        canvas.drawRoundRect(
+            RectF(handX, handY - u * 3.5f, handX + u * 5f, handY - u * 1.5f),
+            u,
+            u,
+            paint
+        )
+
         // Cano da arma (Cinza escuro / Wap nozzle)
         paint.color = Color.DKGRAY
-        canvas.drawRect(handX + gunW - u, handY - u*1.2f, handX + gunW + u*2f, handY - u*0.3f, paint)
-        
+        canvas.drawRect(
+            handX + gunW - u,
+            handY - u * 1.2f,
+            handX + gunW + u * 2f,
+            handY - u * 0.3f,
+            paint
+        )
+
         // Detalhes (Gatilho e listras)
         paint.color = Color.RED
-        canvas.drawRect(handX + u*2, handY, handX + u*3, handY + u*1.5f, paint)
-        
+        canvas.drawRect(handX + u * 2, handY, handX + u * 3, handY + u * 1.5f, paint)
+
         canvas.restore()
 
         val legTopY = bodyTop + u * 7f
-        val legLen  = u * 5f
-        val legW    = u * 2.5f
+        val legLen = u * 5f
+        val legW = u * 2.5f
         val legSwingPx = legSwing * u * 2.5f // Balanço mais amplo para movimento dinâmico
 
         // Pernas (Centralizadas sob o tronco no perfil)
         // Perna 1 (Trás)
         fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u*0.5f)
-        fillRect(canvas, cx - u * 2.8f, legTopY + legSwingPx + legLen, legW + u, u*1.8f, heroShoes)
+        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(
+            canvas,
+            cx - u * 2.8f,
+            legTopY + legSwingPx + legLen,
+            legW + u,
+            u * 1.8f,
+            heroShoes
+        )
 
         // Perna 2 (Frente)
         fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u*0.5f)
-        fillRect(canvas, cx + u * 0.2f, legTopY - legSwingPx + legLen, legW + u, u*1.8f, heroShoes)
+        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(
+            canvas,
+            cx + u * 0.2f,
+            legTopY - legSwingPx + legLen,
+            legW + u,
+            u * 1.8f,
+            heroShoes
+        )
 
         val shadowY = cy + u * 12f
         drawShadow(canvas, cx, shadowY, u * 5f, u)
@@ -270,23 +306,25 @@ class CharacterRenderer {
         when (state) {
             AnimState.IDLE -> {
                 val cycle = (animTick / 500) % 3
-                bodyBob   = 0f
-                legAnim   = 0f
-                tailWag   = if (cycle < 1) u * 1.5f else if (cycle < 2) -u * 1.5f else 0f
+                bodyBob = 0f
+                legAnim = 0f
+                tailWag = if (cycle < 1) u * 1.5f else if (cycle < 2) -u * 1.5f else 0f
                 tongueOut = cycle == 2L
             }
+
             AnimState.WALK -> {
                 val phase = sin(t * 6.0).toFloat()
-                bodyBob   = if (abs(phase) > 0.7f) u * 0.5f else 0f
-                legAnim   = phase
-                tailWag   = phase * u * 2f
+                bodyBob = if (abs(phase) > 0.7f) u * 0.5f else 0f
+                legAnim = phase
+                tailWag = phase * u * 2f
                 tongueOut = phase > 0.5f
             }
+
             AnimState.RUN -> {
                 val phase = sin(t * 12.0).toFloat()
-                bodyBob   = if ((animTick / 83) % 2 == 0L) u * 0.8f else 0f
-                legAnim   = phase * 1.5f
-                tailWag   = phase * u * 3f
+                bodyBob = if ((animTick / 83) % 2 == 0L) u * 0.8f else 0f
+                legAnim = phase * 1.5f
+                tailWag = phase * u * 3f
                 tongueOut = true
             }
         }
@@ -310,49 +348,73 @@ class CharacterRenderer {
         paint.style = Paint.Style.FILL
 
         val bodyLeft = cx - u * 6f
-        val bodyTop  = renderCy - u * 3f + bodyBob
-        val bodyW    = u * 12f
-        val bodyH    = u * 6f
+        val bodyTop = renderCy - u * 3f + bodyBob
+        val bodyW = u * 12f
+        val bodyH = u * 6f
         fillRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u * 1.5f, dogWhite)
-        strokeRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u*1.5f, dogOutline, u*0.5f)
+        strokeRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u * 1.5f, dogOutline, u * 0.5f)
 
-        fillCircle(canvas, cx - u*2f, bodyTop + u*1.5f, u*1.2f, dogBlack)
-        fillCircle(canvas, cx + u*3f, bodyTop + u*3f,   u*1f,   dogBlack)
+        fillCircle(canvas, cx - u * 2f, bodyTop + u * 1.5f, u * 1.2f, dogBlack)
+        fillCircle(canvas, cx + u * 3f, bodyTop + u * 3f, u * 1f, dogBlack)
 
         val headCX = cx + u * 7f
         val headCY = renderCy - u * 2f + bodyBob
         fillCircle(canvas, headCX, headCY, u * 4f, dogWhite)
-        strokeCircle(canvas, headCX, headCY, u * 4f, dogOutline, u*0.5f)
+        strokeCircle(canvas, headCX, headCY, u * 4f, dogOutline, u * 0.5f)
 
-        fillRoundRect(canvas, headCX + u*1f, headCY - u*5f, u*3f, u*3.5f, u, dogBlack)
-        fillRoundRect(canvas, headCX - u*2f, headCY - u*5f, u*2f, u*3f,   u, dogWhite)
+        fillRoundRect(canvas, headCX + u * 1f, headCY - u * 5f, u * 3f, u * 3.5f, u, dogBlack)
+        fillRoundRect(canvas, headCX - u * 2f, headCY - u * 5f, u * 2f, u * 3f, u, dogWhite)
 
-        fillCircle(canvas, headCX + u*1.5f, headCY - u*0.5f, u*0.8f, dogEye)
-        fillCircle(canvas, headCX + u*2f, headCY - u*1f, u*0.3f, 0xFFFFFFFF.toInt())
+        fillCircle(canvas, headCX + u * 1.5f, headCY - u * 0.5f, u * 0.8f, dogEye)
+        fillCircle(canvas, headCX + u * 2f, headCY - u * 1f, u * 0.3f, 0xFFFFFFFF.toInt())
 
-        fillRoundRect(canvas, headCX - u*2f, headCY + u*0.5f, u*3f, u*2.5f, u, 0xFFF5EDD5.toInt())
-        fillCircle(canvas, headCX - u*0.5f, headCY + u*1f, u*0.8f, dogNose)
+        fillRoundRect(
+            canvas,
+            headCX - u * 2f,
+            headCY + u * 0.5f,
+            u * 3f,
+            u * 2.5f,
+            u,
+            0xFFF5EDD5.toInt()
+        )
+        fillCircle(canvas, headCX - u * 0.5f, headCY + u * 1f, u * 0.8f, dogNose)
 
         if (tongueOut) {
-            fillRoundRect(canvas, headCX - u*1.5f, headCY + u*2.5f, u*2f, u*2f, u, dogTongue)
+            fillRoundRect(
+                canvas,
+                headCX - u * 1.5f,
+                headCY + u * 2.5f,
+                u * 2f,
+                u * 2f,
+                u,
+                dogTongue
+            )
         }
 
-        fillCircle(canvas, headCX - u*1.5f, headCY - u*1.5f, u*1.5f, dogBlack)
+        fillCircle(canvas, headCX - u * 1.5f, headCY - u * 1.5f, u * 1.5f, dogBlack)
 
         val legTopY = bodyTop + bodyH - u
-        val legH    = u * 4f
-        val legW    = u * 2f
-        val animPx  = legAnim * u * 1.5f
+        val legH = u * 4f
+        val legW = u * 2f
+        val animPx = legAnim * u * 1.5f
 
-        fillRoundRect(canvas, cx - u*5f,  legTopY - animPx, legW, legH, u*0.5f, dogWhite)
-        fillRoundRect(canvas, cx - u*2.5f, legTopY + animPx, legW, legH, u*0.5f, dogWhite)
-        fillRoundRect(canvas, cx + u*1f,  legTopY + animPx, legW, legH, u*0.5f, dogWhite)
-        fillRoundRect(canvas, cx + u*3.5f, legTopY - animPx, legW, legH, u*0.5f, dogWhite)
+        fillRoundRect(canvas, cx - u * 5f, legTopY - animPx, legW, legH, u * 0.5f, dogWhite)
+        fillRoundRect(canvas, cx - u * 2.5f, legTopY + animPx, legW, legH, u * 0.5f, dogWhite)
+        fillRoundRect(canvas, cx + u * 1f, legTopY + animPx, legW, legH, u * 0.5f, dogWhite)
+        fillRoundRect(canvas, cx + u * 3.5f, legTopY - animPx, legW, legH, u * 0.5f, dogWhite)
 
         listOf(
-            cx - u*5f, cx - u*2.5f, cx + u*1f, cx + u*3.5f
+            cx - u * 5f, cx - u * 2.5f, cx + u * 1f, cx + u * 3.5f
         ).forEachIndexed { _, lx ->
-            fillRoundRect(canvas, lx - u*0.3f, legTopY + legH, legW + u*0.6f, u*1.5f, u*0.7f, dogBlack)
+            fillRoundRect(
+                canvas,
+                lx - u * 0.3f,
+                legTopY + legH,
+                legW + u * 0.6f,
+                u * 1.5f,
+                u * 0.7f,
+                dogBlack
+            )
         }
 
         val shadowY = renderCy + u * 9f
@@ -371,20 +433,45 @@ class CharacterRenderer {
         canvas.drawRect(x, y, x + w, y + h, paint)
     }
 
-    private fun strokeRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, color: Int, stroke: Float) {
+    private fun strokeRect(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        color: Int,
+        stroke: Float
+    ) {
         paint.color = color
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = stroke
         canvas.drawRect(x, y, x + w, y + h, paint)
     }
 
-    private fun fillRoundRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float, color: Int) {
+    private fun fillRoundRect(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        r: Float,
+        color: Int
+    ) {
         paint.color = color
         paint.style = Paint.Style.FILL
         canvas.drawRoundRect(RectF(x, y, x + w, y + h), r, r, paint)
     }
 
-    private fun strokeRoundRect(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, r: Float, color: Int, stroke: Float) {
+    private fun strokeRoundRect(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        r: Float,
+        color: Int,
+        stroke: Float
+    ) {
         paint.color = color
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = stroke
@@ -397,7 +484,14 @@ class CharacterRenderer {
         canvas.drawCircle(cx, cy, radius, paint)
     }
 
-    private fun strokeCircle(canvas: Canvas, cx: Float, cy: Float, radius: Float, color: Int, stroke: Float) {
+    private fun strokeCircle(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        color: Int,
+        stroke: Float
+    ) {
         paint.color = color
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = stroke
@@ -426,11 +520,11 @@ class CharacterRenderer {
         val t = frame.toFloat() / 8f
         val bob = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
         val cx = x
-        
+
         // Feedback de dano: flash vermelho (MECH-04 / UI-04)
         val actualBodyColor = if (appearance.isHit) Color.RED else appearance.bodyColor
         val actualAppearance = appearance.copy(bodyColor = actualBodyColor)
-        
+
         val yOffset = when (appearance.shapeVariant % 4) {
             3 -> -4 * s
             else -> -2 * s
@@ -451,7 +545,7 @@ class CharacterRenderer {
             paintFill.color = Color.argb(60, 0, 0, 0)
             val auraBase = (14 + Math.sin(t * Math.PI * 3) * 3) * s
             canvas.drawCircle(cx, cy, auraBase.toFloat(), paintFill)
-            
+
             paintContorno.color = Color.argb(150, 200, 0, 0)
             paintContorno.strokeWidth = 3f * s
             val auraRaio = (16 + Math.sin(t * Math.PI * 5) * 2) * s
@@ -462,7 +556,7 @@ class CharacterRenderer {
             paintContorno.strokeWidth = 1.5f * s
             val auraRaio = (10 + Math.sin(t * Math.PI * 6) * 1.5) * s
             canvas.drawCircle(cx, cy, auraRaio.toFloat(), paintContorno)
-            
+
             val numRaios = 4
             for (i in 0 until numRaios) {
                 val ang = (i * (360 / numRaios) + t * 360) * Math.PI / 180.0
@@ -478,7 +572,14 @@ class CharacterRenderer {
         }
     }
 
-    private fun monsterRedondo(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
+    private fun monsterRedondo(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        s: Float,
+        t: Float,
+        app: MonsterAppearance
+    ) {
         paintFill.color = app.bodyColor
         canvas.drawCircle(cx, cy, 9 * s, paintFill)
         paintFill.color = escurecer(app.bodyColor, 0.20f)
@@ -496,14 +597,27 @@ class CharacterRenderer {
         canvas.drawCircle(cx + 4 * s, cy - 2 * s, 1.5f * s, paintFill)
         paintContorno.color = Color.rgb(20, 0, 0)
         paintContorno.strokeWidth = 1.5f * s
-        canvas.drawArc(RectF(cx - 4 * s, cy + 1 * s, cx + 4 * s, cy + 6 * s), 0f, 180f, false, paintContorno)
+        canvas.drawArc(
+            RectF(cx - 4 * s, cy + 1 * s, cx + 4 * s, cy + 6 * s),
+            0f,
+            180f,
+            false,
+            paintContorno
+        )
         paintContorno.strokeWidth = 1.5f
         paintContorno.color = escurecer(app.bodyColor, 0.50f)
         paintContorno.strokeWidth = 1.2f
         canvas.drawCircle(cx, cy, 9 * s, paintContorno)
     }
 
-    private fun monsterEspinhoso(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
+    private fun monsterEspinhoso(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        s: Float,
+        t: Float,
+        app: MonsterAppearance
+    ) {
         paintFill.color = app.bodyColor
         path.reset()
         for (i in 0 until 8) {
@@ -530,7 +644,14 @@ class CharacterRenderer {
         canvas.drawPath(path, paintContorno)
     }
 
-    private fun monsterQuadrado(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
+    private fun monsterQuadrado(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        s: Float,
+        t: Float,
+        app: MonsterAppearance
+    ) {
         paintFill.color = app.bodyColor
         canvas.drawRect(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy + 9 * s, paintFill)
         paintFill.color = escurecer(app.bodyColor, 0.22f)
@@ -551,7 +672,14 @@ class CharacterRenderer {
         canvas.drawRect(cx - 9 * s, cy - 9 * s, cx + 9 * s, cy + 9 * s, paintContorno)
     }
 
-    private fun monsterAlto(canvas: Canvas, cx: Float, cy: Float, s: Float, t: Float, app: MonsterAppearance) {
+    private fun monsterAlto(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        s: Float,
+        t: Float,
+        app: MonsterAppearance
+    ) {
         paintFill.color = app.bodyColor
         canvas.drawRect(cx - 5 * s, cy - 13 * s, cx + 5 * s, cy + 8 * s, paintFill)
         paintFill.color = clarear(app.bodyColor, 0.08f)
@@ -614,16 +742,22 @@ class CharacterRenderer {
 
         paintFill.color = Color.rgb(80, 50, 10)
         canvas.drawRect(cx - 12 * s, cy - 8 * s, cx - 9 * s, cy - 4 * s, paintFill)
-        
+
         paintContorno.color = Color.rgb(120, 80, 0)
         paintContorno.strokeWidth = 2f * s
         canvas.drawPath(path, paintContorno)
         paintContorno.strokeWidth = 1.5f
     }
 
-    fun renderWaterProjectile(canvas: Canvas, x: Float, y: Float, tileW: Float, direction: com.ericleber.joguinho.core.Direction) {
+    fun renderWaterProjectile(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        tileW: Float,
+        direction: com.ericleber.joguinho.core.Direction
+    ) {
         val s = tileW / 40f
-        
+
         canvas.save()
         val angle = when (direction) {
             com.ericleber.joguinho.core.Direction.NORTH -> 270f
@@ -636,18 +770,32 @@ class CharacterRenderer {
             com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 135f
         }
         canvas.rotate(angle, x, y)
-        
+
         // Fluxo contínuo (Wap style): Mais longo e com variação de espessura
         val streamLength = 16 * s // Aumentado para parecer um fluxo
         val timePhase = (animTick % 200) / 200f
         val thickness = (1.5f + sin(timePhase * Math.PI.toFloat() * 2f) * 0.5f) * s
-        
+
         paintFill.color = Color.argb(160, 100, 200, 255) // Azul água
-        canvas.drawRoundRect(RectF(x - streamLength/2, y - thickness, x + streamLength/2, y + thickness), thickness, thickness, paintFill)
-        
+        canvas.drawRoundRect(
+            RectF(
+                x - streamLength / 2,
+                y - thickness,
+                x + streamLength / 2,
+                y + thickness
+            ), thickness, thickness, paintFill
+        )
+
         paintFill.color = Color.WHITE // Núcleo de pressão cavitando
-        canvas.drawRoundRect(RectF(x - streamLength/2 + 2*s, y - thickness/3f, x + streamLength/2 - 2*s, y + thickness/3f), thickness/3f, thickness/3f, paintFill)
-        
+        canvas.drawRoundRect(
+            RectF(
+                x - streamLength / 2 + 2 * s,
+                y - thickness / 3f,
+                x + streamLength / 2 - 2 * s,
+                y + thickness / 3f
+            ), thickness / 3f, thickness / 3f, paintFill
+        )
+
         canvas.restore()
     }
 
@@ -655,9 +803,9 @@ class CharacterRenderer {
         val s = tileW / 40f
         val alpha = (255 * (1f - progress)).toInt()
         val radius = 5 * s + progress * 15 * s
-        
+
         paintFill.color = Color.argb(alpha, 150, 220, 255)
-        
+
         // Desenha várias gotas saindo do centro
         val numDrops = 6
         for (i in 0 until numDrops) {
@@ -667,24 +815,86 @@ class CharacterRenderer {
             val dropSize = 3 * s * (1f - progress)
             canvas.drawCircle(x + dx, y + dy, dropSize, paintFill)
         }
-        
+
         // Centro do splash
         paintFill.color = Color.argb(alpha, 255, 255, 255)
         canvas.drawCircle(x, y, 4 * s * (1f - progress), paintFill)
     }
 
-    fun renderWaterMuzzle(canvas: Canvas, x: Float, y: Float, tileW: Float, progress: Float, angle: Float) {
+    fun renderWaterMuzzle(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        tileW: Float,
+        progress: Float,
+        angle: Float
+    ) {
         val s = tileW / 40f
         val alpha = (200 * (1f - progress)).toInt()
-        
+
         canvas.save()
         canvas.rotate(angle, x, y)
-        
+
         paintFill.color = Color.argb(alpha, 200, 240, 255)
         val w = 15 * s * progress
         val h = 8 * s * progress
-        canvas.drawOval(RectF(x, y - h/2, x + w, y + h/2), paintFill)
-        
+        canvas.drawOval(RectF(x, y - h / 2, x + w, y + h / 2), paintFill)
+
         canvas.restore()
+    }
+
+    /**
+     * Renderiza o esguicho contínuo de água com efeito de pressão.
+     */
+    fun drawWaterStream(
+        canvas: Canvas,
+        originX: Float,
+        originY: Float,
+        targetX: Float,
+        targetY: Float,
+        tileSize: Float
+    ) {
+        val streamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+        }
+
+        val time = animTick / 1000f
+        val steps = 12
+        val streamPath = Path()
+        streamPath.moveTo(originX, originY)
+
+        val dx = targetX - originX
+        val dy = targetY - originY
+
+        for (i in 1..steps) {
+            val t = i.toFloat() / steps
+            val px = originX + dx * t
+            val py = originY + dy * t
+
+            // Efeito de ondulação senoidal para simular pressão da água
+            val wave = sin(t * 10f - time * 20f) * (tileSize * 0.05f)
+
+            // Perpendicular à direção do jato
+            val perpX = -dy / tileSize
+            val perpY = dx / tileSize
+            val mag = kotlin.math.sqrt(perpX * perpX + perpY * perpY).coerceAtLeast(0.01f)
+
+            val offsetX = (perpX / mag) * wave
+            val offsetY = (perpY / mag) * wave
+
+            streamPath.lineTo(px + offsetX, py + offsetY)
+        }
+
+        // Desenha camadas para o efeito "aqua"
+        // 1. Base translúcida larga
+        streamPaint.color = 0x4444AAFF.toInt()
+        streamPaint.strokeWidth = tileSize * 0.15f
+        canvas.drawPath(streamPath, streamPaint)
+
+        // 2. Núcleo brilhante fino
+        streamPaint.color = 0xAAFFFFFF.toInt()
+        streamPaint.strokeWidth = tileSize * 0.05f
+        canvas.drawPath(streamPath, streamPaint)
     }
 }
