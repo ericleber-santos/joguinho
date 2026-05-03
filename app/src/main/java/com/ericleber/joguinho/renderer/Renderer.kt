@@ -445,22 +445,23 @@ class Renderer(
         if (gameState.isShooting && gameState.waterStreamImpactPos != null) {
             val impact = gameState.waterStreamImpactPos!!
             
-            // Origem baseada na direção (ponta da arma)
-            val (offX, offY) = when (gameState.heroDirection) {
-                com.ericleber.joguinho.core.Direction.NORTH -> Pair(0.1f, -0.6f)
-                com.ericleber.joguinho.core.Direction.SOUTH -> Pair(0.1f, 0.6f)
-                com.ericleber.joguinho.core.Direction.EAST -> Pair(0.6f, 0.1f)
-                com.ericleber.joguinho.core.Direction.WEST -> Pair(-0.6f, 0.1f)
-                else -> Pair(0.3f, 0.3f)
+            val heroAnimState = when {
+                gameState.heroIsSlowedDown -> AnimState.WALK
+                gameState.heroHasSpeedBuff -> AnimState.RUN
+                gameState.heroStoppedDurationSec > 0.05f -> AnimState.IDLE
+                else -> AnimState.WALK
             }
             
-            val ox = (gameState.heroPosition.x + offX) * tileW + cameraX + tileW / 2f
-            val oy = (gameState.heroPosition.y + offY) * tileH + cameraY + tileH / 2f
+            val (ox, oy) = characterRenderer.getGunTipPosition(
+                heroSx, heroSy, tileW, heroAnimState, gameState.heroDirection
+            )
+            
             val tx = impact.x * tileW + cameraX + tileW / 2f
             val ty = impact.y * tileH + cameraY + tileH / 2f
 
             renderList.add(object : Renderable {
-                override val ySort: Float = gameState.heroPosition.y + 0.75f
+                // Bias de +0.6f para garantir que o jato fique sempre à frente do corpo do herói (que é +0.5f)
+                override val ySort: Float = gameState.heroPosition.y + 0.6f
                 override fun render(c: Canvas) {
                     characterRenderer.drawWaterStream(c, ox, oy, tx, ty, tileW)
                 }

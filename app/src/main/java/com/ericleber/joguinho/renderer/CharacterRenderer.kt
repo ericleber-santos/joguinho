@@ -283,6 +283,79 @@ class CharacterRenderer {
         canvas.restore()
     }
 
+    /**
+     * Calcula a posição da ponta da pistola em coordenadas de tela.
+     */
+    fun getGunTipPosition(
+        cx: Float,
+        cy: Float,
+        tileSize: Float,
+        state: AnimState,
+        direction: com.ericleber.joguinho.core.Direction
+    ): Pair<Float, Float> {
+        val facingLeft = when (direction) {
+            com.ericleber.joguinho.core.Direction.WEST,
+            com.ericleber.joguinho.core.Direction.NORTH_WEST,
+            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+            else -> false
+        }
+        val u = tileSize / 20f
+        val t = animTick / 1000f
+
+        val bodyBob = when (state) {
+            AnimState.IDLE -> if (sin(t * 2.0) > 0.3) u * 0.5f else 0f
+            AnimState.WALK -> {
+                val phase = sin(t * 6.0).toFloat()
+                if (abs(phase) > 0.7f) u * 0.5f else 0f
+            }
+            AnimState.RUN -> if ((animTick / 83) % 2 == 0L) u else 0f
+        }
+
+        val armSwing = when (state) {
+            AnimState.IDLE -> 0f
+            AnimState.WALK -> -sin(t * 6.0).toFloat()
+            AnimState.RUN -> -sin(t * 12.0).toFloat() * 1.2f
+        }
+
+        val bodyTop = cy + bodyBob
+        val armTopY = bodyTop + u * 0.5f
+        val armLen = u * 5f
+        val rArmX = cx - u * 1.5f
+        val rArmSwingPx = -armSwing * u * 1.5f
+        
+        var hX = rArmX + u * 1.1f
+        var hY = armTopY + rArmSwingPx + armLen + u
+
+        val rotationAngle = when (direction) {
+            com.ericleber.joguinho.core.Direction.NORTH -> -90f
+            com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+            com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
+            com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
+            else -> 0f
+        }
+        val idleBob = if (state == AnimState.IDLE) 5f else 0f
+        val angleDeg = rotationAngle + idleBob
+        val angleRad = Math.toRadians(angleDeg.toDouble())
+
+        // Vetor da ponta da arma relativo à mão
+        val tipRelX = u * 10f
+        val tipRelY = -u * 0.75f
+
+        // Rotação 2D
+        val cosA = Math.cos(angleRad).toFloat()
+        val sinA = Math.sin(angleRad).toFloat()
+        
+        var finalTipX = hX + (tipRelX * cosA - tipRelY * sinA)
+        var finalTipY = hY + (tipRelX * sinA + tipRelY * cosA)
+
+        // Se estiver virado para a esquerda, reflete em torno do eixo vertical central (cx)
+        if (facingLeft) {
+            finalTipX = cx - (finalTipX - cx)
+        }
+
+        return Pair(finalTipX, finalTipY)
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // CACHORRO
     // ─────────────────────────────────────────────────────────────────────────
