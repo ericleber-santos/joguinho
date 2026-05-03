@@ -357,22 +357,40 @@ class CharacterRenderer {
                 else -> false
             }
         }
+        // --- CÁLCULO DE GEOMETRIA (Espelha o drawHero) ---
         val u = tileSize / 20f
-        
+        val t = animTick / 1000f
+        val bodyBob = when (state) {
+            AnimState.IDLE -> if (kotlin.math.sin(t * 2.0) > 0.3) u * 0.5f else 0f
+            AnimState.WALK -> {
+                val phase = kotlin.math.sin(t * 6.0).toFloat()
+                if (kotlin.math.abs(phase) > 0.7f) u * 0.5f else 0f
+            }
+            AnimState.RUN -> if ((animTick / 83) % 2 == 0L) u else 0f
+            else -> 0f
+        }
         val vShift = -u * 9f
-        val bodyTop = cy + vShift
+        val bodyTop = cy + bodyBob + vShift
         val armTopY = bodyTop + u * 0.5f
-        val rArmX = cx - u * 1.5f
-        val armPivotX = rArmX + u * 1.1f
-        val armPivotY = armTopY
         val armLen = u * 5f
-        val holdAngle = -35f
-
-        // --- DESENHO DA ARMA (Lógica de rotação idêntica ao drawHero) ---
-        val hX = armPivotX
-        val hY = armPivotY + armLen
         
-        val rotationAngle = if (isShooting) {
+        val rArmX = cx - u * 1.5f
+        val pivotX = rArmX + u * 1.1f
+        val pivotY = armTopY
+        
+        val holdAngleDeg = -35f
+        val holdAngleRad = Math.toRadians(holdAngleDeg.toDouble()).toFloat()
+        
+        // Posição da mão (hX, hY) após a rotação do braço (holdAngle) ao redor do pivot
+        // No sistema local do braço, a mão está em (0, armLen)
+        val hX_rel = -armLen * kotlin.math.sin(holdAngleRad)
+        val hY_rel = armLen * kotlin.math.cos(holdAngleRad)
+        
+        val hX_world = pivotX + hX_rel
+        val hY_world = pivotY + hY_rel
+        
+        // Rotação da arma relativa à mão
+        val weaponRotationDeg = if (isShooting) {
             var deg = Math.toDegrees(shootingAngle.toDouble()).toFloat()
             if (facingLeft) {
                 deg = if (deg >= 0) 180f - deg else -180f - deg
@@ -388,21 +406,27 @@ class CharacterRenderer {
             }
         }
         
-        val totalRot = Math.toRadians((rotationAngle - holdAngle).toDouble())
-        val cosR = kotlin.math.cos(totalRot).toFloat()
-        val sinR = kotlin.math.sin(totalRot).toFloat()
+        // Ângulo final da arma (Rotação absoluta na tela)
+        val finalWeaponRotRad = Math.toRadians(weaponRotationDeg.toDouble()).toFloat()
         
-        // Ponta da arma relativa a hX, hY (antes da rotação da arma)
-        val tipRelY = -u * 0.5f // Levemente acima do centro do cano
+        // Ponta da arma relativa à mão (bocal da pistola)
+        val gunW = u * 8f
+        val tipRelX = gunW + u * 2f // Muzzle end no drawHero
+        val tipRelY = -u * 0.75f   // Centro vertical do cano
         
-        // Se facingLeft for true, o scale(-1, 1) inverte o X.
-        val worldTipRelX = if (facingLeft) -u * 8f else u * 8f
+        // Aplica a rotação da arma relativa à mão
+        val tipX_rot = tipRelX * kotlin.math.cos(finalWeaponRotRad) - tipRelY * kotlin.math.sin(finalWeaponRotRad)
+        val tipY_rot = tipRelX * kotlin.math.sin(finalWeaponRotRad) + tipRelY * kotlin.math.cos(finalWeaponRotRad)
         
-        // Aplica rotação da arma
-        val rotatedTipX = worldTipRelX * cosR - tipRelY * sinR
-        val rotatedTipY = worldTipRelX * sinR + tipRelY * cosR
+        var finalX = hX_world + tipX_rot
+        var finalY = hY_world + tipY_rot
         
-        return Pair(hX + rotatedTipX, hY + rotatedTipY)
+        // Se facingLeft for true, o herói é espelhado horizontalmente em torno de cx
+        if (facingLeft) {
+            finalX = cx - (finalX - cx)
+        }
+        
+        return Pair(finalX, finalY)
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -808,13 +808,50 @@ class GameLogic(private val gameState: GameState) {
         val maxDistance = 7.0f // Distância máxima do esguicho
         val step = 0.2f // Precisão do raio
         
+        // --- Cálculo Preciso da Origem (Ponta da Arma) ---
+        val u = 0.05f
+        val facingLeft = kotlin.math.abs(gameState.shootingAngle) > Math.PI / 2
+        
+        // Ombro (Pivot do braço) relativo ao centro do herói
+        val pivotX = -0.02f
+        val pivotY = -0.425f
+        
+        // Mão relativa ao ombro (Braço estendido com holdAngle de -35º)
+        val holdAngleDeg = -35f
+        val holdAngleRad = Math.toRadians(holdAngleDeg.toDouble()).toFloat()
+        val armLen = 0.25f // 5u
+        val hX_hand = pivotX - armLen * kotlin.math.sin(holdAngleRad)
+        val hY_hand = pivotY + armLen * kotlin.math.cos(holdAngleRad)
+        
+        // Rotação da arma (Compensa facingLeft para bater com o Renderer)
+        var weaponRotDeg = Math.toDegrees(gameState.shootingAngle.toDouble()).toFloat()
+        if (facingLeft) {
+            weaponRotDeg = if (weaponRotDeg >= 0) 180f - weaponRotDeg else -180f - weaponRotDeg
+        }
+        val finalWeaponRotRad = Math.toRadians(weaponRotDeg.toDouble()).toFloat()
+        
+        // Ponta da arma (Muzzle) relativa à mão (10u de comprimento, -0.75u de altura)
+        val tipRelX = 0.5f 
+        val tipRelY = -0.0375f
+        
+        val tipX_rot = tipRelX * kotlin.math.cos(finalWeaponRotRad) - tipRelY * kotlin.math.sin(finalWeaponRotRad)
+        val tipY_rot = tipRelX * kotlin.math.sin(finalWeaponRotRad) + tipRelY * kotlin.math.cos(finalWeaponRotRad)
+        
+        var finalOffX = hX_hand + tipX_rot
+        var finalOffY = hY_hand + tipY_rot
+        
+        // Aplica o espelhamento se estiver olhando para a esquerda
+        if (facingLeft) {
+            finalOffX = -finalOffX
+        }
+        
         val dx = kotlin.math.cos(gameState.shootingAngle.toDouble()).toFloat()
         val dy = kotlin.math.sin(gameState.shootingAngle.toDouble()).toFloat()
-
-        // Origem aproximada (ponta da arma)
-        val offX = dx * 0.5f
-        val offY = dy * 0.5f
-        val origin = Position(gameState.heroPosition.x + offX, gameState.heroPosition.y + offY)
+        
+        val origin = Position(
+            gameState.heroPosition.x + 0.5f + finalOffX,
+            gameState.heroPosition.y + 0.5f + finalOffY
+        )
         
         var currentDist = 0f
         var impactPos = origin
