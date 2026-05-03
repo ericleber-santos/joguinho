@@ -634,7 +634,7 @@ class GameLogic(private val gameState: GameState) {
                         gameState.phase = GamePhase.GAME_OVER
                     } else {
                         // Respawn no início do mapa para dar chance
-                        gameState.heroPosition = Position(maze.startIndex % maze.width, maze.startIndex / maze.width)
+                        gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
                         gameState.heroIsSlowedDown = false
                         gameState.heroSlowdownRemainingMs = 0
                     }

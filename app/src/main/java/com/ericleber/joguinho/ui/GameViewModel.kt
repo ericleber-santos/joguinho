@@ -136,8 +136,8 @@ class GameViewModel : ViewModel() {
         val maze = mapaGerado.maze
         val startX = maze.startIndex % maze.width
         val startY = maze.startIndex / maze.width
-        gameState.heroPosition = Position(startX, startY)
-        gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1), startY)
+        gameState.heroPosition = Position(startX + 0.5f, startY + 0.5f)
+        gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1) + 0.5f, startY + 0.5f)
         
         // Garante que a fase volte para PLAYING após a geração
         gameState.phase = GamePhase.PLAYING
