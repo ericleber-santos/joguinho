@@ -174,6 +174,36 @@ class CharacterRenderer {
         val armTopY = bodyTop + u * 0.5f
         val armLen = u * 5f
 
+        // Pernas (Centralizadas sob o tronco no perfil)
+        val legTopY = bodyTop + u * 7f
+        val legLen = u * 5f
+        val legW = u * 2.5f
+        val legSwingPx = legSwing * u * 2.5f // Balanço mais amplo para movimento dinâmico
+
+        // Perna 1 (Trás)
+        fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(
+            canvas,
+            cx - u * 2.8f,
+            legTopY + legSwingPx + legLen,
+            legW + u,
+            u * 1.8f,
+            heroShoes
+        )
+
+        // Perna 2 (Frente)
+        fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, currentPants)
+        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(
+            canvas,
+            cx + u * 0.2f,
+            legTopY - legSwingPx + legLen,
+            legW + u,
+            u * 1.8f,
+            heroShoes
+        )
+
         // Braço Esquerdo (atrás no perfil - sombra)
         val lArmX = cx - u * 3.8f
         val lArmSwingPx = armSwing * u * 1.5f
@@ -246,36 +276,6 @@ class CharacterRenderer {
         canvas.drawRect(handX + u * 2, handY, handX + u * 3, handY + u * 1.5f, paint)
 
         canvas.restore()
-
-        val legTopY = bodyTop + u * 7f
-        val legLen = u * 5f
-        val legW = u * 2.5f
-        val legSwingPx = legSwing * u * 2.5f // Balanço mais amplo para movimento dinâmico
-
-        // Pernas (Centralizadas sob o tronco no perfil)
-        // Perna 1 (Trás)
-        fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u * 0.5f)
-        fillRect(
-            canvas,
-            cx - u * 2.8f,
-            legTopY + legSwingPx + legLen,
-            legW + u,
-            u * 1.8f,
-            heroShoes
-        )
-
-        // Perna 2 (Frente)
-        fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u * 0.5f)
-        fillRect(
-            canvas,
-            cx + u * 0.2f,
-            legTopY - legSwingPx + legLen,
-            legW + u,
-            u * 1.8f,
-            heroShoes
-        )
 
         val shadowY = cy + u * 12f
         drawShadow(canvas, cx, shadowY, u * 5f, u)
