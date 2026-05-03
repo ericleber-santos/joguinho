@@ -156,6 +156,7 @@ class GameLogic(private val gameState: GameState) {
         verificarHeroNoExit(maze)
         atualizarWaterStream(deltaTimeSec, maze)
         atualizarVfx(deltaMs)
+        atualizarFeedbackCombate(deltaMs)
         
         // Atualiza timer do mapa (5 minutos)
         gameState.mapTimerMs -= deltaMs
@@ -357,7 +358,8 @@ class GameLogic(private val gameState: GameState) {
             if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL) {
                 monster
             } else {
-                monster.copy(position = Position(nextX, nextY))
+                monster.position = Position(nextX, nextY)
+                monster
             }
         }
     }
@@ -920,7 +922,44 @@ class GameLogic(private val gameState: GameState) {
         }
     }
 
+    private fun atualizarFeedbackCombate(deltaMs: Long) {
+        val currentTime = System.currentTimeMillis()
+        
+        // 1. Atualiza Flash de Dano nos Monstros
+        for (monster in gameState.monsters) {
+            if (monster.damageFlashRemainingMs > 0) {
+                monster.damageFlashRemainingMs = Math.max(0L, monster.damageFlashRemainingMs - deltaMs)
+            }
+        }
+
+        // 2. Atualiza Popups de Score
+        val newPopups = gameState.scorePopups.toMutableList()
+        val removeList = mutableListOf<ScorePopup>()
+        
+        for (popup in newPopups) {
+            val elapsed = currentTime - popup.createdAtMs
+            val progress = elapsed.toFloat() / popup.durationMs
+            
+            if (progress >= 1.0f) {
+                removeList.add(popup)
+                com.ericleber.joguinho.ui.ScorePopupPool.recycle(popup)
+            } else {
+                // Sobe suavemente
+                popup.offsetY = progress * 60f 
+                // Fade out no final
+                if (progress > 0.5f) {
+                    popup.alpha = ((1.0f - (progress - 0.5f) * 2f) * 255).toInt().coerceIn(0, 255)
+                }
+            }
+        }
+        
+        if (removeList.isNotEmpty()) {
+            gameState.scorePopups = newPopups.filter { it !in removeList }
+        }
+    }
+
     private fun atualizarWaterStream(deltaTimeSec: Float, maze: MazeData) {
+        val currentTime = System.currentTimeMillis()
         val isShooting = gameState.isShooting
         
         // --- Gerenciamento de Som ---
@@ -1016,12 +1055,30 @@ class GameLogic(private val gameState: GameState) {
             damageAccumulatorMs += (deltaTimeSec * 1000).toLong()
             if (damageAccumulatorMs >= 150) {
                 damageAccumulatorMs = 0
-                gameState.monsters = gameState.monsters.map { m ->
+                gameState.monsters.forEach { m ->
                     if (m.id == hitMonsterId && m.isActive) {
-                        val newHp = (m.hp - 1).coerceAtLeast(0)
-                        m.copy(hp = newHp, isActive = newHp > 0, lastHitTimeMs = System.currentTimeMillis())
-                    } else {
-                        m
+                        val damage = 1
+                        val wasAlive = m.hp > 0
+                        m.hp = (m.hp - damage).coerceAtLeast(0)
+                        val isNowDead = wasAlive && m.hp == 0
+                        
+                        m.isActive = m.hp > 0
+                        m.lastHitTimeMs = currentTime
+                        m.damageFlashRemainingMs = 150L // Flash de 150ms
+                        
+                        // Score e Popup apenas na morte
+                        if (isNowDead) {
+                            val points = if (m.isBoss) 500 else 10
+                            gameState.accumulatedScore += points
+                            
+                            val popup = com.ericleber.joguinho.ui.ScorePopupPool.obtain(
+                                id = "score_${m.id}_${currentTime}",
+                                position = m.position,
+                                score = points,
+                                currentTimeMs = currentTime
+                            )
+                            gameState.scorePopups = gameState.scorePopups + popup
+                        }
                     }
                 }
             }

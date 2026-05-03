@@ -86,18 +86,30 @@ data class ProjectileState(
 )
 
 @Serializable
+data class ScorePopup(
+    var id: String,
+    var position: Position,
+    var score: Int,
+    var createdAtMs: Long,
+    var durationMs: Long = 800L,
+    var alpha: Int = 255,
+    var offsetY: Float = 0f
+)
+
+@Serializable
 data class MonsterState(
     val id: String,
-    val position: Position,
+    var position: Position,
     val movementPattern: MovementPattern,
-    val isActive: Boolean,
+    var isActive: Boolean,
     val isBoss: Boolean = false,
     val bossType: Int = 0, // 0=Normal, 1=Slime King, 2=Skeleton Lord, etc.
     val anchorPosition: Position? = null, // Ponto central para Zoning Defenders
-    val rageMultiplier: Float = 1.0f,
-    val hp: Int = 3,
+    var rageMultiplier: Float = 1.0f,
+    var hp: Int = 3,
     val maxHp: Int = 3,
-    val lastHitTimeMs: Long = 0L
+    var lastHitTimeMs: Long = 0L,
+    var damageFlashRemainingMs: Long = 0L
 )
 
 @Serializable

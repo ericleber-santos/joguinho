@@ -99,6 +99,7 @@ class GameState {
     var survivalElements: List<SurvivalElementState> = emptyList()
     var bossAoeZones: List<AoeZone> = emptyList()
     var vfxList: List<VfxState> = emptyList()
+    var scorePopups: List<ScorePopup> = emptyList()
 
     // --- Timers ---
     /** Tempo acumulado no Floor atual em milissegundos. */
@@ -257,6 +258,7 @@ class GameState {
         survivalElements = survivalElements,
         bossAoeZones = bossAoeZones,
         floorTimerMs = floorTimerMs,
+        scorePopups = scorePopups,
         accumulatedScore = accumulatedScore,
         comboStreak = comboStreak,
         comboBonus = comboBonus,
@@ -287,6 +289,7 @@ class GameState {
         survivalElements = save.survivalElements
         bossAoeZones = save.bossAoeZones
         floorTimerMs = save.floorTimerMs
+        scorePopups = save.scorePopups
         accumulatedScore = save.accumulatedScore
         comboStreak = save.comboStreak
         comboBonus = save.comboBonus

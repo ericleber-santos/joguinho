@@ -44,6 +44,13 @@ class Renderer(
         style = Paint.Style.FILL
     }
 
+    // Paint para os popups de score (Estilo Clean/Android)
+    private val popupPaint = Paint().apply {
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+
     // Paint para a placa de saída animada
     private val placaPaint = Paint().apply {
         isAntiAlias = false
@@ -399,7 +406,12 @@ class Renderer(
             renderList.add(object : Renderable {
                 override val ySort: Float = monster.position.y + 0.5f
                 override fun render(c: Canvas) {
-                    characterRenderer.renderMonster(c, mx, my, appearance, monsterAnimFrame, tileW, tileH)
+                    // Flash de dano (Overlay Branco)
+                    if (monster.damageFlashRemainingMs > 0) {
+                        characterRenderer.renderMonster(c, mx, my, appearance.copy(isHit = true), monsterAnimFrame, tileW, tileH)
+                    } else {
+                        characterRenderer.renderMonster(c, mx, my, appearance, monsterAnimFrame, tileW, tileH)
+                    }
                 }
             })
         }
@@ -484,6 +496,24 @@ class Renderer(
                         com.ericleber.joguinho.core.VfxType.WATER_SPLASH -> characterRenderer.renderWaterSplash(c, vx, vy, tileW, progress)
                         com.ericleber.joguinho.core.VfxType.WATER_JET_MUZZLE -> characterRenderer.renderWaterMuzzle(c, vx, vy, tileW, progress, vfx.angle)
                     }
+                }
+            })
+        }
+        
+        // 10. Popups de Score
+        for (popup in gameState.scorePopups) {
+            val px = popup.position.x * tileW + cameraX + tileW / 2f
+            val py = popup.position.y * tileH + cameraY - popup.offsetY
+            
+            renderList.add(object : Renderable {
+                override val ySort: Float = popup.position.y + 1.5f // Sempre no topo das entidades
+                override fun render(c: Canvas) {
+                    popupPaint.textSize = (tileW * 0.45f).coerceAtLeast(18f)
+                    popupPaint.color = Color.rgb(255, 235, 59) // Amarelo vibrante para score
+                    popupPaint.alpha = popup.alpha
+                    popupPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+                    c.drawText("+${popup.score}", px, py, popupPaint)
+                    popupPaint.clearShadowLayer()
                 }
             })
         }

@@ -826,30 +826,35 @@ class HudRenderer {
         val progress = (boss.hp.toFloat() / boss.maxHp.toFloat()).coerceIn(0f, 1f)
         
         // Fundo (Sombra)
-        bgPaint.color = Color.argb(100, 0, 0, 0)
-        canvas.drawRect(x + 5f, y + 5f, x + barW + 5f, y + barH + 5f, bgPaint)
+        bgPaint.color = Color.argb(120, 0, 0, 0)
+        canvas.drawRect(x + 4f, y + 4f, x + barW + 4f, y + barH + 4f, bgPaint)
         
         // Fundo (Barra vazia)
-        bgPaint.color = Color.argb(180, 50, 0, 0)
+        bgPaint.color = Color.argb(200, 30, 10, 10)
         canvas.drawRect(x, y, x + barW, y + barH, bgPaint)
         
-        // Preenchimento (HP) - Vermelho neon
-        bgPaint.color = Color.rgb(255, 30, 30)
+        // Preenchimento (HP) - Vermelho neon com brilho
+        bgPaint.color = Color.rgb(255, 40, 40)
         canvas.drawRect(x, y, x + barW * progress, y + barH, bgPaint)
         
-        // Borda metálica
-        bgPaint.color = Color.rgb(200, 200, 200)
+        // Borda metálica premium
+        bgPaint.color = Color.rgb(220, 220, 220)
         bgPaint.style = Paint.Style.STROKE
-        bgPaint.strokeWidth = 3f
+        bgPaint.strokeWidth = 4f
         canvas.drawRect(x, y, x + barW, y + barH, bgPaint)
         bgPaint.style = Paint.Style.FILL
         
-        // Nome do Boss
-        textPaint.textSize = 24f
+        // Nome do Boss e HP numérico
+        textPaint.textSize = 28f
         textPaint.textAlign = Paint.Align.CENTER
         textPaint.color = Color.WHITE
-        textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK)
-        canvas.drawText("O GUARDIÃO DO BIOMA", screenWidth / 2f, y - 10f, textPaint)
+        textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
+        canvas.drawText("O GUARDIÃO DO BIOMA", screenWidth / 2f, y - 15f, textPaint)
+        
+        // HP Texto (Opcional - limpo)
+        textPaint.textSize = 18f
+        canvas.drawText("${boss.hp} / ${boss.maxHp}", screenWidth / 2f, y + barH - 4f, textPaint)
+        
         textPaint.clearShadowLayer()
         textPaint.textAlign = Paint.Align.LEFT
     }

@@ -594,8 +594,8 @@ class CharacterRenderer {
         val bob = (Math.sin(t * Math.PI * 2) * 2 * s).toFloat()
         val cx = x
 
-        // Feedback de dano: flash vermelho (MECH-04 / UI-04)
-        val actualBodyColor = if (appearance.isHit) Color.RED else appearance.bodyColor
+        // Feedback de dano: flash branco (UI-04)
+        val actualBodyColor = if (appearance.isHit) Color.WHITE else appearance.bodyColor
         val actualAppearance = appearance.copy(bodyColor = actualBodyColor)
 
         val yOffset = when (appearance.shapeVariant % 4) {

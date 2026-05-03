@@ -19,6 +19,7 @@ data class SaveState(
     val survivalElements: List<SurvivalElementState> = emptyList(),
     val bossAoeZones: List<AoeZone> = emptyList(),
     val floorTimerMs: Long,
+    val scorePopups: List<ScorePopup> = emptyList(),
     val accumulatedScore: Float,
     val comboStreak: Int,
     val comboBonus: Float,
