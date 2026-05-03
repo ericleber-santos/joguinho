@@ -340,7 +340,11 @@ class Renderer(
                     gameState.heroStoppedDurationSec > 0.05f -> AnimState.IDLE
                     else -> AnimState.WALK
                 }
-                characterRenderer.drawHero(c, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection, gameState.heroIsSlowedDown, gameState.heroHasSpeedBuff)
+                characterRenderer.drawHero(
+                    c, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection,
+                    gameState.heroIsSlowedDown, gameState.heroHasSpeedBuff,
+                    equippedWeapon = gameState.equippedWeapon
+                )
             }
         })
 
@@ -358,7 +362,8 @@ class Renderer(
             }
             
             val (ox, oy) = characterRenderer.getGunTipPosition(
-                heroSx, heroSy, tileW, heroAnimState, gameState.heroDirection
+                heroSx, heroSy, tileW, heroAnimState, gameState.heroDirection,
+                equippedWeapon = gameState.equippedWeapon
             )
             
             val tx = impact.x * tileW + cameraX + tileW / 2f

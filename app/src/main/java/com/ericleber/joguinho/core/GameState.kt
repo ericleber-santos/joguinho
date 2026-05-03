@@ -65,6 +65,7 @@ class GameState {
     var heroLives: Int = 3
     var heroLastSlowdownTimeMs: Long = 0L
     var mapSlowdownCount: Int = 0 // Contador de lentidões no mapa atual
+    var equippedWeapon: WeaponType = WeaponType.WATER_GUN
     
     // Buff de velocidade (+50% por 7s)
     var heroHasSpeedBuff: Boolean = false
@@ -242,7 +243,8 @@ class GameState {
             isSlowedDown = heroIsSlowedDown,
             slowdownRemainingMs = heroSlowdownRemainingMs,
             lives = heroLives,
-            lastSlowdownTimeMs = heroLastSlowdownTimeMs
+            lastSlowdownTimeMs = heroLastSlowdownTimeMs,
+            equippedWeapon = equippedWeapon
         ),
         spikePosition = spikePosition,
         spikeState = SpikeState(
@@ -280,6 +282,7 @@ class GameState {
         heroSlowdownRemainingMs = save.heroState.slowdownRemainingMs
         heroLives = save.heroState.lives
         heroLastSlowdownTimeMs = save.heroState.lastSlowdownTimeMs
+        equippedWeapon = save.heroState.equippedWeapon
         spikePosition = save.spikePosition
         spikeIsSlowedDown = save.spikeState.isSlowedDown
         spikeSlowdownRemainingMs = save.spikeState.slowdownRemainingMs

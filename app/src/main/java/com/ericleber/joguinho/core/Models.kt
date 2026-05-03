@@ -19,6 +19,11 @@ enum class VfxType {
 }
 
 @Serializable
+enum class WeaponType {
+    NONE, WATER_GUN
+}
+
+@Serializable
 data class VfxState(
     val id: String,
     val position: Position,
@@ -64,7 +69,8 @@ data class HeroState(
     val isSlowedDown: Boolean,
     val slowdownRemainingMs: Long,
     val lives: Int = 3,
-    val lastSlowdownTimeMs: Long = 0L
+    val lastSlowdownTimeMs: Long = 0L,
+    val equippedWeapon: WeaponType = WeaponType.WATER_GUN
 )
 
 @Serializable

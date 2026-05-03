@@ -10,6 +10,8 @@ import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.roundToInt
+import com.ericleber.joguinho.core.WeaponType
+import com.ericleber.joguinho.core.Direction
 
 /**
  * Direções de movimento do Hero (8 direções cardinais/diagonais).
@@ -94,7 +96,8 @@ class CharacterRenderer {
         state: AnimState,
         direction: com.ericleber.joguinho.core.Direction,
         isFlashingRed: Boolean = false,
-        isFlashingBlue: Boolean = false
+        isFlashingBlue: Boolean = false,
+        equippedWeapon: WeaponType = WeaponType.NONE
     ) {
         val facingLeft = when (direction) {
             com.ericleber.joguinho.core.Direction.WEST,
@@ -179,10 +182,11 @@ class CharacterRenderer {
         val legLen = u * 5f
         val legW = u * 2.5f
         val legSwingPx = legSwing * u * 2.5f // Balanço mais amplo para movimento dinâmico
+        val legOverlap = u * 3f // Sobreposição para evitar frestas no movimento
 
         // Perna 1 (Trás)
-        fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(canvas, cx - u * 2.5f, legTopY + legSwingPx - legOverlap, legW, legLen + legOverlap, currentPants)
+        strokeRect(canvas, cx - u * 2.5f, legTopY + legSwingPx - legOverlap, legW, legLen + legOverlap, heroOutline, u * 0.5f)
         fillRect(
             canvas,
             cx - u * 2.8f,
@@ -193,8 +197,8 @@ class CharacterRenderer {
         )
 
         // Perna 2 (Frente)
-        fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, currentPants)
-        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx, legW, legLen, heroOutline, u * 0.5f)
+        fillRect(canvas, cx + u * 0.5f, legTopY - legSwingPx - legOverlap, legW, legLen + legOverlap, currentPants)
+        strokeRect(canvas, cx + u * 0.5f, legTopY - legSwingPx - legOverlap, legW, legLen + legOverlap, heroOutline, u * 0.5f)
         fillRect(
             canvas,
             cx + u * 0.2f,
@@ -204,12 +208,32 @@ class CharacterRenderer {
             heroShoes
         )
 
-        // Braço Esquerdo (atrás no perfil - sombra)
-        val lArmX = cx - u * 3.8f
-        val lArmSwingPx = armSwing * u * 1.5f
-        fillRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, currentShirt)
-        strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
-        fillCircle(canvas, lArmX + u * 1.1f, armTopY + lArmSwingPx + armLen + u, u * 1.3f, heroSkin)
+        // --- BRAÇO ESQUERDO (Atrás) ---
+        if (equippedWeapon == WeaponType.NONE) {
+            val lArmX = cx - u * 3.8f
+            val lArmSwingPx = armSwing * u * 1.5f
+            fillRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, currentShirt)
+            strokeRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
+            fillCircle(canvas, lArmX + u * 1.1f, armTopY + lArmSwingPx + armLen + u, u * 1.3f, heroSkin)
+        } else if (equippedWeapon == WeaponType.WATER_GUN) {
+            // Braço Esquerdo (Suporte da arma - Atrás)
+            val lArmX = cx - u * 3.8f
+            canvas.save()
+            val lPivotX = lArmX + u * 1.1f
+            val lPivotY = armTopY
+            
+            // Ângulo de suporte (levemente menos inclinado que o braço da frente para dar profundidade)
+            val lHoldAngle = -25f
+            canvas.rotate(lHoldAngle, lPivotX, lPivotY)
+            
+            fillRect(canvas, lArmX, armTopY, u * 2.2f, armLen, currentShirt)
+            strokeRect(canvas, lArmX, armTopY, u * 2.2f, armLen, heroOutline, u * 0.5f)
+            
+            val hX = lArmX + u * 1.1f
+            val hY = armTopY + armLen
+            fillCircle(canvas, hX, hY, u * 1.3f, heroSkin)
+            canvas.restore()
+        }
 
         // CORPO (Perfil 3/4: mais estreito para dar profundidade)
         fillRect(canvas, cx - u * 3.8f, bodyTop, u * 6.5f, u * 7f, currentShirt)
@@ -219,63 +243,72 @@ class CharacterRenderer {
         fillRect(canvas, cx + u * 1.0f, bodyTop + u * 1f, u * 1.2f, u * 1.2f, heroShirtDark)
         fillRect(canvas, cx + u * 1.0f, bodyTop + u * 3f, u * 1.2f, u * 1.2f, heroShirtDark)
 
-        // Braço Direito (à frente no perfil)
-        val rArmX = cx - u * 1.5f // Recuado para alinhar com a nuca, não com o nariz
-        val rArmSwingPx = -armSwing * u * 1.5f
-        fillRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, currentShirt)
-        strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
+        // --- BRAÇO DIREITO E ARMA ---
+        if (equippedWeapon == WeaponType.NONE) {
+            // Braço Direito (Swing normal quando desarmado)
+            val rArmX = cx - u * 1.5f
+            val rArmSwingPx = -armSwing * u * 1.5f
+            fillRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, currentShirt)
+            strokeRect(canvas, rArmX, armTopY + rArmSwingPx, u * 2.2f, armLen, heroOutline, u * 0.5f)
 
-        val handX = rArmX + u * 1.1f
-        val handY = armTopY + rArmSwingPx + armLen + u
-        fillCircle(canvas, handX, handY, u * 1.3f, heroSkin)
+            val handX = rArmX + u * 1.1f
+            val handY = armTopY + rArmSwingPx + armLen + u
+            fillCircle(canvas, handX, handY, u * 1.3f, heroSkin)
+        } else if (equippedWeapon == WeaponType.WATER_GUN) {
+            // Braço Direito (Empunhando arma - Mais fixo e apontado)
+            val rArmX = cx - u * 1.5f
+            
+            // O braço não balança tanto, mas acompanha o "bodyBob"
+            canvas.save()
+            val pivotX = rArmX + u * 1.1f
+            val pivotY = armTopY
+            
+            // Ângulo de empunhadura (levemente para cima/frente)
+            val holdAngle = -35f
+            canvas.rotate(holdAngle, pivotX, pivotY)
+            
+            fillRect(canvas, rArmX, armTopY, u * 2.2f, armLen, currentShirt)
+            strokeRect(canvas, rArmX, armTopY, u * 2.2f, armLen, heroOutline, u * 0.5f)
+            
+            val hX = rArmX + u * 1.1f
+            val hY = armTopY + armLen
+            fillCircle(canvas, hX, hY, u * 1.3f, heroSkin)
+            
+            // --- DESENHO DA ARMA ---
+            canvas.save()
+            // Calcula o ângulo da arma baseado na direção real
+            val rotationAngle = when (direction) {
+                com.ericleber.joguinho.core.Direction.NORTH -> -90f
+                com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+                com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
+                com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
+                else -> 0f
+            }
+            
+            // Compensa a rotação do braço para a arma ficar na horizontal/direção desejada
+            canvas.rotate(rotationAngle - holdAngle, hX, hY)
 
-        // PISTOLINHA D'ÁGUA (Wap Style / Super Soaker)
-        canvas.save()
+            // Corpo da arma (Translúcido / Plástico)
+            val gunW = u * 8f
+            val gunH = u * 3f
+            paint.color = Color.argb(180, 200, 230, 255)
+            canvas.drawRoundRect(RectF(hX - u, hY - u * 2, hX + gunW, hY + u), u, u, paint)
 
-        // Calcula o ângulo da arma baseado na direção real
-        // Como o canvas já está flipado se facingLeft for true, lidamos com ângulos relativos ao "frente"
-        val rotationAngle = when (direction) {
-            com.ericleber.joguinho.core.Direction.NORTH -> -90f
-            com.ericleber.joguinho.core.Direction.SOUTH -> 90f
-            com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
-            com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
-            else -> 0f
+            // Tanque de água
+            paint.color = Color.rgb(173, 255, 47)
+            canvas.drawRoundRect(RectF(hX, hY - u * 3.5f, hX + u * 5f, hY - u * 1.5f), u, u, paint)
+
+            // Cano
+            paint.color = Color.DKGRAY
+            canvas.drawRect(hX + gunW - u, hY - u * 1.2f, hX + gunW + u * 2f, hY - u * 0.3f, paint)
+
+            // Detalhes
+            paint.color = Color.RED
+            canvas.drawRect(hX + u * 2, hY, hX + u * 3, hY + u * 1.5f, paint)
+
+            canvas.restore() // Restaura arma
+            canvas.restore() // Restaura braço
         }
-
-        // Ajuste fino para Idle
-        val idleBob = if (state == AnimState.IDLE) 5f else 0f
-        canvas.rotate(rotationAngle + idleBob, handX, handY)
-
-        // Corpo da arma (Translúcido / Plástico)
-        val gunW = u * 8f
-        val gunH = u * 3f
-        paint.color = Color.argb(180, 200, 230, 255) // Azul claro translúcido
-        canvas.drawRoundRect(RectF(handX - u, handY - u * 2, handX + gunW, handY + u), u, u, paint)
-
-        // Tanque de água (Verde limão néon)
-        paint.color = Color.rgb(173, 255, 47)
-        canvas.drawRoundRect(
-            RectF(handX, handY - u * 3.5f, handX + u * 5f, handY - u * 1.5f),
-            u,
-            u,
-            paint
-        )
-
-        // Cano da arma (Cinza escuro / Wap nozzle)
-        paint.color = Color.DKGRAY
-        canvas.drawRect(
-            handX + gunW - u,
-            handY - u * 1.2f,
-            handX + gunW + u * 2f,
-            handY - u * 0.3f,
-            paint
-        )
-
-        // Detalhes (Gatilho e listras)
-        paint.color = Color.RED
-        canvas.drawRect(handX + u * 2, handY, handX + u * 3, handY + u * 1.5f, paint)
-
-        canvas.restore()
 
         val shadowY = cy + u * 12f
         drawShadow(canvas, cx, shadowY, u * 5f, u)
@@ -291,7 +324,8 @@ class CharacterRenderer {
         cy: Float,
         tileSize: Float,
         state: AnimState,
-        direction: com.ericleber.joguinho.core.Direction
+        direction: com.ericleber.joguinho.core.Direction,
+        equippedWeapon: WeaponType = WeaponType.NONE
     ): Pair<Float, Float> {
         val facingLeft = when (direction) {
             com.ericleber.joguinho.core.Direction.WEST,
@@ -321,10 +355,31 @@ class CharacterRenderer {
         val armTopY = bodyTop + u * 0.5f
         val armLen = u * 5f
         val rArmX = cx - u * 1.5f
-        val rArmSwingPx = -armSwing * u * 1.5f
         
-        var hX = rArmX + u * 1.1f
-        var hY = armTopY + rArmSwingPx + armLen + u
+        var hX: Float
+        var hY: Float
+
+        if (equippedWeapon == WeaponType.NONE) {
+            val rArmSwingPx = -armSwing * u * 1.5f
+            hX = rArmX + u * 1.1f
+            hY = armTopY + rArmSwingPx + armLen + u
+        } else {
+            // Braço rotacionado (-35 graus)
+            val armPivotX = rArmX + u * 1.1f
+            val armPivotY = armTopY
+            val holdAngleRad = Math.toRadians(-35.0)
+            
+            // Posição da mão relativa ao pivô antes da rotação
+            val handRelX = 0f
+            val handRelY = armLen
+            
+            // Aplica rotação 2D no ponto da mão
+            val cosH = Math.cos(holdAngleRad).toFloat()
+            val sinH = Math.sin(holdAngleRad).toFloat()
+            
+            hX = armPivotX + (handRelX * cosH - handRelY * sinH)
+            hY = armPivotY + (handRelX * sinH + handRelY * cosH)
+        }
 
         val rotationAngle = when (direction) {
             com.ericleber.joguinho.core.Direction.NORTH -> -90f
