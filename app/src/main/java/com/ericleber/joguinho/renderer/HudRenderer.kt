@@ -161,7 +161,6 @@ class HudRenderer {
             renderBossHealthBar(canvas, gameState, w.toFloat())
         }
 
-        renderShootButton(canvas, gameState, w.toFloat(), h.toFloat())
     }
 
     /**
@@ -293,7 +292,6 @@ class HudRenderer {
             renderBossHealthBar(canvas, gameState, w.toFloat())
         }
 
-        renderShootButton(canvas, gameState, w.toFloat(), h.toFloat())
     }
 
     /**
@@ -780,40 +778,6 @@ class HudRenderer {
     // -------------------------------------------------------------------------
     // Utilitários
     // -------------------------------------------------------------------------
-
-    private fun renderShootButton(canvas: Canvas, gameState: GameState, w: Float, h: Float) {
-        val buttonSize = w * 0.15f
-        val margin = w * 0.05f
-        val bx = w - margin - buttonSize / 2
-        val by = h - margin - buttonSize / 2
-        
-        // Fundo do botão
-        bgPaint.color = if (gameState.isShooting) Color.argb(200, 0, 150, 255) else Color.argb(150, 0, 100, 200)
-        canvas.drawCircle(bx, by, buttonSize / 2, bgPaint)
-        
-        // Borda
-        bgPaint.color = Color.WHITE
-        bgPaint.style = Paint.Style.STROKE
-        bgPaint.strokeWidth = 4f
-        canvas.drawCircle(bx, by, buttonSize / 2, bgPaint)
-        bgPaint.style = Paint.Style.FILL
-        
-        // Ícone de Gota (Pistolinha d'Água)
-        paint.color = Color.WHITE
-        val dropSize = buttonSize * 0.4f
-        val path = android.graphics.Path()
-        path.moveTo(bx, by - dropSize / 2)
-        path.quadTo(bx + dropSize / 2, by + dropSize / 4, bx, by + dropSize / 2)
-        path.quadTo(bx - dropSize / 2, by + dropSize / 4, bx, by - dropSize / 2)
-        canvas.drawPath(path, paint)
-        
-        // Texto "SHOT" ou símbolo
-        textPaint.textSize = buttonSize * 0.2f
-        textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = Color.WHITE
-        canvas.drawText("TIRO", bx, by + buttonSize / 2 + 30f, textPaint)
-        textPaint.textAlign = Paint.Align.LEFT
-    }
 
     private fun renderBossHealthBar(canvas: Canvas, gameState: GameState, screenWidth: Float) {
         val boss = gameState.monsters.find { it.isBoss && it.isActive } ?: return

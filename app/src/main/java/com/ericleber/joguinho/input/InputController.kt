@@ -2,6 +2,7 @@ package com.ericleber.joguinho.input
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -12,6 +13,7 @@ import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.Position
 import java.lang.ref.WeakReference
+import kotlin.math.atan2
 
 /**
  * Orquestrador de input: gerencia FloatingJoystick e DPadController,
@@ -52,8 +54,9 @@ class InputController(
     // WeakReference para evitar vazamento de memória (Requisito 20.2)
     private val contextRef = WeakReference(context.applicationContext)
 
-    // Controles
-    val joystick = FloatingJoystick()
+    // Controles (Twin-Stick)
+    val moveJoystick = FloatingJoystick()
+    val shootJoystick = FloatingJoystick()
     val dpad = DPadController()
 
     // Modo de controle ativo
@@ -137,20 +140,11 @@ class InputController(
             dpad.onTouchDown(x, y, id)
         } else {
             if (x <= screenHalfWidth) {
-                // Metade esquerda: joystick flutuante (Requisito 4.7)
-                joystick.onTouchDown(x, y, id)
+                // Metade esquerda: joystick de movimento
+                moveJoystick.onTouchDown(x, y, id)
             } else {
-                // Metade direita dividida:
-                val screenHeight = (contextRef.get()?.resources?.displayMetrics?.heightPixels ?: 2000).toFloat()
-                if (y > screenHeight * 0.6f) {
-                    // Canto inferior direito: Botão de Tiro (MECH-03)
-                    gameState.isShooting = true
-                    shootButtonPointerId = id
-                } else {
-                    // Canto superior direito: Botão de Corrida (Requisito 4.4)
-                    runButtonPressed = true
-                    runButtonPointerId = id
-                }
+                // Metade direita: joystick de tiro
+                shootJoystick.onTouchDown(x, y, id)
             }
         }
     }
@@ -159,7 +153,8 @@ class InputController(
         if (useDPad) {
             dpad.onTouchMove(x, y, id)
         } else {
-            joystick.onTouchMove(x, y, id)
+            moveJoystick.onTouchMove(x, y, id)
+            shootJoystick.onTouchMove(x, y, id)
         }
     }
 
@@ -167,15 +162,8 @@ class InputController(
         if (useDPad) {
             dpad.onTouchUp(id)
         } else {
-            joystick.onTouchUp(id)
-            if (id == runButtonPointerId) {
-                runButtonPressed = false
-                runButtonPointerId = -1
-            }
-            if (id == shootButtonPointerId) {
-                gameState.isShooting = false
-                shootButtonPointerId = -1
-            }
+            moveJoystick.onTouchUp(id)
+            shootJoystick.onTouchUp(id)
         }
     }
 
@@ -197,7 +185,15 @@ class InputController(
                 }
             }
         } else {
-            joystick.getMovementVector()
+            moveJoystick.getMovementVector()
+        }
+
+        // Atualiza estado de tiro via Joystick direito
+        if (!useDPad) {
+            gameState.isShooting = shootJoystick.isActive && shootJoystick.magnitude > 0.3f
+            if (shootJoystick.isActive && shootJoystick.magnitude > 0.1f) {
+                gameState.shootingAngle = atan2(shootJoystick.directionY, shootJoystick.directionX)
+            }
         }
 
         if (movementVector == null || (movementVector.x == 0f && movementVector.y == 0f)) {
@@ -297,7 +293,7 @@ class InputController(
     // -------------------------------------------------------------------------
 
     private fun getActiveDirection(): Direction? =
-        if (useDPad) dpad.getActiveDirection() else joystick.getMappedDirection()
+        if (useDPad) dpad.getActiveDirection() else moveJoystick.getMappedDirection()
 
     /**
      * Converte uma Direction para vetor (dx, dy) no espaço do grid.
@@ -343,7 +339,11 @@ class InputController(
         if (useDPad) {
             dpad.draw(canvas)
         } else {
-            joystick.draw(canvas)
+            // Joystick de Movimento: Âmbar/Tocha
+            moveJoystick.draw(canvas, accentColor = Color.rgb(220, 180, 100), drawWaterIcon = false)
+            
+            // Joystick de Tiro: Azul/Água
+            shootJoystick.draw(canvas, accentColor = Color.rgb(80, 150, 255), drawWaterIcon = true)
         }
     }
 }

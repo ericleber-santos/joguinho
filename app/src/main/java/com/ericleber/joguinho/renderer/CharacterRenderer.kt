@@ -97,14 +97,20 @@ class CharacterRenderer {
         direction: com.ericleber.joguinho.core.Direction,
         isFlashingRed: Boolean = false,
         isFlashingBlue: Boolean = false,
-        equippedWeapon: WeaponType = WeaponType.NONE
+        equippedWeapon: WeaponType = WeaponType.NONE,
+        isShooting: Boolean = false,
+        shootingAngle: Float = 0f
     ) {
-        val facingLeft = when (direction) {
-            com.ericleber.joguinho.core.Direction.WEST,
-            com.ericleber.joguinho.core.Direction.NORTH_WEST,
-            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
-
-            else -> false
+        val facingLeft = if (isShooting) {
+            // Se estiver atirando, olha para onde a arma aponta (Twin-Stick)
+            kotlin.math.abs(shootingAngle) > Math.PI / 2
+        } else {
+            when (direction) {
+                com.ericleber.joguinho.core.Direction.WEST,
+                com.ericleber.joguinho.core.Direction.NORTH_WEST,
+                com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+                else -> false
+            }
         }
         val u = tileSize / 20f
 
@@ -282,13 +288,22 @@ class CharacterRenderer {
             
             // --- DESENHO DA ARMA ---
             canvas.save()
-            // Calcula o ângulo da arma baseado na direção real
-            val rotationAngle = when (direction) {
-                com.ericleber.joguinho.core.Direction.NORTH -> -90f
-                com.ericleber.joguinho.core.Direction.SOUTH -> 90f
-                com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
-                com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
-                else -> 0f
+            // Calcula o ângulo da arma baseado na direção real ou no Twin-Stick
+            val rotationAngle = if (isShooting) {
+                var deg = Math.toDegrees(shootingAngle.toDouble()).toFloat()
+                if (facingLeft) {
+                    // Compensa a inversão do canvas (escala -1)
+                    deg = if (deg >= 0) 180f - deg else -180f - deg
+                }
+                deg
+            } else {
+                when (direction) {
+                    com.ericleber.joguinho.core.Direction.NORTH -> -90f
+                    com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+                    com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
+                    com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
+                    else -> 0f
+                }
             }
             
             // Compensa a rotação do braço para a arma ficar na horizontal/direção desejada
@@ -328,91 +343,66 @@ class CharacterRenderer {
         tileSize: Float,
         state: AnimState,
         direction: com.ericleber.joguinho.core.Direction,
-        equippedWeapon: WeaponType = WeaponType.NONE
+        equippedWeapon: WeaponType = WeaponType.NONE,
+        isShooting: Boolean = false,
+        shootingAngle: Float = 0f
     ): Pair<Float, Float> {
-        val facingLeft = when (direction) {
-            com.ericleber.joguinho.core.Direction.WEST,
-            com.ericleber.joguinho.core.Direction.NORTH_WEST,
-            com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
-            else -> false
+        val facingLeft = if (isShooting) {
+            kotlin.math.abs(shootingAngle) > Math.PI / 2
+        } else {
+            when (direction) {
+                com.ericleber.joguinho.core.Direction.WEST,
+                com.ericleber.joguinho.core.Direction.NORTH_WEST,
+                com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
+                else -> false
+            }
         }
         val u = tileSize / 20f
-        val t = animTick / 1000f
-
-        val bodyBob = when (state) {
-            AnimState.IDLE -> if (sin(t * 2.0) > 0.3) u * 0.5f else 0f
-            AnimState.WALK -> {
-                val phase = sin(t * 6.0).toFloat()
-                if (abs(phase) > 0.7f) u * 0.5f else 0f
-            }
-            AnimState.RUN -> if ((animTick / 83) % 2 == 0L) u else 0f
-        }
-
-        val armSwing = when (state) {
-            AnimState.IDLE -> 0f
-            AnimState.WALK -> -sin(t * 6.0).toFloat()
-            AnimState.RUN -> -sin(t * 12.0).toFloat() * 1.2f
-        }
-
+        
         val vShift = -u * 9f
-        val bodyTop = cy + bodyBob + vShift
+        val bodyTop = cy + vShift
         val armTopY = bodyTop + u * 0.5f
-        val armLen = u * 5f
         val rArmX = cx - u * 1.5f
-        
-        var hX: Float
-        var hY: Float
+        val armPivotX = rArmX + u * 1.1f
+        val armPivotY = armTopY
+        val armLen = u * 5f
+        val holdAngle = -35f
 
-        if (equippedWeapon == WeaponType.NONE) {
-            val rArmSwingPx = -armSwing * u * 1.5f
-            hX = rArmX + u * 1.1f
-            hY = armTopY + rArmSwingPx + armLen + u
+        // --- DESENHO DA ARMA (Lógica de rotação idêntica ao drawHero) ---
+        val hX = armPivotX
+        val hY = armPivotY + armLen
+        
+        val rotationAngle = if (isShooting) {
+            var deg = Math.toDegrees(shootingAngle.toDouble()).toFloat()
+            if (facingLeft) {
+                deg = if (deg >= 0) 180f - deg else -180f - deg
+            }
+            deg
         } else {
-            // Braço rotacionado (-35 graus)
-            val armPivotX = rArmX + u * 1.1f
-            val armPivotY = armTopY
-            val holdAngleRad = Math.toRadians(-35.0)
-            
-            // Posição da mão relativa ao pivô antes da rotação
-            val handRelX = 0f
-            val handRelY = armLen
-            
-            // Aplica rotação 2D no ponto da mão
-            val cosH = Math.cos(holdAngleRad).toFloat()
-            val sinH = Math.sin(holdAngleRad).toFloat()
-            
-            hX = armPivotX + (handRelX * cosH - handRelY * sinH)
-            hY = armPivotY + (handRelX * sinH + handRelY * cosH)
+            when (direction) {
+                com.ericleber.joguinho.core.Direction.NORTH -> -90f
+                com.ericleber.joguinho.core.Direction.SOUTH -> 90f
+                com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
+                com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
+                else -> 0f
+            }
         }
-
-        val rotationAngle = when (direction) {
-            com.ericleber.joguinho.core.Direction.NORTH -> -90f
-            com.ericleber.joguinho.core.Direction.SOUTH -> 90f
-            com.ericleber.joguinho.core.Direction.NORTH_EAST, com.ericleber.joguinho.core.Direction.NORTH_WEST -> -45f
-            com.ericleber.joguinho.core.Direction.SOUTH_EAST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> 45f
-            else -> 0f
-        }
-        val idleBob = if (state == AnimState.IDLE) 5f else 0f
-        val angleDeg = rotationAngle + idleBob
-        val angleRad = Math.toRadians(angleDeg.toDouble())
-
-        // Vetor da ponta da arma relativo à mão
-        val tipRelX = u * 10f
-        val tipRelY = -u * 0.75f
-
-        // Rotação 2D
-        val cosA = Math.cos(angleRad).toFloat()
-        val sinA = Math.sin(angleRad).toFloat()
         
-        var finalTipX = hX + (tipRelX * cosA - tipRelY * sinA)
-        var finalTipY = hY + (tipRelX * sinA + tipRelY * cosA)
-
-        // Se estiver virado para a esquerda, reflete em torno do eixo vertical central (cx)
-        if (facingLeft) {
-            finalTipX = cx - (finalTipX - cx)
-        }
-
-        return Pair(finalTipX, finalTipY)
+        val totalRot = Math.toRadians((rotationAngle - holdAngle).toDouble())
+        val cosR = kotlin.math.cos(totalRot).toFloat()
+        val sinR = kotlin.math.sin(totalRot).toFloat()
+        
+        // Ponta da arma relativa a hX, hY (antes da rotação da arma)
+        val tipRelY = -u * 0.5f // Levemente acima do centro do cano
+        
+        // Se facingLeft for true, o scale(-1, 1) inverte o X.
+        val worldTipRelX = if (facingLeft) -u * 8f else u * 8f
+        
+        // Aplica rotação da arma
+        val rotatedTipX = worldTipRelX * cosR - tipRelY * sinR
+        val rotatedTipY = worldTipRelX * sinR + tipRelY * cosR
+        
+        return Pair(hX + rotatedTipX, hY + rotatedTipY)
     }
 
     // ─────────────────────────────────────────────────────────────────────────

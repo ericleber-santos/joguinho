@@ -343,7 +343,9 @@ class Renderer(
                 characterRenderer.drawHero(
                     c, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection,
                     gameState.heroIsSlowedDown, gameState.heroHasSpeedBuff,
-                    equippedWeapon = gameState.equippedWeapon
+                    equippedWeapon = gameState.equippedWeapon,
+                    isShooting = gameState.isShooting,
+                    shootingAngle = gameState.shootingAngle
                 )
             }
         })
@@ -363,7 +365,9 @@ class Renderer(
             
             val (ox, oy) = characterRenderer.getGunTipPosition(
                 heroSx, heroSy, tileW, heroAnimState, gameState.heroDirection,
-                equippedWeapon = gameState.equippedWeapon
+                equippedWeapon = gameState.equippedWeapon,
+                isShooting = gameState.isShooting,
+                shootingAngle = gameState.shootingAngle
             )
             
             val tx = impact.x * tileW + cameraX + tileW / 2f

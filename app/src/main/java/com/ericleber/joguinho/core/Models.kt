@@ -70,7 +70,8 @@ data class HeroState(
     val slowdownRemainingMs: Long,
     val lives: Int = 3,
     val lastSlowdownTimeMs: Long = 0L,
-    val equippedWeapon: WeaponType = WeaponType.WATER_GUN
+    val equippedWeapon: WeaponType = WeaponType.WATER_GUN,
+    val shootingAngle: Float = 0f
 )
 
 @Serializable

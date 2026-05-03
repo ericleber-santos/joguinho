@@ -14,8 +14,12 @@ import kotlin.math.min
  * Joystick virtual flutuante que se reposiciona para o ponto de toque.
  *
  * - Raio mínimo de 80dp (Requisito 4.1, 13.4)
- * - Reposicionamento dinâmico ao tocar na metade esquerda da tela (Requisito 4.7)
+ * - Reposicionamento dinâmico ao tocar (Requisito 4.7)
  * - Mapeia para 8 direções cardinais/diagonais (Requisito 4.3)
+ *
+ * Estilos:
+ * - MOVE: Âmbar/Tocha
+ * - SHOOT: Azul/Água
  *
  * Requisitos: 4.1, 4.7, 12.3, 13.4
  */
@@ -178,23 +182,44 @@ class FloatingJoystick {
      */
     fun getMovementVector(): PointF = PointF(directionX * magnitude, directionY * magnitude)
 
-    // -------------------------------------------------------------------------
-    // Renderização
-    // -------------------------------------------------------------------------
-
     /**
-     * Desenha o joystick no canvas. Deve ser chamado pelo Renderer na UI thread do SurfaceView.
+     * Desenha o joystick no canvas com estilo opcional.
+     * @param accentColor Cor principal (âmbar para movimento, azul para tiro)
+     * @param drawWaterIcon Se true, desenha uma gota d'água no knob
      */
-    fun draw(canvas: Canvas) {
+    fun draw(canvas: Canvas, accentColor: Int = Color.rgb(220, 180, 100), drawWaterIcon: Boolean = false) {
         if (!isActive) return
+
+        // Ajusta as cores dos paints com base no acento
+        outerPaint.color = Color.argb(70, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        outerFillPaint.color = Color.argb(25, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        innerPaint.color = Color.argb(160, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        innerBorderPaint.color = Color.argb(100, 255, 230, 150)
 
         // Preenchimento sutil do anel externo
         canvas.drawCircle(centerX, centerY, radiusPx, outerFillPaint)
         // Borda do anel externo (âmbar translúcido — estética tocha)
         canvas.drawCircle(centerX, centerY, radiusPx, outerPaint)
 
-        // Knob: preenchimento âmbar + borda
+        // Knob: preenchimento + borda
         canvas.drawCircle(knobX, knobY, radiusPx * KNOB_RATIO, innerPaint)
         canvas.drawCircle(knobX, knobY, radiusPx * KNOB_RATIO, innerBorderPaint)
+
+        // Desenha ícone de água se solicitado
+        if (drawWaterIcon) {
+            val iconSize = radiusPx * KNOB_RATIO * 0.6f
+            val dropPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            // Gota d'água simples (triângulo + círculo)
+            val path = android.graphics.Path()
+            path.moveTo(knobX, knobY - iconSize)
+            path.lineTo(knobX - iconSize * 0.6f, knobY + iconSize * 0.3f)
+            path.lineTo(knobX + iconSize * 0.6f, knobY + iconSize * 0.3f)
+            path.close()
+            canvas.drawPath(path, dropPaint)
+            canvas.drawCircle(knobX, knobY + iconSize * 0.3f, iconSize * 0.6f, dropPaint)
+        }
     }
 }

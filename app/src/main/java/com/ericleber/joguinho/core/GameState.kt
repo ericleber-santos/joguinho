@@ -90,6 +90,7 @@ class GameState {
 
     // --- Controle de Combate ---
     var isShooting: Boolean = false
+    var shootingAngle: Float = 0f // Ângulo em radianos
     var projectileCooldownMs: Long = 0L
     var waterStreamDistance: Float = 0f
     var waterStreamVisualDistance: Float = 0f
@@ -244,7 +245,8 @@ class GameState {
             slowdownRemainingMs = heroSlowdownRemainingMs,
             lives = heroLives,
             lastSlowdownTimeMs = heroLastSlowdownTimeMs,
-            equippedWeapon = equippedWeapon
+            equippedWeapon = equippedWeapon,
+            shootingAngle = shootingAngle
         ),
         spikePosition = spikePosition,
         spikeState = SpikeState(
@@ -283,6 +285,7 @@ class GameState {
         heroLives = save.heroState.lives
         heroLastSlowdownTimeMs = save.heroState.lastSlowdownTimeMs
         equippedWeapon = save.heroState.equippedWeapon
+        shootingAngle = save.heroState.shootingAngle
         spikePosition = save.spikePosition
         spikeIsSlowedDown = save.spikeState.isSlowedDown
         spikeSlowdownRemainingMs = save.spikeState.slowdownRemainingMs

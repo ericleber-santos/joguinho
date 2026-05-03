@@ -804,29 +804,16 @@ class GameLogic(private val gameState: GameState) {
             return
         }
 
-        // --- Raycasting para o Esguicho ---
+        // --- Raycasting para o Esguicho (Twin-Stick) ---
         val maxDistance = 7.0f // Distância máxima do esguicho
         val step = 0.2f // Precisão do raio
         
-        val (dx, dy) = when (gameState.heroDirection) {
-            Direction.NORTH -> Pair(0f, -1f)
-            Direction.SOUTH -> Pair(0f, 1f)
-            Direction.EAST -> Pair(1f, 0f)
-            Direction.WEST -> Pair(-1f, 0f)
-            Direction.NORTH_EAST -> Pair(0.707f, -0.707f)
-            Direction.NORTH_WEST -> Pair(-0.707f, -0.707f)
-            Direction.SOUTH_EAST -> Pair(0.707f, 0.707f)
-            Direction.SOUTH_WEST -> Pair(-0.707f, 0.707f)
-        }
+        val dx = kotlin.math.cos(gameState.shootingAngle.toDouble()).toFloat()
+        val dy = kotlin.math.sin(gameState.shootingAngle.toDouble()).toFloat()
 
-        // Origem (ponta da arma)
-        val (offX, offY) = when (gameState.heroDirection) {
-            Direction.NORTH -> Pair(0.1f, -0.6f)
-            Direction.SOUTH -> Pair(0.1f, 0.6f)
-            Direction.EAST -> Pair(0.6f, 0.1f)
-            Direction.WEST -> Pair(-0.6f, 0.1f)
-            else -> Pair(0.5f * dx, 0.5f * dy)
-        }
+        // Origem aproximada (ponta da arma)
+        val offX = dx * 0.5f
+        val offY = dy * 0.5f
         val origin = Position(gameState.heroPosition.x + offX, gameState.heroPosition.y + offY)
         
         var currentDist = 0f
