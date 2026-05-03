@@ -197,8 +197,10 @@ class GameViewModel : ViewModel() {
     /**
      * Salva o estado atual e retorna ao menu principal.
      * Aguarda a conclusão do salvamento antes de sinalizar o retorno.
+     * 
+     * @param onConcluido Callback chamado após o salvamento terminar (sucesso ou erro)
      */
-    fun salvarESair() {
+    fun salvarESair(onConcluido: () -> Unit) {
         viewModelScope.launch {
             _estadoSalvamento.value = EstadoSalvamento.Salvando
             val pm = persistenceManager
@@ -213,6 +215,7 @@ class GameViewModel : ViewModel() {
                 EstadoSalvamento.Erro("Falha ao salvar o estado do jogo")
             }
             pararJogo()
+            onConcluido()
         }
     }
 
@@ -222,18 +225,16 @@ class GameViewModel : ViewModel() {
 
     /**
      * Salva o estado do jogo de forma assíncrona sem bloquear a UI thread.
-     * Usado em onPause para garantir conclusão em até 500ms (Requisito 7.3).
+     * Usado em onPause para garantir conclusão mesmo se a Activity for destruída.
      */
     fun salvarEstadoAsync() {
+        val pm = persistenceManager ?: return
+        val estado = gameState.toSaveState()
+        
+        // Usamos o escopo global do PersistenceManager para que o save não seja
+        // cancelado se o ViewModel for limpo durante o processo de saída.
         viewModelScope.launch {
-            val pm = persistenceManager ?: return@launch
-            _estadoSalvamento.value = EstadoSalvamento.Salvando
-            val sucesso = pm.salvar(gameState.toSaveState())
-            _estadoSalvamento.value = if (sucesso) {
-                EstadoSalvamento.Sucesso
-            } else {
-                EstadoSalvamento.Erro("Falha ao salvar estado em background")
-            }
+            pm.salvarAsync(estado)
         }
     }
 
@@ -248,9 +249,18 @@ class GameViewModel : ViewModel() {
             when (resultado) {
                 is PersistenceManager.RestoreResult.Sucesso -> {
                     gameState.restoreFrom(resultado.estado)
+                    
+                    // Reconstroi o labirinto determinístico a partir do seed salvo
+                    // (O SaveState não guarda os tiles do labirinto por serem grandes e redundantes)
+                    reconstruirMundoAposRestore()
+                    
                     _saveStateRestaurado.value = resultado.estado
                     _faseJogo.value = GamePhase.PLAYING
-                    Logger.error(TAG, "Estado restaurado do snapshot ${resultado.indiceSnapshot}")
+                    
+                    // Inicia o GameLoop após a restauração (Requisito 21.4)
+                    gameLoop?.start()
+                    
+                    Logger.error(TAG, "Estado restaurado e jogo iniciado do snapshot ${resultado.indiceSnapshot}")
                 }
                 is PersistenceManager.RestoreResult.FalhaCorrupcao -> {
                     Logger.error(TAG, "Falha ao restaurar estado: ${resultado.mensagem}")
@@ -260,6 +270,28 @@ class GameViewModel : ViewModel() {
                     _saveStateRestaurado.value = null
                 }
             }
+        }
+    }
+
+    /**
+     * Reconstrói os dados do labirinto que não são serializados no SaveState.
+     * Utiliza o PCGEngine com o mesmo seed para garantir o mapa idêntico.
+     */
+    private fun reconstruirMundoAposRestore() {
+        val mapaGerado = pcgEngine.generateMap(
+            floorNumber = gameState.floorNumber,
+            mapIndex = gameState.mapIndex,
+            playerSeed = gameState.floorSeed
+        )
+        // IMPORTANTE: Restauramos apenas o labirinto (tiles/indices).
+        // As entidades (monstros/traps/hero) já foram restauradas pelo restoreFrom()
+        // com suas posições exatas do momento do salvamento.
+        gameState.mazeData = mapaGerado.maze
+        gameState.items = mapaGerado.items // Itens geralmente são estáticos no chão
+        
+        // Sincroniza bioma forçado se estivermos em modo DEV no save (extensibilidade)
+        if (gameState.devModeForcedBiome != null) {
+            Logger.error(TAG, "Aviso: Restaurando jogo com Bioma Forçado: ${gameState.devModeForcedBiome}")
         }
     }
 

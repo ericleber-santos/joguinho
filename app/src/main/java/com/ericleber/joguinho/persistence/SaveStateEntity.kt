@@ -9,8 +9,7 @@ import androidx.room.PrimaryKey
  */
 @Entity(tableName = "save_states")
 data class SaveStateEntity(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey val snapshotIndex: Int, // 0, 1 ou 2 (3 snapshots de segurança)
     val timestamp: Long,
-    val snapshotIndex: Int,       // 0, 1 ou 2 (3 snapshots de segurança)
     val saveStateJson: String     // SaveState serializado como JSON
 )

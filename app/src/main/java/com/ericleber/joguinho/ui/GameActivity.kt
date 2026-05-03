@@ -293,8 +293,9 @@ class GameActivity : AppCompatActivity() {
 
     /** Salva o estado e retorna ao menu principal. */
     private fun salvarESairParaMenu() {
-        viewModel.salvarESair()
-        finish()
+        viewModel.salvarESair {
+            finish()
+        }
     }
 
     // =========================================================================

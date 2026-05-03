@@ -42,6 +42,7 @@ class MainMenuActivity : AppCompatActivity() {
     private var temSaveExistente = false
     private var recordePessoal = 0
     private var biomasDesbloqueados: List<Biome> = emptyList()
+    private lateinit var gerenciadorPersistencia: PersistenceManager
 
     // Controle de tela
     private var exibindoGaleria = false
@@ -58,13 +59,16 @@ class MainMenuActivity : AppCompatActivity() {
         // Inicializar ViewModel e PersistenceManager
         viewModel = ViewModelProvider(this)[GameViewModel::class.java]
         val banco = AppDatabase.getInstance(applicationContext)
-        val gerenciadorPersistencia = PersistenceManager(applicationContext, banco)
+        gerenciadorPersistencia = PersistenceManager(applicationContext, banco)
 
         // Criar e exibir a View customizada
         menuView = MenuView(this)
         setContentView(menuView)
+    }
 
-        // Verificar save existente e carregar dados (Requisito 1.2, 10.1)
+    override fun onResume() {
+        super.onResume()
+        // Verificar save existente e carregar dados sempre que voltar ao menu (Requisito 1.2, 10.1)
         carregarDadosIniciais(gerenciadorPersistencia)
     }
 
@@ -73,24 +77,29 @@ class MainMenuActivity : AppCompatActivity() {
      * Requisitos: 1.2, 10.1, 10.7
      */
     private fun carregarDadosIniciais(gerenciadorPersistencia: PersistenceManager) {
-        viewModel.verificarSaveExistente { temSave ->
+        lifecycleScope.launch {
+            // 1. Verificar se existe save para habilitar o botão Continuar
+            val temSave = gerenciadorPersistencia.temSaveState()
             temSaveExistente = temSave
             menuView.atualizarEstado(temSave)
-        }
 
-        // Carregar recorde pessoal e biomas desbloqueados do save mais recente
-        lifecycleScope.launch(Dispatchers.IO) {
-            val resultado = gerenciadorPersistencia.restaurar()
-            if (resultado is PersistenceManager.RestoreResult.Sucesso) {
-                val estado = resultado.estado
-                // Recorde pessoal = maior floor alcançado (Requisito 10.1)
-                val maiorFloor = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
-                val novoRecorde = maiorFloor
-                val novosBiomas = Biome.entries.filter { it.floorRange.first <= maiorFloor }
-                withContext(Dispatchers.Main) {
-                    recordePessoal = novoRecorde
-                    biomasDesbloqueados = novosBiomas
-                    menuView.atualizarRecordeEBiomas(recordePessoal, biomasDesbloqueados)
+            // 2. Se houver save, carregar recorde e biomas desbloqueados
+            if (temSave) {
+                withContext(Dispatchers.IO) {
+                    val resultado = gerenciadorPersistencia.restaurar()
+                    if (resultado is PersistenceManager.RestoreResult.Sucesso) {
+                        val estado = resultado.estado
+                        // Recorde pessoal = maior floor alcançado nas estatísticas ou no estado atual
+                        val maiorFloor = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
+                        val novoRecorde = maiorFloor
+                        val novosBiomas = Biome.entries.filter { it.floorRange.first <= maiorFloor }
+                        
+                        withContext(Dispatchers.Main) {
+                            recordePessoal = novoRecorde
+                            biomasDesbloqueados = novosBiomas
+                            menuView.atualizarRecordeEBiomas(recordePessoal, biomasDesbloqueados)
+                        }
+                    }
                 }
             }
         }

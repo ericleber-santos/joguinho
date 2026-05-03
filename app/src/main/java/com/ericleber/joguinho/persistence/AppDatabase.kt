@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
  */
 @Database(
     entities = [SaveStateEntity::class, LeaderboardEntryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
