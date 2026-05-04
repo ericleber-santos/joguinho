@@ -1,8 +1,10 @@
 package com.ericleber.joguinho.core
 
 import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.persistence.SaveState
+import com.ericleber.joguinho.renderer.PortalState
 
 /** Marcos de andar que desbloqueiam conquistas (Requisito 10.2). */
 val MARCOS_CONQUISTAS = setOf(1, 10, 20, 40, 60, 80, 100, 120)
@@ -140,6 +142,15 @@ class GameState {
 
     val currentBiome: Biome
         get() = devModeForcedBiome ?: Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
+
+    val currentBiomeWorld: BiomeWorld
+        get() = BiomeWorld.fromFloor(floorNumber)
+
+    // --- Portal Interdimensional ---
+    /** Estado visual atual do portal de saída. */
+    var portalState: PortalState = PortalState.DORMANT
+    /** Mundo destino do próximo portal (calculado ao gerar o mapa). */
+    var portalDestWorld: BiomeWorld = BiomeWorld.ENTRANHAS
 
     // --- Eventos pendentes para o frame atual ---
     // CopyOnWriteArrayList garante leitura segura de múltiplas threads sem sincronização explícita

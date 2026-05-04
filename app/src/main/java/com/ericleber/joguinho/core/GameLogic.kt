@@ -2,6 +2,8 @@ package com.ericleber.joguinho.core
 
 import com.ericleber.joguinho.pcg.BSPMazeGenerator
 import com.ericleber.joguinho.audio.TipoEfeito
+import com.ericleber.joguinho.biome.BiomeWorld
+import com.ericleber.joguinho.renderer.PortalState
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -152,6 +154,7 @@ class GameLogic(private val gameState: GameState) {
         verificarColisaoHeroMonster(maze)
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
+        atualizarPortal(maze)          // Portal interdimensional
         atualizarWaterStream(deltaTimeSec, maze)
         atualizarVfx(deltaMs)
         atualizarFeedbackCombate(deltaMs)
@@ -688,7 +691,41 @@ class GameLogic(private val gameState: GameState) {
     }
 
     /**
-     * Processa a transição real de nível após a animação da escada.
+     * Atualiza o estado visual do portal de saída baseado na distância do Hero.
+     *
+     * DORMANT   : dist > 5 tiles
+     * AWAKENING : dist ≤ 5 tiles
+     * OPEN      : dist ≤ 2.5 tiles
+     *
+     * Também calcula o mundo destino do portal ao entrar em AWAKENING pela primeira vez.
+     */
+    private fun atualizarPortal(maze: MazeData) {
+        val heroX = gameState.heroPosition.x
+        val heroY = gameState.heroPosition.y
+        val exitX = (maze.exitIndex % maze.width).toFloat()
+        val exitY = (maze.exitIndex / maze.width).toFloat()
+
+        val dx = heroX - exitX
+        val dy = heroY - exitY
+        val dist = sqrt(dx * dx + dy * dy)
+
+        val newState = when {
+            dist <= 2.5f -> PortalState.OPEN
+            dist <= 5.0f -> PortalState.AWAKENING
+            else         -> PortalState.DORMANT
+        }
+
+        // Calcula mundo destino quando o portal acorda pela primeira vez
+        if (newState == PortalState.AWAKENING && gameState.portalState == PortalState.DORMANT) {
+            val nextFloor = gameState.floorNumber + 1
+            gameState.portalDestWorld = BiomeWorld.fromFloor(nextFloor.coerceAtMost(120))
+        }
+
+        gameState.portalState = newState
+    }
+
+    /**
+     * Processa a transição real de nível após a animação do portal.
      */
     private fun processarTransicaoNivel(maze: MazeData) {
         gameState.isExiting = false
@@ -705,6 +742,9 @@ class GameLogic(private val gameState: GameState) {
         
         // Reseta o timer de sobrevivência do mapa para 5 minutos
         gameState.mapTimerMs = MAP_TIMER_INITIAL_MS
+
+        // Reseta o portal para o próximo mapa (começa DORMANT)
+        gameState.portalState = PortalState.DORMANT
 
         // Emite evento de conclusão de mapa
         gameState.emitEvent(GameEvent.MapCompleted)

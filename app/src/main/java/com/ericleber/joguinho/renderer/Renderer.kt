@@ -30,6 +30,7 @@ class Renderer(
 ) {
 
     private val lightingSystem = LightingSystem()
+    private val portalRenderer = PortalRenderer()
 
     var cameraX: Float = 0f
     var cameraY: Float = 0f
@@ -426,9 +427,23 @@ class Renderer(
             item.render(canvas)
         }
 
-        // Passo FINAL: Elementos de HUD fixos (Z-Index Máximo)
+        // Passo FINAL: Portal Interdimensional (substitui placa/escada)
         if (saidaTx in minX..maxX && saidaTy in minY..maxY) {
-            renderizarPlacaSaida(canvas, mazeData, saidaTx, saidaTy, tileW, tileH)
+            val portalSx = saidaTx * tileW + cameraX + tileW / 2f
+            val portalSy = saidaTy * tileH + cameraY + tileH / 2f
+            val isLocked = gameState.bossFightState.isActive &&
+                    gameState.bossFightState.elapsedMs < gameState.bossFightState.totalDurationMs
+            portalRenderer.render(
+                canvas     = canvas,
+                cx         = portalSx,
+                cy         = portalSy,
+                tileW      = tileW,
+                tileH      = tileH,
+                frameTotal = frameTotal,
+                state      = gameState.portalState,
+                destWorld  = gameState.portalDestWorld,
+                isLocked   = isLocked
+            )
         }
 
         // Partículas
@@ -527,6 +542,7 @@ class Renderer(
         spriteCache.clear()
         particleSystem.clear()
         lightingSystem.release()
+        portalRenderer.release()
     }
 
     // -------------------------------------------------------------------------
