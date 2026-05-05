@@ -53,6 +53,8 @@ class Renderer(
 
     /** Bioma do último frame — usado para detectar troca e reinicializar sistemas. */
     private var lastBiome: Biome? = null
+    /** Mapa do último frame — usado para re-init do DripSystem. */
+    private var lastMaze: MazeData? = null
 
     var cameraX: Float = 0f
     var cameraY: Float = 0f
@@ -484,14 +486,24 @@ class Renderer(
         // Fase 10 — DripSystem + Partículas Ambiente + Luz Ambiente
         // -----------------------------------------------------------------------
 
-        // Reinicializar sistemas ao trocar de bioma
+        // Reinicializar sistemas ao trocar de bioma ou mapa
         val biomeAtualFrame = gameState.currentBiome
-        if (biomeAtualFrame != lastBiome) {
+        val mazeAtualFrame = gameState.mazeData
+        
+        if (biomeAtualFrame != lastBiome || mazeAtualFrame != lastMaze) {
             lastBiome = biomeAtualFrame
-            // Re-init partículas ambiente com config do novo bioma (se null, usa DEFAULT)
+            lastMaze = mazeAtualFrame
+            
+            // Re-init partículas ambiente
             val cfg = AmbientParticleSystem.CONFIGS[biomeAtualFrame]
             val bounds = RectF(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
             ambientParticles.init(cfg, bounds)
+            
+            // Re-init DripSystem (fontes de goteira dependem do mapa)
+            if (mazeAtualFrame != null) {
+                val pal = BIOME_PALETTES[biomeAtualFrame] ?: BIOME_PALETTES.values.first()
+                dripSystem.init(mazeAtualFrame, pal)
+            }
         }
 
         // Atualizar e renderizar goteiras (apenas biomas com hasDrips)

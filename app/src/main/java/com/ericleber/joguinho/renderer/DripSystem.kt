@@ -44,6 +44,47 @@ class DripSystem {
     var onDripSound: ((volume: Float) -> Unit)? = null
     var onSplashSound: (() -> Unit)? = null
 
+    /**
+     * Inicializa o sistema para um novo mapa, escaneando por fontes de goteira.
+     * Uma fonte é criada onde há teto (parede) acima de um chão (piso).
+     */
+    fun init(maze: com.ericleber.joguinho.core.MazeData, palette: com.ericleber.joguinho.biome.BiomePalette) {
+        sources.clear()
+        pool.forEach { it.state = DripState.DEAD }
+
+        if (!palette.hasDrips) return
+
+        val width = maze.width
+        val height = maze.height
+        val tiles = maze.tiles
+
+        for (ty in 0 until height - 1) {
+            for (tx in 0 until width) {
+                val idxSelf = ty * width + tx
+                val idxBelow = (ty + 1) * width + tx
+                
+                // Regra: parede no topo, chão abaixo = goteira no "bico" do teto
+                if (tiles[idxSelf] == 1 && tiles[idxBelow] == 0) {
+                    // Encontra o chão mais baixo na mesma coluna para o splash
+                    var gridFloorY = ty + 1
+                    for (fy in (ty + 1) until height) {
+                        if (tiles[fy * width + tx] == 1) {
+                            gridFloorY = fy - 1
+                            break
+                        }
+                        if (fy == height - 1) gridFloorY = fy
+                    }
+                    
+                    // 25% de chance de ser uma goteira ativa nesse tile
+                    val seed = tx * 13 + ty * 37
+                    if (java.util.Random(seed.toLong()).nextFloat() < 0.25f) {
+                        registerDripSource(tx, ty, gridFloorY, seed.toLong())
+                    }
+                }
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Geração de mapa — chamado uma vez por mapa
     // -----------------------------------------------------------------------
@@ -176,21 +217,28 @@ class DripSystem {
                     )
                 }
                 DripState.FALLING -> {
-                    // Gota caindo: oval alongada verticalmente
+                    // Glow (Aura)
+                    val baseAlpha = (drip.alpha * 220).toInt().coerceIn(0, 255)
                     paint.style = Paint.Style.FILL
-                    canvas.drawOval(
-                        RectF(sx - 2f, sy - 5f, sx + 2f, sy + 2f),
-                        paint
-                    )
+                    paint.alpha = baseAlpha / 3
+                    canvas.drawCircle(sx, sy, 8f, paint)
+                    
+                    // Gota caindo
+                    paint.alpha = baseAlpha
+                    canvas.drawOval(RectF(sx - 2f, sy - 5f, sx + 2f, sy + 2f), paint)
                 }
                 DripState.SPLASHING -> {
-                    // Círculo de onda expandindo e fadindo
-                    val radius = 6f * drip.splashTimer
+                    // Efeito de impacto: círculos concêntricos expandindo
                     paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 1.5f
+                    paint.strokeWidth = 2f
+                    val radius = drip.splashTimer * 16f
+                    val baseAlpha = (drip.alpha * 220).toInt().coerceIn(0, 255)
+                    
+                    paint.alpha = baseAlpha
                     canvas.drawCircle(sx, sy, radius, paint)
-                    paint.style = Paint.Style.FILL
-                    paint.strokeWidth = 0f
+                    
+                    paint.alpha = baseAlpha / 2
+                    canvas.drawCircle(sx, sy, radius * 0.6f, paint)
                 }
                 DripState.DEAD -> { /* ignorar */ }
             }

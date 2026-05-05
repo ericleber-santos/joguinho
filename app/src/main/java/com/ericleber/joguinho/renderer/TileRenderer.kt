@@ -78,6 +78,16 @@ class TileRenderer {
                     canvas.drawLine(gx, gy, gx + 4f, gy + 4f, paint)
                 }
             }
+
+            // 3. Poças de Água (Biomas Úmidos/Pântano)
+            if (palette.hasDrips && rng.nextFloat() > 0.92f) {
+                paint.color = Color.argb(120, 100, 150, 255)
+                val pw = tileW * 0.4f
+                val ph = tileH * 0.2f
+                val px = x + rng.nextFloat() * (tileW - pw)
+                val py = y + rng.nextFloat() * (tileH - ph)
+                canvas.drawOval(RectF(px, py, px + pw, py + ph), paint)
+            }
         }
     }
 
@@ -103,9 +113,22 @@ class TileRenderer {
         // Bitmask de vizinhos (Top=1, Right=2, Bottom=4, Left=8)
         val mask = getWallBitmask(tileX, tileY, mazeData)
 
-        // Desenha a base (cor sólida)
+        // 1. Desenha a base (cor sólida)
         paint.color = corBase
         canvas.drawRect(x, y, x + tileW, y + tileH, paint)
+
+        // 2. Detalhes de Pedras/Gemas (Style Stardew)
+        val rng = java.util.Random(seed.toLong())
+        if (rng.nextFloat() > 0.7f) {
+            // Pequena gema ou mineral brilhante
+            paint.color = if (rng.nextBoolean()) palette.accentColor else palette.wallDetailColor
+            val gx = x + tileW * 0.3f + rng.nextFloat() * tileW * 0.4f
+            val gy = y + tileH * 0.3f + rng.nextFloat() * tileH * 0.4f
+            canvas.drawRect(gx, gy, gx + 3f, gy + 3f, paint)
+            // Brilho
+            paint.color = Color.WHITE
+            canvas.drawRect(gx + 1f, gy + 1f, gx + 2f, gy + 2f, paint)
+        }
 
         if (tileW > 4f) {
             // Lógica de "Topo da Parede" (Style Stardew)

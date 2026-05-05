@@ -163,9 +163,14 @@ class AmbientParticleSystem {
             if (!p.active) continue
             val lifeRatio = (p.life / p.maxLife).coerceIn(0f, 1f)
             // Efeito de "twinkle" (pulsação aleatória baseada na posição/tempo)
-            val twinkle = 0.8f + 0.2f * kotlin.math.sin((p.x + p.y + p.life * 0.01f).toDouble()).toFloat()
+            val wave = kotlin.math.sin((p.x + p.y + p.life * 0.01f).toDouble()).toFloat()
+            val twinkle = 0.8f + 0.2f * wave
+            
+            // Pulsação de tamanho (cresce e diminui levemente)
+            val currentHalf = half * (0.8f + 0.4f * wave)
+            
             paint.color = Color.argb((lifeRatio * 180 * twinkle).toInt(), r, g, b)
-            canvas.drawRect(p.x - half, p.y - half, p.x + half, p.y + half, paint)
+            canvas.drawRect(p.x - currentHalf, p.y - currentHalf, p.x + currentHalf, p.y + currentHalf, paint)
         }
     }
 
