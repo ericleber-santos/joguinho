@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomePalette
+import com.ericleber.joguinho.core.MazeData
 
 enum class TileType {
     WALL, FLOOR,
@@ -52,13 +53,30 @@ class TileRenderer {
         canvas.drawRect(x, y, x + tileW, y + tileH, paint)
 
         val seed = tileX * 11 + tileY * 17
-        if (hash % 4 != 0 && tileW > 4f) {
-            paint.color = escurecer(corFinal, 0.15f)
-            val n = 2 + (seed % 2)
+        val rng = java.util.Random(seed.toLong())
+
+        // Detalhes de Textura (Style Stardew)
+        if (tileW > 8f) {
+            // 1. Ruído de cor (manchas de terra/pedra)
+            if (rng.nextFloat() > 0.6f) {
+                paint.color = clarear(corFinal, 0.08f)
+                val sw = tileW * (0.2f + rng.nextFloat() * 0.3f)
+                val sh = tileH * (0.2f + rng.nextFloat() * 0.3f)
+                canvas.drawRect(x + rng.nextFloat() * (tileW - sw), y + rng.nextFloat() * (tileH - sh), x + sw, y + sh, paint)
+            }
+
+            // 2. Grãos e Cracks
+            paint.color = escurecer(corFinal, 0.20f)
+            val n = 3 + rng.nextInt(3)
             for (i in 0 until n) {
-                val gx = x + ((seed * (i + 1) * 3).and(0x7FFFFFFF) % (tileW.toInt().coerceAtLeast(2))).toFloat()
-                val gy = y + ((seed * (i + 1) * 5).and(0x7FFFFFFF) % (tileH.toInt().coerceAtLeast(2))).toFloat()
-                canvas.drawRect(gx, gy, gx + 1.5f, gy + 1.5f, paint)
+                val gx = x + rng.nextFloat() * (tileW - 2f)
+                val gy = y + rng.nextFloat() * (tileH - 2f)
+                canvas.drawRect(gx, gy, gx + 2f, gy + 2f, paint)
+                
+                // Pequena rachadura ocasional
+                if (rng.nextFloat() > 0.85f) {
+                    canvas.drawLine(gx, gy, gx + 4f, gy + 4f, paint)
+                }
             }
         }
     }
@@ -73,26 +91,54 @@ class TileRenderer {
         x: Float, y: Float,
         tileW: Float, tileH: Float,
         palette: BiomePalette,
-        tileX: Int = 0, tileY: Int = 0
+        tileX: Int, tileY: Int,
+        mazeData: MazeData? = null
     ) {
         val seed = tileX * 7 + tileY * 13
         val varBase = ((seed * 3) % 14) - 7
         val corBase = variarCor(palette.wallColor, varBase)
+        val corTopo = palette.wallTopColor
+        val corSombra = palette.wallShadowColor
 
+        // Bitmask de vizinhos (Top=1, Right=2, Bottom=4, Left=8)
+        val mask = getWallBitmask(tileX, tileY, mazeData)
+
+        // Desenha a base (cor sólida)
         paint.color = corBase
         canvas.drawRect(x, y, x + tileW, y + tileH, paint)
 
         if (tileW > 4f) {
-            // Highlight topo e esquerda
-            paint.color = clarear(corBase, 0.20f)
-            canvas.drawRect(x, y, x + tileW, y + 2f, paint)
-            canvas.drawRect(x, y, x + 2f, y + tileH, paint)
-            // Sombra base e direita
-            paint.color = escurecer(corBase, 0.25f)
-            canvas.drawRect(x, y + tileH - 2f, x + tileW, y + tileH, paint)
-            canvas.drawRect(x + tileW - 2f, y, x + tileW, y + tileH, paint)
+            // Lógica de "Topo da Parede" (Style Stardew)
+            // Se não tem parede acima, desenha o topo (profundidade)
+            if (mask and 1 == 0) {
+                paint.color = corTopo
+                canvas.drawRect(x, y, x + tileW, y + tileH * 0.4f, paint)
+                // Highlight na quina superior
+                paint.color = clarear(corTopo, 0.15f)
+                canvas.drawRect(x, y, x + tileW, y + 2f, paint)
+            }
+
+            // Lógica de "Face Frontal" (Shadow/Depth)
+            // Se não tem parede abaixo, desenha a face frontal
+            if (mask and 4 == 0) {
+                paint.color = corSombra
+                canvas.drawRect(x, y + tileH * 0.7f, x + tileW, y + tileH, paint)
+                // Detalhe de borda inferior
+                paint.color = escurecer(corSombra, 0.15f)
+                canvas.drawRect(x, y + tileH - 2f, x + tileW, y + tileH, paint)
+            }
+
+            // Sombras laterais (opcional para profundidade)
+            if (mask and 8 == 0) { // Sem parede na esquerda
+                paint.color = Color.argb(40, 0, 0, 0)
+                canvas.drawRect(x, y, x + 3f, y + tileH, paint)
+            }
+            if (mask and 2 == 0) { // Sem parede na direita
+                paint.color = Color.argb(40, 0, 0, 0)
+                canvas.drawRect(x + tileW - 3f, y, x + tileW, y + tileH, paint)
+            }
             
-            // Textura ÚNICA por bioma
+            // Textura por bioma (reduzida se for muito pequeno)
             val nome = biomeAtual.name
             when {
                 nome.contains("MINA") || nome.contains("CAVERNA") || nome.contains("TUNEIS") || nome.contains("CARVAO") ->
@@ -106,9 +152,20 @@ class TileRenderer {
                 nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") ->
                     texturaVulcanica(canvas, x, y, tileW, tileH, palette, seed)
                 else ->
-                    texturaMina(canvas, x, y, tileW, tileH, palette, seed) // Fallback
+                    texturaMina(canvas, x, y, tileW, tileH, palette, seed)
             }
         }
+    }
+
+    /** Calcula bitmask de vizinhos (Top=1, Right=2, Bottom=4, Left=8) */
+    fun getWallBitmask(tx: Int, ty: Int, mazeData: MazeData?): Int {
+        if (mazeData == null) return 15
+        var mask = 0
+        if (ty > 0 && mazeData.tiles[(ty - 1) * mazeData.width + tx] == 1) mask = mask or 1
+        if (tx < mazeData.width - 1 && mazeData.tiles[ty * mazeData.width + (tx + 1)] == 1) mask = mask or 2
+        if (ty < mazeData.height - 1 && mazeData.tiles[(ty + 1) * mazeData.width + tx] == 1) mask = mask or 4
+        if (tx > 0 && mazeData.tiles[ty * mazeData.width + (tx - 1)] == 1) mask = mask or 8
+        return mask
     }
 
     // --- MINA: Rachaduras escuras, veios de minério brilhante ---
@@ -467,7 +524,7 @@ class TileRenderer {
         val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), tileH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
         when (tileType) {
-            TileType.WALL         -> renderWallTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY)
+            TileType.WALL         -> renderWallTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY, null)
             TileType.FLOOR        -> renderFloorTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY)
             TileType.ENTRADA      -> renderEntradaTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat())
             TileType.SAIDA        -> renderSaidaTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat())
@@ -476,6 +533,16 @@ class TileRenderer {
             TileType.DECORATIVE_2 -> renderDecorativeTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, 2, biome, tileX, tileY)
             TileType.DECORATIVE_3 -> renderDecorativeTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, 3, biome, tileX, tileY)
         }
+        return bitmap
+    }
+
+    fun createWallBitmap(
+        tileW: Int, tileH: Int, palette: BiomePalette,
+        tileX: Int, tileY: Int, mazeData: MazeData
+    ): Bitmap {
+        val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), tileH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bitmap)
+        renderWallTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY, mazeData)
         return bitmap
     }
 

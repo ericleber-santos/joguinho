@@ -4,7 +4,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
@@ -31,6 +34,25 @@ class Renderer(
 
     private val lightingSystem = LightingSystem()
     private val portalRenderer = PortalRenderer()
+
+    // -----------------------------------------------------------------------
+    // Fase 10 — Sistemas de imersão visual
+    // -----------------------------------------------------------------------
+
+    /** Sistema de goteiras animadas para biomas com hasDrips = true. */
+    val dripSystem = DripSystem()
+
+    /** Sistema de partículas ambiente (poeira, esporos, terra). */
+    private val ambientParticles = AmbientParticleSystem()
+
+    /** Paint para overlay de luz ambiente (PorterDuff MULTIPLY). */
+    private val ambientLightPaint = Paint().apply {
+        isAntiAlias = false
+        style = Paint.Style.FILL
+    }
+
+    /** Bioma do último frame — usado para detectar troca e reinicializar sistemas. */
+    private var lastBiome: Biome? = null
 
     var cameraX: Float = 0f
     var cameraY: Float = 0f
@@ -256,12 +278,21 @@ class Renderer(
                 val idx = ty * mazeData.width + tx
                 if (idx < 0 || idx >= mazeData.tiles.size) continue
                 if (mazeData.tiles[idx] != 1) continue
+                
                 val sx = tx * tileW + cameraX
                 val sy = ty * tileH + cameraY
+                
+                // Calcula bitmask para AutoTiling
+                val mask = tileRenderer.getWallBitmask(tx, ty, mazeData)
+                val wallKey = "biome_${gameState.currentBiome.name}_wall_mask_$mask"
+                
                 renderList.add(object : Renderable {
                     override val ySort: Float = ty + 1.0f
                     override fun render(c: Canvas) {
-                        tileRenderer.renderWallTile(c, sx, sy, tileW, tileH, palette, tx, ty)
+                        val wallBitmap = spriteCache.getOrCreate(wallKey) {
+                            tileRenderer.createWallBitmap(tileW.toInt(), tileH.toInt(), palette, tx, ty, mazeData)
+                        }
+                        c.drawBitmap(wallBitmap, sx, sy, null)
                     }
                 })
             }
@@ -446,8 +477,39 @@ class Renderer(
             )
         }
 
-        // Partículas
+        // Partículas legadas (water splash, etc.)
         particleSystem.render(canvas)
+
+        // -----------------------------------------------------------------------
+        // Fase 10 — DripSystem + Partículas Ambiente + Luz Ambiente
+        // -----------------------------------------------------------------------
+
+        // Reinicializar sistemas ao trocar de bioma
+        val biomeAtualFrame = gameState.currentBiome
+        if (biomeAtualFrame != lastBiome) {
+            lastBiome = biomeAtualFrame
+            // Re-init partículas ambiente com config do novo bioma (se null, usa DEFAULT)
+            val cfg = AmbientParticleSystem.CONFIGS[biomeAtualFrame]
+            val bounds = RectF(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
+            ambientParticles.init(cfg, bounds)
+        }
+
+        // Atualizar e renderizar goteiras (apenas biomas com hasDrips)
+        val paletteForDrip = BIOME_PALETTES[gameState.currentBiome]
+        if (paletteForDrip?.hasDrips == true) {
+            dripSystem.update(deltaMs, tileWDinamico)
+            dripSystem.render(canvas, cameraX, cameraY)
+        }
+
+        // Atualizar e renderizar partículas ambiente
+        val gameBounds = RectF(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
+        ambientParticles.updateBounds(gameBounds)
+        ambientParticles.update(deltaMs)
+        ambientParticles.render(canvas)
+
+        // Overlay de cor de luz ambiente (MULTIPLY) — aplicado por último,
+        // antes do restore, para não afetar o HUD
+        renderAmbientLight(canvas, gameState.currentBiome)
 
         // Restaura a área total de desenho para renderizar o HUD sobreposto
         canvas.restore()
@@ -523,6 +585,9 @@ class Renderer(
      */
     fun onMapEnd() {
         spriteCache.recycleAll()
+        dripSystem.reset()
+        ambientParticles.clear()
+        lastBiome = null
     }
 
     /**
@@ -543,6 +608,61 @@ class Renderer(
         particleSystem.clear()
         lightingSystem.release()
         portalRenderer.release()
+        dripSystem.reset()
+        ambientParticles.clear()
+    }
+
+    // -----------------------------------------------------------------------
+    // Fase 10 — Overlay de luz ambiente (PorterDuff MULTIPLY)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Aplica uma cor de luz ambiente sobre toda a área do jogo via MULTIPLY.
+     * Chamado APÓS todos os sprites/tiles, ANTES de canvas.restore() (preserva HUD limpo).
+     *
+     * A cor deve ter alpha ~0x33–0x55 para efeito sutil.
+     * Biomas mais claros (Calcário) usam alpha menor (0x33).
+     */
+    private fun renderAmbientLight(canvas: Canvas, biome: Biome) {
+        val overlayColor = when (biome) {
+            Biome.MINA_ABANDONADA,
+            Biome.MINA_DE_CARVAO      -> 0x553D2B0A.toInt()  // sépia escuro
+            Biome.CAVERNA_UMIDA,
+            Biome.RIACHOS_SUBTERRANEOS,
+            Biome.TUNEIS_AQUATICOS    -> 0x550A1A2A.toInt()  // azul frio
+            Biome.JARDIM_DE_FUNGOS,
+            Biome.GRUTA_DOS_COGUMELOS -> 0x551A0A2A.toInt()  // roxo
+            Biome.CAVERNA_DE_CALCARIO -> 0x330A1A2A.toInt()  // azul claro (menos opaco)
+            Biome.TUNEIS_DE_TERRA,
+            Biome.CAVERNA_DAS_RAIZES  -> 0x552A1008.toInt()  // marrom
+            Biome.CAVERNA_DE_LAVA,
+            Biome.TUNEIS_VULCANICOS,
+            Biome.NUCLEO_DE_FOGO,
+            Biome.FORJA_INFERNAL,
+            Biome.ERA_DINOSSAUROS     -> 0x553A0A00.toInt()  // laranja escuro
+            Biome.ABISMO_PROFUNDO,
+            Biome.ABISMO_AZUL,
+            Biome.ABISMO_DE_PEDRA,
+            Biome.NUCLEO_ESCURO,
+            Biome.CAVERNA_DO_VAZIO    -> 0x66000010.toInt()  // vazio escuro
+            else                      -> return               // sem overlay para demais biomas
+        }
+
+        // saveLayer isola o MULTIPLY do HUD (que está fora do clipRect)
+        val sc = canvas.saveLayer(
+            0f, 0f,
+            screenWidth.toFloat(), screenHeight * fracaoAreaJogo,
+            null
+        )
+        ambientLightPaint.color = overlayColor
+        ambientLightPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+        canvas.drawRect(
+            0f, 0f,
+            screenWidth.toFloat(), screenHeight * fracaoAreaJogo,
+            ambientLightPaint
+        )
+        ambientLightPaint.xfermode = null
+        canvas.restoreToCount(sc)
     }
 
     // -------------------------------------------------------------------------

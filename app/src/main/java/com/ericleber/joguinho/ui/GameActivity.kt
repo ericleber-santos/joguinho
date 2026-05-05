@@ -129,6 +129,29 @@ class GameActivity : AppCompatActivity() {
         // Conecta callback para lançar ScoreActivity ao completar andar (Requisito 6.1)
         viewModel.onHeroReachedExit = { runOnUiThread { lancarTelaScore() } }
 
+        // Fase 10 — Registrar DripSources no DripSystem após gerar cada mapa
+        viewModel.onMapGenerated = { maze, biome, _ ->
+            val palette = com.ericleber.joguinho.biome.BIOME_PALETTES[biome]
+            if (palette?.hasDrips == true) {
+                for (ty in 0 until maze.height - 1) {
+                    for (tx in 0 until maze.width) {
+                        val idx = ty * maze.width + tx
+                        val below = (ty + 1) * maze.width + tx
+                        if (idx < maze.tiles.size && below < maze.tiles.size) {
+                            // Tile de parede com tile de chão abaixo = possível fonte de gota
+                            if (maze.tiles[idx] == 1 && maze.tiles[below] == 0) {
+                                renderer.dripSystem.registerDripSource(
+                                    gridX = tx, gridY = ty,
+                                    gridFloorY = ty + 1,
+                                    mapSeed = maze.seed
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Aplica volumes de áudio das configurações (Requisito 12.1)
         gerenciadorAudio.setVolumeMusicaPercent(prefs.getInt("volumeMusica", 80) / 100f)
         gerenciadorAudio.setVolumeEfeitosPercent(prefs.getInt("volumeEfeitos", 80) / 100f)

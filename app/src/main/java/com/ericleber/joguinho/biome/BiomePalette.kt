@@ -116,7 +116,7 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = Biome.entries.associateWith { bio
     when (biome) {
         // 1-10: Minas e Cavernas Iniciais
         Biome.MINA_ABANDONADA -> createPalette(0xFF3A3028.toInt(), 0xFFC4A882.toInt(), 0xFFF59E0B.toInt(), 0xFFB45309.toInt(), 0xFF0F0806.toInt(),
-            wallDetailType = WallDetailType.MOSS, floorVariantCount = 2, hasAmbush = true)
+            wallDetailType = WallDetailType.MOSS, floorVariantCount = 2, hasAmbush = true, hasDrips = true)
         Biome.CAVERNA_UMIDA -> createPalette(0xFF2D3748.toInt(), 0xFF4A5568.toInt(), 0xFF63B3ED.toInt(), 0xFF4299E1.toInt(), 0xFF1A202C.toInt(),
             wallDetailType = WallDetailType.MOSS, floorVariantCount = 3, hasDrips = true, hasAmbush = true)
         Biome.TUNEIS_DE_TERRA -> createPalette(0xFF4A3728.toInt(), 0xFF8B4513.toInt(), 0xFFCD853F.toInt(), 0xFFD2691E.toInt(), 0xFF1E1408.toInt(),
@@ -133,18 +133,18 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = Biome.entries.associateWith { bio
             lightingMode = LightingMode.BIOLUMINESCENT, wallDetailType = WallDetailType.CRYSTAL_VEIN, floorVariantCount = 3)
         Biome.TUNEIS_LUMINESCENTES -> createPalette(0xFF234E52.toInt(), 0xFF319795.toInt(), 0xFF81E6D9.toInt(), 0xFF4FD1C5.toInt(), 0xFF1D3131.toInt(),
             lightingMode = LightingMode.BIOLUMINESCENT, wallDetailType = WallDetailType.CRYSTAL_VEIN, floorVariantCount = 3, hasAmbush = true)
-        Biome.GRUTA_DOS_COGUMELOS -> createPalette(0xFF702459.toInt(), 0xFFB83280.toInt(), 0xFFF687B3.toInt(), 0xFFED64A6.toInt(), 0xFF4A1239.toInt(),
-            lightingMode = LightingMode.BIOLUMINESCENT, wallDetailType = WallDetailType.MOSS, floorVariantCount = 4, hasDrips = true)
         Biome.MINA_DE_QUARTZO -> createPalette(0xFF4A5568.toInt(), 0xFFEDF2F7.toInt(), 0xFFFFFFFF.toInt(), 0xFFE2E8F0.toInt(), 0xFF1A202C.toInt(),
             wallDetailType = WallDetailType.CRYSTAL_VEIN, floorVariantCount = 2)
+        Biome.GRUTA_DOS_COGUMELOS -> createPalette(0xFF702459.toInt(), 0xFFB83280.toInt(), 0xFFF687B3.toInt(), 0xFFED64A6.toInt(), 0xFF4A1239.toInt(),
+            lightingMode = LightingMode.BIOLUMINESCENT, wallDetailType = WallDetailType.MOSS, floorVariantCount = 4, hasDrips = true)
 
         // 21-30: Água e Gelo
-        Biome.RIACHOS_SUBTERRANEOS -> createPalette(0xFF2C5282.toInt(), 0xFF4299E1.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF1A365D.toInt(),
-            wallDetailType = WallDetailType.MOSS, hasDrips = true, floorVariantCount = 3)
         Biome.LAGO_CONGELADO -> createPalette(0xFF2A4365.toInt(), 0xFFEBF8FF.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF1A365D.toInt(),
             wallDetailType = WallDetailType.ICE_DRIP, hasDrips = true, floorVariantCount = 2)
         Biome.CAVERNA_DE_GELO -> createPalette(0xFFEBF8FF.toInt(), 0xFFFFFFFF.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF2A4365.toInt(),
             wallDetailType = WallDetailType.ICE_DRIP, hasDrips = true, floorVariantCount = 2)
+        Biome.RIACHOS_SUBTERRANEOS -> createPalette(0xFF2C5282.toInt(), 0xFF4299E1.toInt(), 0xFFBEE3F8.toInt(), 0xFF90CDF4.toInt(), 0xFF1A365D.toInt(),
+            wallDetailType = WallDetailType.MOSS, hasDrips = true, floorVariantCount = 3)
         Biome.TUNEIS_AQUATICOS -> createPalette(0xFF2B6CB0.toInt(), 0xFF3182CE.toInt(), 0xFF63B3ED.toInt(), 0xFF4299E1.toInt(), 0xFF1A365D.toInt(),
             hasDrips = true, hasAmbush = true, floorVariantCount = 3)
         Biome.ABISMO_AZUL -> createPalette(0xFF1A365D.toInt(), 0xFF2A4365.toInt(), 0xFF3182CE.toInt(), 0xFF2B6CB0.toInt(), 0xFF000000.toInt(),
@@ -257,6 +257,7 @@ val BIOME_PALETTES: Map<Biome, BiomePalette> = Biome.entries.associateWith { bio
             lightingMode = LightingMode.MOONLIGHT, wallDetailType = WallDetailType.RUNE_GLOW, floorVariantCount = 4, hasAmbush = true)
         Biome.O_ULTIMO_PISO -> createPalette(0xFF000000.toInt(), 0xFFD69E2E.toInt(), 0xFFFFFFFF.toInt(), 0xFFECC94B.toInt(), 0xFF000000.toInt(),
             lightingMode = LightingMode.MOONLIGHT, wallDetailType = WallDetailType.RUNE_GLOW, floorVariantCount = 4, hasAmbush = true)
+        else -> createPalette(0xFF3A3028.toInt(), 0xFFC4A882.toInt(), 0xFFF59E0B.toInt(), 0xFFB45309.toInt(), 0xFF0F0806.toInt())
     }
 }
 

@@ -54,6 +54,15 @@ class GameViewModel : ViewModel() {
     // Callback para lançar ScoreActivity — injetado pela GameActivity
     var onHeroReachedExit: (() -> Unit)? = null
 
+    /**
+     * Callback invocado após gerar um novo mapa.
+     * Permite que a GameActivity registre DripSources no DripSystem do Renderer
+     * sem criar acoplamento entre ViewModel e Renderer.
+     *
+     * Parâmetros: (mazeData, biome, tileSize)
+     */
+    var onMapGenerated: ((com.ericleber.joguinho.core.MazeData, com.ericleber.joguinho.biome.Biome, Float) -> Unit)? = null
+
     // --- Estado do jogo exposto à UI via StateFlow (Requisito 21.1) ---
     private val _faseJogo = MutableStateFlow(GamePhase.MENU)
     val faseJogo: StateFlow<GamePhase> = _faseJogo.asStateFlow()
@@ -144,6 +153,13 @@ class GameViewModel : ViewModel() {
         val startY = maze.startIndex / maze.width
         gameState.heroPosition = Position(startX + 0.5f, startY + 0.5f)
         gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1) + 0.5f, startY + 0.5f)
+        
+        // Notifica GameActivity para registrar DripSources no Renderer
+        // (tileSize = 0f indica que será calculado pelo Renderer dinamicamente)
+        val currentBiome = com.ericleber.joguinho.biome.Biome.entries
+            .firstOrNull { gameState.floorNumber in it.floorRange }
+            ?: com.ericleber.joguinho.biome.Biome.MINA_ABANDONADA
+        onMapGenerated?.invoke(maze, currentBiome, 0f)
         
         // Garante que a fase volte para PLAYING após a geração
         gameState.phase = GamePhase.PLAYING
