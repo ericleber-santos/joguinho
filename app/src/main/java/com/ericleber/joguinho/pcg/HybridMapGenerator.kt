@@ -30,9 +30,10 @@ class HybridMapGenerator(private val random: Random) {
 
         // Passo 1: Geração Base com Perlin Noise (fBm)
         // O noise scale determina a "frequência" das cavernas.
-        // Quanto menor, mais longas e conectadas.
-        val noiseScale = 0.08
-        val threshold = 0.0 + (wallDensityTarget - 0.5) * 0.2 // Ajusta o threshold baseado na densidade
+        // Reduzido de 0.08 para 0.05 para criar passagens no mínimo 3x maiores.
+        val noiseScale = 0.05
+        // Threshold reduzido para expandir as áreas de chão.
+        val threshold = -0.1 + (wallDensityTarget - 0.5) * 0.2 
         
         for (y in 1 until height - 1) {
             for (x in 1 until width - 1) {
@@ -55,9 +56,11 @@ class HybridMapGenerator(private val random: Random) {
         // Definir Ponto de Início e Saída baseados em distâncias
         val (startIndex, exitIndex, exitDir) = findStartAndExit(tiles, width, height)
 
-        // Passo 4: Limpeza final (Flood Fill para bolsões isolados e preenchimento de becos sem saída)
+        // Passo 4: Limpeza final (Flood Fill para bolsões isolados)
         removeIsolatedPockets(tiles, width, height, startIndex)
-        fillDeadEnds(tiles, width, height, startIndex, exitIndex)
+        // REMOVIDO: fillDeadEnds estreita demais as passagens ao fechar cantos.
+        // fillDeadEnds(tiles, width, height, startIndex, exitIndex)
+
 
         return MazeData(
             width = width,

@@ -343,6 +343,10 @@ class GameLogic(private val gameState: GameState) {
                         gameState.heroSpeedBuffRemainingMs = 7000L
                         onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                     }
+                    com.ericleber.joguinho.core.ItemType.HEART -> {
+                        gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(3)
+                        onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
+                    }
                 }
                 item.copy(isActive = false)
             } else {
@@ -515,46 +519,30 @@ class GameLogic(private val gameState: GameState) {
             // Registra colisão para cooldown
             gameState.monsterCollisionCooldowns[monster.id] = currentTime
 
-            // Lógica de Dano/Slowdown baseada no tipo de monstro
-            if (monster.isBoss) {
-                if (gameState.heroIsSlowedDown && (currentTime - gameState.heroLastSlowdownTimeMs) < SLOWDOWN_BOSS_MS) {
-                    // Já está sob efeito do Boss e foi pego de novo! Perde vida.
-                    gameState.heroLives--
-                    onSoundEffectRequested?.invoke(TipoEfeito.BOSS_RISADA)
-                    
-                    // Se as vidas acabarem, Game Over
-                    if (gameState.heroLives <= 0) {
-                        gameState.heroLives = 0
-                        gameState.phase = GamePhase.GAME_OVER
-                    } else {
-                        // Respawn no início do mapa para dar chance
-                        gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
-                        gameState.heroIsSlowedDown = false
-                        gameState.heroSlowdownRemainingMs = 0
-                    }
-                } else {
-                    // Primeiro golpe do Boss: Lentidão Severa
-                    gameState.heroIsSlowedDown = true
-                    gameState.heroSlowdownRemainingMs = SLOWDOWN_BOSS_MS
-                    gameState.heroLastSlowdownTimeMs = currentTime
-                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
-                }
+            // Lógica de Dano Direto (Corações)
+            // Se tiver vidas, perde uma. Se chegar a 0 (menos de 1 completo), reseta para o início.
+            if (gameState.heroLives > 0) {
+                gameState.heroLives--
+                onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+            }
+            
+            // MECÂNICA DE RESET: Se após o dano estiver com 0, volta ao início do mapa
+            if (gameState.heroLives <= 0) {
+                gameState.heroLives = 0 // Garante 0
+                // Som de derrota sutil (risada do boss ou lentidão)
+                onSoundEffectRequested?.invoke(TipoEfeito.BOSS_RISADA)
+                
+                // Respawn no início do mapa atual
+                gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
+                gameState.heroIsSlowedDown = false
+                gameState.heroSlowdownRemainingMs = 0
+                
+                // Penalidade: Herói ganha 1 vida para poder continuar tentando
+                gameState.heroLives = 1 
             } else {
-                // Monstro Normal: Aplica slowdown padrão
-                // MECH-04: Letalidade de Lacaios - Se o herói estiver em "Lentidão Severa", perde vida
-                if (gameState.heroIsSlowedDown && (currentTime - gameState.heroLastSlowdownTimeMs) < SLOWDOWN_BOSS_MS) {
-                    gameState.heroLives--
-                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
-                    
-                    if (gameState.heroLives <= 0) {
-                        gameState.heroLives = 0
-                        gameState.phase = GamePhase.GAME_OVER
-                    }
-                } else {
-                    gameState.heroIsSlowedDown = true
-                    gameState.heroSlowdownRemainingMs = (gameState.heroSlowdownRemainingMs + SLOWDOWN_MONSTER_MS).coerceAtMost(SLOWDOWN_MAX_ACUMULADO_MS)
-                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
-                }
+                // Se ainda tem vida, aplica o recuo e um pequeno slowdown visual
+                gameState.heroIsSlowedDown = true
+                gameState.heroSlowdownRemainingMs = SLOWDOWN_MONSTER_MS
             }
             
             gameState.currentMapClean = false
@@ -987,6 +975,15 @@ class GameLogic(private val gameState: GameState) {
                         if (isNowDead) {
                             val points = if (m.isBoss) 500 else 10
                             gameState.accumulatedScore += points
+                            
+                            // Requisito: Recupera um coração após derrotar 2 chefes
+                            if (m.isBoss) {
+                                gameState.bossesDefeatedCount++
+                                if (gameState.bossesDefeatedCount % 2 == 0) {
+                                    gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(3)
+                                    onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
+                                }
+                            }
                             
                             val popup = com.ericleber.joguinho.ui.ScorePopupPool.obtain(
                                 id = "score_${m.id}_${currentTime}",

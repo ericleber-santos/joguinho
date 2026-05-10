@@ -79,6 +79,7 @@ class GameState {
     // Frase atual do Boss para exibição no HUD
     var bossMessage: String? = null
     var bossMessageTimerMs: Long = 0L
+    var bossesDefeatedCount: Int = 0
 
     // --- Estado do Spike ---
     var spikeIsSlowedDown: Boolean = false
@@ -281,7 +282,8 @@ class GameState {
         achievements = achievements.toSet(),
         personalBests = personalBests.toMap(),
         activeCharacterId = activeCharacterId,
-        activeSkinId = activeSkinId
+        activeSkinId = activeSkinId,
+        bossesDefeatedCount = bossesDefeatedCount
     )
 
     /** Restaura o estado a partir de um SaveState. */
@@ -315,6 +317,7 @@ class GameState {
         personalBests = save.personalBests.toMutableMap()
         activeCharacterId = save.activeCharacterId
         activeSkinId = save.activeSkinId
+        bossesDefeatedCount = save.bossesDefeatedCount
         phase = GamePhase.PLAYING
     }
 }

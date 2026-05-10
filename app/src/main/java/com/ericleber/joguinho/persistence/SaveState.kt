@@ -28,5 +28,6 @@ data class SaveState(
     val personalBests: Map<Int, Long>,
     // Extensibility fields (Requisitos 24.6, 24.8)
     val activeCharacterId: String = "hero",
-    val activeSkinId: String = "default"
+    val activeSkinId: String = "default",
+    val bossesDefeatedCount: Int = 0
 )

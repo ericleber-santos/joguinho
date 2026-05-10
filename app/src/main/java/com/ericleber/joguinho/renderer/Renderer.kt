@@ -308,7 +308,11 @@ class Renderer(
             renderList.add(object : Renderable {
                 override val ySort: Float = item.position.y + 0.4f // Levemente atrás do pé
                 override fun render(c: Canvas) {
-                    characterRenderer.renderBanana(c, sx, sy, heroAnimFrame, tileW)
+                    if (item.type == com.ericleber.joguinho.core.ItemType.HEART) {
+                        characterRenderer.renderHeart(c, sx, sy, heroAnimFrame, tileW)
+                    } else {
+                        characterRenderer.renderBanana(c, sx, sy, heroAnimFrame, tileW)
+                    }
                 }
             })
         }

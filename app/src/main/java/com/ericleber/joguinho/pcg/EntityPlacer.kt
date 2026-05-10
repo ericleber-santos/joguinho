@@ -142,20 +142,36 @@ class EntityPlacer(private val random: Random) {
         criticalPath: Set<Int>,
         occupiedIndices: Set<Int>
     ): List<ItemState> {
-        // Requisito: O power up poderá estar em locais aleatórios SOMENTE no mapa onde tem chefão (mapIndex == 2)
-        if (mapIndex != 2) return emptyList()
-
-        // 1 item por mapa de boss, em algum lugar fora do caminho crítico
-        val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
-        val selected = candidates.shuffled(random).take(1)
+        val items = mutableListOf<ItemState>()
         
-        return selected.mapIndexed { i, index ->
-            ItemState(
-                id = "item_${maze.seed}_$i",
-                position = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f),
-                type = ItemType.SPEED_BOOTS // Representará a Banana visualmente
-            )
+        // Requisito: O power up (Botas) poderá estar em locais aleatórios SOMENTE no mapa onde tem chefão (mapIndex == 2)
+        if (mapIndex == 2) {
+            val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
+            val selected = candidates.shuffled(random).take(1)
+            selected.forEachIndexed { i, index ->
+                items.add(ItemState(
+                    id = "item_boots_${maze.seed}_$i",
+                    position = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f),
+                    type = ItemType.SPEED_BOOTS
+                ))
+            }
         }
+        
+        // Novo Requisito: Item de coração raríssimo (2% de chance em QUALQUER mapa)
+        if (random.nextFloat() < 0.02f) {
+            val currentOccupied = occupiedIndices + items.map { it.position.iy * maze.width + it.position.ix }
+            val candidates = getFloorCandidates(maze, criticalPath + currentOccupied)
+            val selected = candidates.shuffled(random).take(1)
+            selected.forEachIndexed { i, index ->
+                items.add(ItemState(
+                    id = "item_heart_${maze.seed}_$i",
+                    position = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f),
+                    type = ItemType.HEART
+                ))
+            }
+        }
+        
+        return items
     }
 
     /**

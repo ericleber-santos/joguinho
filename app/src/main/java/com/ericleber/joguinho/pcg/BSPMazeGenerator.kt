@@ -20,7 +20,8 @@ class BSPMazeGenerator(private val random: Random) {
 
         // Tamanho mínimo de uma folha BSP — menor = mais salas geradas
         // Com mapa 40x30 e MIN_LEAF_SIZE=8, o BSP gera 4-6 salas por Map
-        private const val MIN_LEAF_SIZE = 8
+        // Tamanho mínimo de uma folha BSP — aumentado para garantir salas e corredores amplos
+        private const val MIN_LEAF_SIZE = 12
     }
 
     /**
@@ -302,13 +303,13 @@ class BSPMazeGenerator(private val random: Random) {
     }
 
     private fun carveHorizontalCorridor(tiles: IntArray, mapWidth: Int, x1: Int, x2: Int, y: Int) {
-        val from = minOf(x1, x2)
-        val to = maxOf(x1, x2)
-        val comprimento = to - from
-
-        // Corredor com 5 tiles de largura
-        for (x in from..to) {
-            for (dy in -2..2) {
+        val startX = minOf(x1, x2)
+        val endX = maxOf(x1, x2)
+        val comprimento = endX - startX
+        
+        // Corredores com largura de 9 tiles (triplo da largura mínima anterior)
+        for (x in startX..endX) {
+            for (dy in -4..4) {
                 val ty = y + dy
                 if (ty >= 0 && ty < tiles.size / mapWidth) {
                     tiles[ty * mapWidth + x] = TILE_FLOOR
@@ -319,11 +320,11 @@ class BSPMazeGenerator(private val random: Random) {
         // Obstáculo no meio do corredor — força desvio, evita linha reta A→B
         // Só insere se o corredor for longo o suficiente (>10 tiles)
         if (comprimento > 10) {
-            val midX = from + comprimento / 2 + random.nextInt(comprimento / 4) - comprimento / 8
-            val ladoObstaculo = if (random.nextBoolean()) 1 else -1
-            // Bloco de parede de 3×3 deslocado para um lado do corredor
+            val midX = startX + comprimento / 2 + random.nextInt(comprimento / 4) - comprimento / 8
+            val ladoObstaculo = if (random.nextBoolean()) 2 else -2 // Desloca 2 tiles
+            // Bloco de parede de 3×3 
             for (bx in (midX - 1)..(midX + 1)) {
-                for (by in (y + ladoObstaculo)..(y + ladoObstaculo * 2)) {
+                for (by in (y + ladoObstaculo - 1)..(y + ladoObstaculo + 1)) {
                     if (bx >= 0 && bx < mapWidth && by >= 0 && by < tiles.size / mapWidth) {
                         tiles[by * mapWidth + bx] = TILE_WALL
                     }
@@ -336,10 +337,10 @@ class BSPMazeGenerator(private val random: Random) {
         val from = minOf(y1, y2)
         val to = maxOf(y1, y2)
         val comprimento = to - from
-
-        // Corredor com 5 tiles de largura
+        
+        // Corredores com largura de 9 tiles (triplo da largura mínima anterior)
         for (y in from..to) {
-            for (dx in -2..2) {
+            for (dx in -4..4) {
                 val tx = x + dx
                 if (tx >= 0 && tx < mapWidth) {
                     tiles[y * mapWidth + tx] = TILE_FLOOR
@@ -350,15 +351,17 @@ class BSPMazeGenerator(private val random: Random) {
         // Obstáculo no meio do corredor vertical
         if (comprimento > 10) {
             val midY = from + comprimento / 2 + random.nextInt(comprimento / 4) - comprimento / 8
-            val ladoObstaculo = if (random.nextBoolean()) 1 else -1
+            val ladoObstaculo = if (random.nextBoolean()) 2 else -2
+            // Bloco de parede de 3×3
             for (by in (midY - 1)..(midY + 1)) {
-                for (bx in (x + ladoObstaculo)..(x + ladoObstaculo * 2)) {
+                for (bx in (x + ladoObstaculo - 1)..(x + ladoObstaculo + 1)) {
                     if (bx >= 0 && bx < mapWidth && by >= 0 && by < tiles.size / mapWidth) {
                         tiles[by * mapWidth + bx] = TILE_WALL
                     }
                 }
             }
         }
+
     }
 
     private fun getAnyLeaf(node: BSPNode?): BSPNode? {

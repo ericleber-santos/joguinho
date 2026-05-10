@@ -163,7 +163,8 @@ data class BossFightState(
 
 @Serializable
 enum class ItemType {
-    SPEED_BOOTS
+    SPEED_BOOTS,
+    HEART
 }
 
 @Serializable

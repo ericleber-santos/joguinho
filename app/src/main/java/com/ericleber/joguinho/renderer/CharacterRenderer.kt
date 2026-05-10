@@ -896,6 +896,42 @@ class CharacterRenderer {
         paintContorno.strokeWidth = 1.5f
     }
 
+    fun renderHeart(canvas: Canvas, x: Float, y: Float, frame: Int, tileW: Float) {
+        val s = (tileW / 48f) * 1.5f
+        val t = frame.toFloat() / 15f
+        val bob = (Math.sin(t * Math.PI * 2) * 4 * s).toFloat()
+        val cx = x
+        val cy = y + bob - 5 * s
+
+        // Sombra
+        paintFill.color = Color.argb(40, 0, 0, 0)
+        canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
+
+        // Brilho pulsante
+        paintFill.color = Color.argb(50, 255, 100, 100)
+        canvas.drawCircle(cx, cy, 12 * s + (Math.sin(t * Math.PI * 4) * 2 * s).toFloat(), paintFill)
+
+        // Coração Procedural
+        paintFill.color = Color.rgb(255, 50, 50)
+        path.reset()
+        path.moveTo(cx, cy + 2 * s)
+        // Lado esquerdo
+        path.cubicTo(cx - 10 * s, cy - 8 * s, cx - 12 * s, cy + 5 * s, cx, cy + 11 * s)
+        // Lado direito
+        path.cubicTo(cx + 12 * s, cy + 5 * s, cx + 10 * s, cy - 8 * s, cx, cy + 2 * s)
+        canvas.drawPath(path, paintFill)
+
+        // Detalhe de brilho
+        paintFill.color = Color.argb(180, 255, 200, 200)
+        canvas.drawCircle(cx - 3 * s, cy - 1 * s, 1.5f * s, paintFill)
+
+        paintContorno.color = Color.rgb(150, 0, 0)
+        paintContorno.strokeWidth = 2f * s
+        canvas.drawPath(path, paintContorno)
+        paintContorno.strokeWidth = 1.5f
+    }
+
+
     fun renderWaterProjectile(
         canvas: Canvas,
         x: Float,
