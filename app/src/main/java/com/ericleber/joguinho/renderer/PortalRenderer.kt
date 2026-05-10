@@ -40,8 +40,9 @@ class PortalRenderer {
         style = Paint.Style.FILL
     }
 
-    // Raio anterior para evitar recriar RadialGradient todo frame
+    // Raio anterior e status de bloqueio para evitar recriar RadialGradient todo frame
     private var lastRadius = -1f
+    private var lastLockedState = false
     private var cachedGradient: RadialGradient? = null
 
     /**
@@ -69,7 +70,9 @@ class PortalRenderer {
         isLocked: Boolean
     ) {
         val time = frameTotal * 0.05f
-        val colors = destWorld.portalColors
+        
+        // Se bloqueado, usa cores de alerta/mortas (cinza escuro e vermelho hostil)
+        val colors = if (isLocked) PortalColors(Color.rgb(60, 60, 60), Color.rgb(180, 40, 40)) else destWorld.portalColors
 
         // Raio do portal: cresce com estado
         val baseRadius = when (state) {
@@ -85,17 +88,19 @@ class PortalRenderer {
 
         // Halo de luz externo (RadialGradient reutilizável)
         val glowRadius = radius * 2.0f
-        if (kotlin.math.abs(radius - lastRadius) > 2f) {
+        if (kotlin.math.abs(radius - lastRadius) > 2f || isLocked != lastLockedState) {
+            val glowAlpha = if (isLocked) 30 else 120
             cachedGradient = RadialGradient(
                 cx, cy, glowRadius,
                 intArrayOf(
-                    Color.argb(120, Color.red(colors.primary), Color.green(colors.primary), Color.blue(colors.primary)),
+                    Color.argb(glowAlpha, Color.red(colors.primary), Color.green(colors.primary), Color.blue(colors.primary)),
                     Color.argb(0,   Color.red(colors.primary), Color.green(colors.primary), Color.blue(colors.primary))
                 ),
                 floatArrayOf(0f, 1f),
                 Shader.TileMode.CLAMP
             )
             lastRadius = radius
+            lastLockedState = isLocked
         }
         paintGlow.shader = cachedGradient
         canvas.drawCircle(cx, cy, glowRadius, paintGlow)

@@ -79,12 +79,11 @@ class EntityPlacer(private val random: Random) {
             val exitX = maze.exitIndex % maze.width
             val exitY = maze.exitIndex / maze.width
             
-            // Busca um tile de chão na sala adjacente à saída (distância 2-4)
-            // Requisito: Boss spawnado única e exclusivamente na sala ao lado da escada
+            // Requisito: Boss spawnado longe da escada (distância mínima 4 tiles) para evitar insta-trap
             val bossTile = candidates.filter { 
                 val dist = Math.abs(it % maze.width - exitX) + Math.abs(it / maze.width - exitY)
-                dist in 2..4
-            }.shuffled(random).firstOrNull()
+                dist >= 4
+            }.shuffled(random).firstOrNull() ?: candidates.shuffled(random).firstOrNull()
             
             bossTile?.let {
                 val bossHp = 50 + (floorNumber * 5)

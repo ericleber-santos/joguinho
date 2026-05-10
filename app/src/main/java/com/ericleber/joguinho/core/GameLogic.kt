@@ -249,8 +249,19 @@ class GameLogic(private val gameState: GameState) {
                 }
 
                 val velocidadeFinal = velocidade * newRage
-                val nextX = (monster.position.x + dx * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.width - 1f)
-                val nextY = (monster.position.y + dy * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.height - 1f)
+                var nextX = (monster.position.x + dx * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.width - 1f)
+                var nextY = (monster.position.y + dy * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.height - 1f)
+
+                // Repulsão do Portal (Bug Fix: Loop do Boss no Portal)
+                val portalX = maze.exitIndex % maze.width + 0.5f
+                val portalY = maze.exitIndex / maze.width + 0.5f
+                val distToPortal = Math.sqrt(Math.pow((nextX - portalX).toDouble(), 2.0) + Math.pow((nextY - portalY).toDouble(), 2.0)).toFloat()
+                
+                if (distToPortal < 1.5f) {
+                    val angleFromPortal = Math.atan2((nextY - portalY).toDouble(), (nextX - portalX).toDouble())
+                    nextX = portalX + (Math.cos(angleFromPortal) * 1.5f).toFloat()
+                    nextY = portalY + (Math.sin(angleFromPortal) * 1.5f).toFloat()
+                }
 
                 // Não atravessa paredes (checa com raio de 0.3 para evitar atravessamento lateral)
                 val isWall = checkMonsterCollision(nextX, nextY, maze, 0.3f)

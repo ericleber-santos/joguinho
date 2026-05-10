@@ -352,22 +352,104 @@ class Renderer(
         renderList.add(object : Renderable {
             override val ySort: Float = gameState.spikePosition.y + 0.5f
             override fun render(c: Canvas) {
+                var drawSpikeSx = spikeSx
+                var drawSpikeSy = spikeSy
+                var scale = 1f
+                var rotation = 0f
+                var alpha = 255
+                
+                if (gameState.isExiting) {
+                    val progressBase = (gameState.exitAnimationTimerMs.toFloat() / 800f)
+                    val progress = ((progressBase - 0.2f) * 1.25f).coerceIn(0f, 1f)
+                    
+                    if (progress > 0f) {
+                        val saidaTx = mazeData.exitIndex % mazeData.width
+                        val saidaTy = mazeData.exitIndex / mazeData.width
+                        val portalSx = saidaTx * tileW + cameraX + tileW / 2f
+                        val portalSy = saidaTy * tileH + cameraY + tileH / 2f
+                        
+                        drawSpikeSx = spikeSx + (portalSx - spikeSx) * progress
+                        drawSpikeSy = spikeSy + (portalSy - tileH * 0.2f - spikeSy) * progress - (Math.sin(progress * Math.PI).toFloat() * tileH)
+                        
+                        scale = 1f - (progress * progress)
+                        rotation = progress * 1080f
+                        alpha = (255 * (1f - progress)).toInt().coerceIn(0, 255)
+                    }
+                }
+                
                 val facingLeft = when (gameState.heroDirection) {
                     com.ericleber.joguinho.core.Direction.WEST, com.ericleber.joguinho.core.Direction.NORTH_WEST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
                     else -> false
                 }
-                characterRenderer.drawDog(c, spikeSx, spikeSy, tileW, AnimState.WALK, facingLeft)
+                
+                c.save()
+                if (gameState.isExiting && alpha < 255) {
+                    c.saveLayerAlpha(
+                        drawSpikeSx - tileW * 2f, 
+                        drawSpikeSy - tileH * 4f, 
+                        drawSpikeSx + tileW * 2f, 
+                        drawSpikeSy + tileH * 2f, 
+                        alpha
+                    )
+                }
+                if (gameState.isExiting) {
+                    c.translate(drawSpikeSx, drawSpikeSy - tileH * 0.5f)
+                    c.rotate(rotation)
+                    c.scale(scale, scale)
+                    c.translate(-drawSpikeSx, -(drawSpikeSy - tileH * 0.5f))
+                }
+                
+                characterRenderer.drawDog(c, drawSpikeSx, drawSpikeSy, tileW, AnimState.WALK, facingLeft)
+                
+                if (gameState.isExiting && alpha < 255) {
+                    c.restore()
+                }
+                c.restore()
             }
         })
 
         renderList.add(object : Renderable {
             override val ySort: Float = gameState.heroPosition.y + 0.5f
             override fun render(c: Canvas) {
+                var drawHeroSx = heroSx
                 var drawHeroSy = heroSy
+                var scale = 1f
+                var rotation = 0f
+                var alpha = 255
+
                 if (gameState.isExiting) {
                     val progress = (gameState.exitAnimationTimerMs.toFloat() / 800f).coerceIn(0f, 1f)
-                    drawHeroSy -= progress * tileH * 1.2f
+                    
+                    val saidaTx = mazeData.exitIndex % mazeData.width
+                    val saidaTy = mazeData.exitIndex / mazeData.width
+                    val portalSx = saidaTx * tileW + cameraX + tileW / 2f
+                    val portalSy = saidaTy * tileH + cameraY + tileH / 2f
+                    
+                    drawHeroSx = heroSx + (portalSx - heroSx) * progress
+                    drawHeroSy = heroSy + (portalSy - tileH * 0.2f - heroSy) * progress - (Math.sin(progress * Math.PI).toFloat() * tileH)
+                    
+                    scale = 1f - (progress * progress)
+                    rotation = progress * 1080f
+                    alpha = (255 * (1f - progress)).toInt().coerceIn(0, 255)
                 }
+
+                c.save()
+                if (gameState.isExiting && alpha < 255) {
+                    c.saveLayerAlpha(
+                        drawHeroSx - tileW * 2f, 
+                        drawHeroSy - tileH * 4f, 
+                        drawHeroSx + tileW * 2f, 
+                        drawHeroSy + tileH * 2f, 
+                        alpha
+                    )
+                }
+                if (gameState.isExiting) {
+                    c.translate(drawHeroSx, drawHeroSy - tileH)
+                    c.rotate(rotation)
+                    c.scale(scale, scale)
+                    c.translate(-drawHeroSx, -(drawHeroSy - tileH))
+                }
+
                 val heroAnimState = when {
                     gameState.heroIsSlowedDown -> AnimState.WALK
                     gameState.heroHasSpeedBuff -> AnimState.RUN
@@ -375,12 +457,17 @@ class Renderer(
                     else -> AnimState.WALK
                 }
                 characterRenderer.drawHero(
-                    c, heroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection,
+                    c, drawHeroSx, drawHeroSy, tileW, heroAnimState, gameState.heroDirection,
                     gameState.heroIsSlowedDown, gameState.heroHasSpeedBuff,
                     equippedWeapon = gameState.equippedWeapon,
                     isShooting = gameState.isShooting,
                     shootingAngle = gameState.shootingAngle
                 )
+
+                if (gameState.isExiting && alpha < 255) {
+                    c.restore()
+                }
+                c.restore()
             }
         })
 
