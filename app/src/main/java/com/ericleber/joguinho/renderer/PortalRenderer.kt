@@ -177,13 +177,45 @@ class PortalRenderer {
         canvas: Canvas, cx: Float, cy: Float,
         world: BiomeWorld, tileW: Float, isLocked: Boolean
     ) {
-        val label = if (isLocked) "🔒 BLOQUEADO" else world.displayEmoji
-        paintText.textSize = (tileW * 0.30f).coerceAtLeast(14f)
-        // Sombra
-        paintText.setShadowLayer(6f, 0f, 2f, Color.BLACK)
-        paintText.color = world.portalColors.accent
-        canvas.drawText(label, cx, cy, paintText)
-        paintText.clearShadowLayer()
+        if (isLocked) {
+            val label = "🔒 BLOQUEADO"
+            paintText.textSize = (tileW * 0.30f).coerceAtLeast(14f)
+            paintText.setShadowLayer(6f, 0f, 2f, Color.BLACK)
+            paintText.color = world.portalColors.accent
+            canvas.drawText(label, cx, cy, paintText)
+            paintText.clearShadowLayer()
+        } else {
+            // Desenha a plaquinha "SAÍDA" (Plaquinha de madeira elegante)
+            val text = "SAÍDA"
+            paintText.textSize = (tileW * 0.28f).coerceAtLeast(12f)
+            val textWidth = paintText.measureText(text)
+            val padH = 18f
+            val padV = 10f
+            
+            val rect = android.graphics.RectF(
+                cx - textWidth/2 - padH, 
+                cy - paintText.textSize - padV, 
+                cx + textWidth/2 + padH, 
+                cy + padV
+            )
+                             
+            // Fundo da plaquinha (Madeira escura)
+            paintParticle.color = Color.rgb(80, 50, 20)
+            canvas.drawRoundRect(rect, 8f, 8f, paintParticle)
+            
+            // Borda da plaquinha (Bege madeira clara)
+            paintParticle.style = Paint.Style.STROKE
+            paintParticle.color = Color.rgb(200, 180, 150)
+            paintParticle.strokeWidth = 3f
+            canvas.drawRoundRect(rect, 8f, 8f, paintParticle)
+            paintParticle.style = Paint.Style.FILL
+            
+            // Texto
+            paintText.color = Color.WHITE
+            paintText.setShadowLayer(4f, 0f, 2f, Color.BLACK)
+            canvas.drawText(text, cx, cy - padV * 0.2f, paintText)
+            paintText.clearShadowLayer()
+        }
     }
 
     fun release() {

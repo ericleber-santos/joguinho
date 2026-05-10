@@ -551,8 +551,7 @@ class Renderer(
         if (saidaTx in minX..maxX && saidaTy in minY..maxY) {
             val portalSx = saidaTx * tileW + cameraX + tileW / 2f
             val portalSy = saidaTy * tileH + cameraY + tileH / 2f
-            val isLocked = gameState.bossFightState.isActive &&
-                    gameState.bossFightState.elapsedMs < gameState.bossFightState.totalDurationMs
+            val isLocked = gameState.monsters.any { it.isBoss && it.isActive }
             portalRenderer.render(
                 canvas     = canvas,
                 cx         = portalSx,

@@ -155,9 +155,8 @@ class HudRenderer {
         renderBannerMapaAtual(canvas, gameState, w, h)
         renderInfoMapaEsquerda(canvas, gameState)
         
-        // Timer de Sobrevivência do Boss
+        // Timer de Sobrevivência do Boss removido (vitoria por combate)
         if (gameState.bossFightState.isActive) {
-            renderBossTimer(canvas, gameState, w.toFloat())
             renderBossHealthBar(canvas, gameState, w.toFloat())
         }
 
@@ -286,9 +285,8 @@ class HudRenderer {
         renderBannerMapaAtual(canvas, gameState, w, h)
         renderInfoMapaEsquerda(canvas, gameState)
         
-        // Timer de Sobrevivência do Boss
+        // Timer de Sobrevivência do Boss removido (vitoria por combate)
         if (gameState.bossFightState.isActive) {
-            renderBossTimer(canvas, gameState, w.toFloat())
             renderBossHealthBar(canvas, gameState, w.toFloat())
         }
 

@@ -178,13 +178,28 @@ class GameLogic(private val gameState: GameState) {
     // Lógica do Boss (Fase 5)
     // -------------------------------------------------------------------------
     private fun atualizarBossFight(deltaMs: Long, maze: MazeData) {
-        if (!gameState.bossFightState.isActive) return
+        val bossAlive = gameState.monsters.any { it.isBoss && it.isActive }
+        
+        if (!gameState.bossFightState.isActive) {
+            // Se não está ativa mas tem um boss vivo, algo ativou o boss (spawn)
+            if (bossAlive) {
+                gameState.bossFightState = gameState.bossFightState.copy(isActive = true, elapsedMs = 0L)
+            }
+            return
+        }
 
         val state = gameState.bossFightState
         
-        // Verifica se Boss morreu por tempo (Vitória)
+        // Se o Boss morreu (não está mais na lista ou inativo), encerra a luta
+        if (!bossAlive) {
+            gameState.bossFightState = state.copy(isActive = false)
+            return
+        }
+
+        // Verifica se Boss morreu por tempo (Vitória por sobrevivência - opcional, mantemos por segurança)
         if (state.elapsedMs >= state.totalDurationMs) {
             gameState.monsters = gameState.monsters.filterNot { it.isBoss }
+            gameState.bossFightState = state.copy(isActive = false)
             return
         }
 
@@ -683,8 +698,8 @@ class GameLogic(private val gameState: GameState) {
         val exitY = maze.exitIndex / maze.width
 
         // Verifica se é uma Boss Fight em andamento
-        if (gameState.bossFightState.isActive && gameState.bossFightState.elapsedMs < gameState.bossFightState.totalDurationMs) {
-            return // Porta travada!
+        if (gameState.monsters.any { it.isBoss && it.isActive }) {
+            return // Porta travada enquanto o Boss estiver vivo!
         }
 
         // O herói deve estar próximo ao tile da saída (placa + escada).
@@ -693,7 +708,7 @@ class GameLogic(private val gameState: GameState) {
         val dx = (heroX - exitX).toFloat()
         val dy = (heroY - exitY).toFloat()
         val distSq = dx * dx + dy * dy
-        if (distSq > 0.64f) return // Raio de 0.8 tiles (0.8 * 0.8 = 0.64)
+        if (distSq > 1.44f) return // Raio de 1.2 tiles (1.2 * 1.2 = 1.44) para cobrir a esfera azul do portal
 
         // Inicia animação de saída em vez de transição imediata
         gameState.isExiting = true
