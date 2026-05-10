@@ -90,7 +90,7 @@ class EntityPlacer(private val random: Random) {
                 val bossHp = 50 + (floorNumber * 5)
                 monsters.add(MonsterState(
                     id = "boss_${floorNumber}",
-                    position = Position(it % maze.width, it / maze.width),
+                    position = Position((it % maze.width) + 0.5f, (it / maze.width) + 0.5f),
                     movementPattern = MovementPattern.BOSS_STALKER,
                     isActive = true,
                     isBoss = true,
@@ -117,7 +117,7 @@ class EntityPlacer(private val random: Random) {
         }
 
         monsters.addAll(selected.mapIndexed { i, index ->
-            val pos = Position(index % maze.width, index / maze.width)
+            val pos = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f)
             val pattern = patterns[random.nextInt(patterns.size)]
             val monsterHp = 1 + (floorNumber / 15)
             MonsterState(
@@ -153,7 +153,7 @@ class EntityPlacer(private val random: Random) {
         return selected.mapIndexed { i, index ->
             ItemState(
                 id = "item_${maze.seed}_$i",
-                position = Position(index % maze.width, index / maze.width),
+                position = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f),
                 type = ItemType.SPEED_BOOTS // Representará a Banana visualmente
             )
         }

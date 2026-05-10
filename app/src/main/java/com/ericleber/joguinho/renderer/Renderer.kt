@@ -138,8 +138,8 @@ class Renderer(
         val alturaMapa  = mapHeight * tileSize
 
         // Câmera segue o herói com interpolação suave (opcional, aqui mantemos direto)
-        val heroSx = heroWorldX * tileSize + tileSize / 2f
-        val heroSy = heroWorldY * tileSize + tileSize / 2f
+        val heroSx = heroWorldX * tileSize
+        val heroSy = heroWorldY * tileSize
         
         // Centraliza o herói na tela, mas respeita os limites do mapa
         cameraX = (screenWidth / 2f - heroSx).coerceIn(screenWidth - larguraMapa, 0f)
@@ -303,8 +303,8 @@ class Renderer(
         // 2. Itens (Power-ups)
         for (item in gameState.items) {
             if (!item.isActive) continue
-            val sx = item.position.x * tileW + cameraX + tileW / 2f
-            val sy = item.position.y * tileH + cameraY + tileH / 2f
+            val sx = item.position.x * tileW + cameraX
+            val sy = item.position.y * tileH + cameraY
             renderList.add(object : Renderable {
                 override val ySort: Float = item.position.y + 0.4f // Levemente atrás do pé
                 override fun render(c: Canvas) {
@@ -320,8 +320,8 @@ class Renderer(
         // 5. Monstros (+0.5f para ySort nos pés)
         for (monster in gameState.monsters) {
             if (!monster.isActive) continue
-            val mx = monster.position.x * tileW + cameraX + tileW / 2f
-            val my = monster.position.y * tileH + cameraY + tileH / 2f
+            val mx = monster.position.x * tileW + cameraX
+            val my = monster.position.y * tileH + cameraY
             val seed = monster.id.hashCode()
             val finalScale = if (monster.isBoss) 3.00f else 1.2f
             
@@ -344,10 +344,10 @@ class Renderer(
         }
 
         // 6. Spike & Hero (+0.5f para ySort nos pés)
-        val heroSx = gameState.heroPosition.x * tileW + cameraX + tileW / 2f
-        val heroSy = gameState.heroPosition.y * tileH + cameraY + tileH / 2f
-        val spikeSx = gameState.spikePosition.x * tileW + cameraX + tileW / 2f
-        val spikeSy = gameState.spikePosition.y * tileH + cameraY + tileH / 2f
+        val heroSx = gameState.heroPosition.x * tileW + cameraX
+        val heroSy = gameState.heroPosition.y * tileH + cameraY
+        val spikeSx = gameState.spikePosition.x * tileW + cameraX
+        val spikeSy = gameState.spikePosition.y * tileH + cameraY
 
         renderList.add(object : Renderable {
             override val ySort: Float = gameState.spikePosition.y + 0.5f
@@ -404,8 +404,8 @@ class Renderer(
                 shootingAngle = gameState.shootingAngle
             )
             
-            val tx = impact.x * tileW + cameraX + tileW / 2f
-            val ty = impact.y * tileH + cameraY + tileH / 2f
+            val tx = impact.x * tileW + cameraX
+            val ty = impact.y * tileH + cameraY
 
             renderList.add(object : Renderable {
                 // Bias de +0.6f para garantir que o jato fique sempre à frente do corpo do herói (que é +0.5f)
@@ -419,8 +419,8 @@ class Renderer(
         // 9. VFX (Muzzle, Splash)
         val currentTimeVfx = System.currentTimeMillis()
         for (vfx in gameState.vfxList) {
-            val vx = vfx.position.x * tileW + cameraX + tileW / 2f
-            val vy = vfx.position.y * tileH + cameraY + tileH / 2f
+            val vx = vfx.position.x * tileW + cameraX
+            val vy = vfx.position.y * tileH + cameraY
             val elapsed = currentTimeVfx - vfx.createdAtMs
             val progress = (elapsed.toFloat() / vfx.durationMs).coerceIn(0f, 1f)
             if (progress >= 1.0f) continue
@@ -438,7 +438,7 @@ class Renderer(
         
         // 10. Popups de Score
         for (popup in gameState.scorePopups) {
-            val px = popup.position.x * tileW + cameraX + tileW / 2f
+            val px = popup.position.x * tileW + cameraX
             val py = popup.position.y * tileH + cameraY - popup.offsetY
             
             renderList.add(object : Renderable {

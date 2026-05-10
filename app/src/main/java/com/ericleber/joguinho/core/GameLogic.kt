@@ -282,9 +282,9 @@ class GameLogic(private val gameState: GameState) {
             val nextX = (monster.position.x + dx * velocidade * deltaTimeSec).coerceIn(0f, maze.width - 1f)
             val nextY = (monster.position.y + dy * velocidade * deltaTimeSec).coerceIn(0f, maze.height - 1f)
 
-            // Não atravessa paredes (checa o tile destino)
-            val indice = nextY.toInt() * maze.width + nextX.toInt()
-            if (maze.tiles[indice] == BSPMazeGenerator.TILE_WALL) {
+            // Não atravessa paredes (checa com raio de 0.3 para evitar atravessamento lateral)
+            val isWall = checkMonsterCollision(nextX, nextY, maze, 0.3f)
+            if (isWall) {
                 monster
             } else {
                 monster.position = Position(nextX, nextY)
