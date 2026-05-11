@@ -450,33 +450,45 @@ class CharacterRenderer {
         drawShadow(canvas, cx, shadowY, u * 4f, u)
 
         val bodyBob: Float
+        val headBob: Float
         val legAnim: Float
         val tailWag: Float
         val tongueOut: Boolean
+        val stretchX: Float
+        val stretchY: Float
 
         when (state) {
             AnimState.IDLE -> {
                 val cycle = (animTick / 500) % 3
-                bodyBob = 0f
+                bodyBob = sin(t * 2f) * u * 0.2f
+                headBob = sin(t * 2f + 1f) * u * 0.1f
                 legAnim = 0f
-                tailWag = if (cycle < 1) u * 1.5f else if (cycle < 2) -u * 1.5f else 0f
+                tailWag = sin(t * 4f) * u * 1.5f
                 tongueOut = cycle == 2L
+                stretchX = 1.0f + sin(t * 2f) * 0.02f
+                stretchY = 1.0f - sin(t * 2f) * 0.02f
             }
 
             AnimState.WALK -> {
-                val phase = sin(t * 6.0).toFloat()
-                bodyBob = if (abs(phase) > 0.7f) u * 0.5f else 0f
+                val phase = sin(t * 8.0).toFloat()
+                bodyBob = abs(phase) * u * 0.8f
+                headBob = sin(t * 8.0 + 0.5).toFloat() * u * 0.5f
                 legAnim = phase
-                tailWag = phase * u * 2f
-                tongueOut = phase > 0.5f
+                tailWag = sin(t * 16.0).toFloat() * u * 2.5f
+                tongueOut = phase > 0.7f
+                stretchX = 1.0f + abs(phase) * 0.05f
+                stretchY = 1.0f - abs(phase) * 0.05f
             }
 
             AnimState.RUN -> {
-                val phase = sin(t * 12.0).toFloat()
-                bodyBob = if ((animTick / 83) % 2 == 0L) u * 0.8f else 0f
-                legAnim = phase * 1.5f
-                tailWag = phase * u * 3f
+                val phase = sin(t * 14.0).toFloat()
+                bodyBob = abs(phase) * u * 1.2f
+                headBob = sin(t * 14.0 + 0.3).toFloat() * u * 0.8f
+                legAnim = phase * 1.8f
+                tailWag = sin(t * 28.0).toFloat() * u * 4f
                 tongueOut = true
+                stretchX = 1.1f + abs(phase) * 0.1f
+                stretchY = 0.9f - abs(phase) * 0.1f
             }
         }
 
@@ -485,7 +497,11 @@ class CharacterRenderer {
 
         canvas.save()
         if (facingLeft) canvas.scale(-1f, 1f, cx, renderCy)
+        
+        // Aplica Squash & Stretch global no ponto de contato com o chão
+        canvas.scale(stretchX, stretchY, cx, renderCy + u * 4f)
 
+        // --- Rabo ---
         val tailBaseX = cx - u * 7f
         val tailBaseY = renderCy - u * 2f + bodyBob
         paint.color = dogWhite
@@ -498,6 +514,7 @@ class CharacterRenderer {
         )
         paint.style = Paint.Style.FILL
 
+        // --- Corpo ---
         val bodyLeft = cx - u * 6f
         val bodyTop = renderCy - u * 3f + bodyBob
         val bodyW = u * 12f
@@ -505,20 +522,26 @@ class CharacterRenderer {
         fillRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u * 1.5f, dogWhite)
         strokeRoundRect(canvas, bodyLeft, bodyTop, bodyW, bodyH, u * 1.5f, dogOutline, u * 0.5f)
 
+        // Manchas
         fillCircle(canvas, cx - u * 2f, bodyTop + u * 1.5f, u * 1.2f, dogBlack)
         fillCircle(canvas, cx + u * 3f, bodyTop + u * 3f, u * 1f, dogBlack)
 
+        // --- Cabeça (com HeadBob independente) ---
         val headCX = cx + u * 7f
-        val headCY = renderCy - u * 2f + bodyBob
+        val headCY = renderCy - u * 2f + bodyBob + headBob
         fillCircle(canvas, headCX, headCY, u * 4f, dogWhite)
         strokeCircle(canvas, headCX, headCY, u * 4f, dogOutline, u * 0.5f)
 
-        fillRoundRect(canvas, headCX + u * 1f, headCY - u * 5f, u * 3f, u * 3.5f, u, dogBlack)
-        fillRoundRect(canvas, headCX - u * 2f, headCY - u * 5f, u * 2f, u * 3f, u, dogWhite)
+        // Orelhas (Secondary Motion: balançam com headBob)
+        val earSwing = headBob * 0.5f
+        fillRoundRect(canvas, headCX + u * 1f, headCY - u * 5f + earSwing, u * 3f, u * 3.5f, u, dogBlack)
+        fillRoundRect(canvas, headCX - u * 2f, headCY - u * 5f - earSwing, u * 2f, u * 3f, u, dogWhite)
 
+        // Olhos e Brilho
         fillCircle(canvas, headCX + u * 1.5f, headCY - u * 0.5f, u * 0.8f, dogEye)
         fillCircle(canvas, headCX + u * 2f, headCY - u * 1f, u * 0.3f, 0xFFFFFFFF.toInt())
 
+        // Focinho
         fillRoundRect(
             canvas,
             headCX - u * 2f,
@@ -542,13 +565,16 @@ class CharacterRenderer {
             )
         }
 
+        // Mancha na cabeça
         fillCircle(canvas, headCX - u * 1.5f, headCY - u * 1.5f, u * 1.5f, dogBlack)
 
+        // --- Pernas ---
         val legTopY = bodyTop + bodyH - u
         val legH = u * 4f
         val legW = u * 2f
         val animPx = legAnim * u * 1.5f
 
+        // Desenha pernas com balanço compensado
         fillRoundRect(canvas, cx - u * 5f, legTopY - animPx, legW, legH, u * 0.5f, dogWhite)
         fillRoundRect(canvas, cx - u * 2.5f, legTopY + animPx, legW, legH, u * 0.5f, dogWhite)
         fillRoundRect(canvas, cx + u * 1f, legTopY + animPx, legW, legH, u * 0.5f, dogWhite)
