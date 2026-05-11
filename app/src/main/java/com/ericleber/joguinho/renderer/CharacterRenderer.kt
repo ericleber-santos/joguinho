@@ -439,12 +439,13 @@ class CharacterRenderer {
         cy: Float,
         tileSize: Float,
         state: AnimState,
-        facingLeft: Boolean = false
+        facingLeft: Boolean = false,
+        zOffset: Float = 0f // Altura em pixels
     ) {
         val u = tileSize / 20f
         val t = animTick / 1000f
 
-        // --- SOMBRA ---
+        // --- SOMBRA (Fica no chão, ignora zOffset) ---
         val shadowY = cy + u * 5.2f
         drawShadow(canvas, cx, shadowY, u * 4f, u)
 
@@ -479,7 +480,7 @@ class CharacterRenderer {
             }
         }
 
-        val yOffset = -u * 2f
+        val yOffset = -u * 2f - zOffset
         val renderCy = cy + yOffset
 
         canvas.save()

@@ -281,8 +281,14 @@ class GameLogic(private val gameState: GameState) {
             }
 
             // 3. Execução do Movimento baseado no Estado
-            val (dx, dy) = when (monster.aiState) {
-                MonsterAIState.CHASE -> {
+            val (dx, dy) = when {
+                monster.isBoss -> {
+                    // Boss usa sempre seu padrão de perseguição agressivo
+                    val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
+                    monsterTimers[monster.id] = timer
+                    calcularDirecaoMonster(monster, heroPos, timer)
+                }
+                monster.aiState == MonsterAIState.CHASE -> {
                     val path = monster.targetPath
                     if (path != null && path.size > 1) {
                         val nextPoint = path[1]
@@ -298,7 +304,7 @@ class GameLogic(private val gameState: GameState) {
                         if (pdist > 0.05f) Pair(pdx / pdist, pdy / pdist) else Pair(0f, 0f)
                     }
                 }
-                MonsterAIState.PATROL -> {
+                monster.aiState == MonsterAIState.PATROL -> {
                     val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
                     monsterTimers[monster.id] = timer
                     calcularDirecaoMonster(monster, heroPos, timer)
@@ -626,32 +632,62 @@ class GameLogic(private val gameState: GameState) {
         val distancia = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
         // --- REQUISITO: Spike ataca o Boss (Prioridade) ---
-        // Movido para o topo para evitar que o early return de distância bloqueie o ataque
         val boss = gameState.monsters.find { it.isBoss && it.isActive }
         if (boss != null) {
             val distHeroBoss = heroPos.dist(boss.position)
             val distSpikeBoss = spikePos.dist(boss.position)
             
-            // Alcance balanceado para assistência
-            if (distHeroBoss < 4.0f && distSpikeBoss < 3.5f) {
-                val currentTime = System.currentTimeMillis()
-                if (currentTime % 1200 < (deltaTimeSec * 1000)) {
-                    gameState.vfxList = gameState.vfxList + VfxState(
-                        id = "spike_bite_${currentTime}",
-                        position = boss.position,
-                        type = VfxType.WATER_SPLASH,
-                        createdAtMs = currentTime,
-                        durationMs = 400L
-                    )
-                    boss.hp = (boss.hp - 5).coerceAtLeast(0)
-                    if (boss.hp == 0) {
-                        boss.isActive = false
-                        gameState.accumulatedScore += 100 
+            // Spike ataca se o Boss estiver no alcance
+            if (distHeroBoss < 6.0f && distSpikeBoss < 5.0f) {
+                if (gameState.spikeAttackTimerMs == 0L) {
+                    // Sistema de Cooldown Real (usa o timer acumulado)
+                    val cooldownKey = "spike_attack_cooldown"
+                    val lastAttack = monsterTimers[cooldownKey] ?: 0f
+                    if (gameState.floorTimerMs.toFloat() - lastAttack > 1200f) {
+                        gameState.spikeAttackTimerMs = 600L 
+                        monsterTimers[cooldownKey] = gameState.floorTimerMs.toFloat()
                     }
-                    gameState.spikeCompanionState = "ENTUSIASMADO"
-                    onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
                 }
             }
+        }
+
+        // Processa animação de pulo (Z)
+        if (gameState.spikeAttackTimerMs > 0) {
+            val totalDur = 600f
+            val progress = (totalDur - gameState.spikeAttackTimerMs) / totalDur // 0.0 a 1.0
+            
+            // Parábola: z = 4 * height * progress * (1 - progress)
+            // Altura máxima de 1.2 tiles no ápice (300ms)
+            gameState.spikeZ = 4.8f * progress * (1f - progress)
+            
+            // No ápice (progress approx 0.5), aplica o dano e o VFX
+            if (progress >= 0.5f && progress < 0.5f + (deltaTimeSec * 1000 / totalDur)) {
+                boss?.let {
+                    if (it.isActive) {
+                        gameState.vfxList = gameState.vfxList + VfxState(
+                            id = "spike_bite_${System.currentTimeMillis()}",
+                            position = it.position,
+                            type = VfxType.WATER_SPLASH,
+                            createdAtMs = System.currentTimeMillis(),
+                            durationMs = 400L
+                        )
+                        it.hp = (it.hp - 5).coerceAtLeast(0)
+                        if (it.hp == 0) {
+                            it.isActive = false
+                            gameState.accumulatedScore += 100 
+                        }
+                        onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
+                    }
+                }
+            }
+
+            gameState.spikeAttackTimerMs = (gameState.spikeAttackTimerMs - (deltaTimeSec * 1000).toLong()).coerceAtLeast(0)
+            if (gameState.spikeAttackTimerMs == 0L) {
+                gameState.spikeZ = 0f
+            }
+            gameState.spikeCompanionState = "ENTUSIASMADO"
+        } else {
+            gameState.spikeZ = 0f
         }
 
         // Rastreamento de travamento

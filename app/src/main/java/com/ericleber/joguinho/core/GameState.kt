@@ -137,6 +137,8 @@ class GameState {
 
     // --- Estado comportamental do Spike (para o Renderer) ---
     var spikeCompanionState: String = "SEGUINDO"
+    var spikeZ: Float = 0f // Altura do pulo (Eixo Z)
+    var spikeAttackTimerMs: Long = 0L // Timer para o ciclo do pulo de ataque
 
     // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---
     var devModeForcedBiome: com.ericleber.joguinho.biome.Biome? = null

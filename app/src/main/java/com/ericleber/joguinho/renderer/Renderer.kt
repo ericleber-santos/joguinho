@@ -457,7 +457,8 @@ class Renderer(
                     c.translate(-drawSpikeSx, -(drawSpikeSy - tileH * 0.5f))
                 }
                 
-                characterRenderer.drawDog(c, drawSpikeSx, drawSpikeSy, tileW, AnimState.WALK, facingLeft)
+                val zOffset = gameState.spikeZ * tileH
+                characterRenderer.drawDog(c, drawSpikeSx, drawSpikeSy, tileW, AnimState.WALK, facingLeft, zOffset)
                 
                 if (gameState.isExiting && alpha < 255) {
                     c.restore()
