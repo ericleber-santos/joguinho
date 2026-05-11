@@ -74,8 +74,8 @@ class EntityPlacer(private val random: Random) {
         
         val monsters = mutableListOf<MonsterState>()
         
-        // Se for o último mapa do bioma (mapIndex == 2), adiciona um Boss próximo à escada
-        if (mapIndex == 2) {
+        // Se for o segundo mapa de um andar par, adiciona um Boss próximo à escada
+        if (floorNumber % 2 == 0 && mapIndex == 1) {
             val exitX = maze.exitIndex % maze.width
             val exitY = maze.exitIndex / maze.width
             

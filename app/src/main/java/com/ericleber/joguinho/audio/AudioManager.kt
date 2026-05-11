@@ -43,6 +43,7 @@ enum class TipoEfeito(
     BOSS_PROVOCACAO(400f, 600, FormaOnda.QUADRADA),
     BOSS_RISADA(100f, 1000, FormaOnda.QUADRADA),
     POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL),
+    SPIKE_BITE(1200f, 150, FormaOnda.QUADRADA),
     ESGUICHO_AGUA(4000f, -1, FormaOnda.SENOIDAL) // Frequência base ignorada, síntese específica
 }
 

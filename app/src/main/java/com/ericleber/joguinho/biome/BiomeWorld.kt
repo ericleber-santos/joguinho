@@ -158,19 +158,10 @@ enum class BiomeWorld(
     );
 
     companion object {
-        /** Retorna o BiomeWorld correspondente ao número de andar. */
-        fun fromFloor(floorNumber: Int): BiomeWorld = when (floorNumber) {
-            in 1..10   -> ENTRANHAS
-            in 11..20  -> FLORESTA_DE_ARVORES
-            in 21..30  -> ABISMOS_AQUATICOS
-            in 31..40  -> JARDIM_PROFUNDO
-            in 41..60  -> MINAS_RIQUEZAS
-            in 61..70  -> RUINAS_ANCESTRAIS
-            in 71..80  -> REINO_DA_MAGIA
-            in 81..90  -> SUPERFICIE_ABERTA
-            in 91..100 -> ABISMO_DO_VAZIO
-            in 101..110 -> NUCLEO_DE_FOGO
-            else       -> BASE_LUNAR
+        /** Retorna o BiomeWorld correspondente ao número de andar. Cada andar tem um bioma único, ciclando entre os disponíveis. */
+        fun fromFloor(floorNumber: Int): BiomeWorld {
+            val worlds = entries
+            return worlds[(floorNumber - 1) % worlds.size]
         }
     }
 }

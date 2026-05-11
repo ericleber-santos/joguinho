@@ -138,11 +138,11 @@ class GameState {
     // --- Estado comportamental do Spike (para o Renderer) ---
     var spikeCompanionState: String = "SEGUINDO"
 
-    // --- Bioma atual ---
-    var devModeForcedBiome: Biome? = null
+    // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---
+    var devModeForcedBiome: com.ericleber.joguinho.biome.Biome? = null
 
-    val currentBiome: Biome
-        get() = devModeForcedBiome ?: Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
+    val currentBiome: com.ericleber.joguinho.biome.Biome
+        get() = devModeForcedBiome ?: com.ericleber.joguinho.biome.Biome.fromFloor(floorNumber)
 
     val currentBiomeWorld: BiomeWorld
         get() = BiomeWorld.fromFloor(floorNumber)

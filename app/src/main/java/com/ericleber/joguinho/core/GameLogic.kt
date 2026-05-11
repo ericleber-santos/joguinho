@@ -311,7 +311,8 @@ class GameLogic(private val gameState: GameState) {
                 monster.isBoss -> {
                     val phase3SpeedMult = if (gameState.bossFightState.elapsedMs >= 80000L) 1.5f else 1.0f
                     val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
-                    MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult
+                    // Velocidade base aumentada de 1.2f para 2.0f (Proativo)
+                    MONSTER_SPEED_TILES_PER_SEC * (2.0f + bossFloorBonus) * phase3SpeedMult
                 }
                 monster.aiState == MonsterAIState.CHASE -> MONSTER_SPEED_TILES_PER_SEC * 1.15f
                 monster.movementPattern == MovementPattern.TANK_SLOW -> MONSTER_SPEED_TILES_PER_SEC * 0.6f
@@ -556,8 +557,15 @@ class GameLogic(private val gameState: GameState) {
                 // Som de derrota sutil (risada do boss ou lentidão)
                 onSoundEffectRequested?.invoke(TipoEfeito.BOSS_RISADA)
                 
-                // Respawn no início do mapa atual
-                gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
+                // REQUISITO: Se morrer no boss (andar par, mapa index 1), volta para o mapa 0 do mesmo andar
+                if (gameState.floorNumber % 2 == 0 && gameState.mapIndex == 1) {
+                    gameState.mapIndex = 0
+                    onMapCompleted?.invoke()
+                } else {
+                    // Respawn no início do mapa atual
+                    gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
+                }
+                
                 gameState.heroIsSlowedDown = false
                 gameState.heroSlowdownRemainingMs = 0
                 
@@ -617,6 +625,35 @@ class GameLogic(private val gameState: GameState) {
         val dy = heroPos.y - spikePos.y
         val distancia = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
+        // --- REQUISITO: Spike ataca o Boss (Prioridade) ---
+        // Movido para o topo para evitar que o early return de distância bloqueie o ataque
+        val boss = gameState.monsters.find { it.isBoss && it.isActive }
+        if (boss != null) {
+            val distHeroBoss = heroPos.dist(boss.position)
+            val distSpikeBoss = spikePos.dist(boss.position)
+            
+            // Alcance balanceado para assistência
+            if (distHeroBoss < 4.0f && distSpikeBoss < 3.5f) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime % 1200 < (deltaTimeSec * 1000)) {
+                    gameState.vfxList = gameState.vfxList + VfxState(
+                        id = "spike_bite_${currentTime}",
+                        position = boss.position,
+                        type = VfxType.WATER_SPLASH,
+                        createdAtMs = currentTime,
+                        durationMs = 400L
+                    )
+                    boss.hp = (boss.hp - 5).coerceAtLeast(0)
+                    if (boss.hp == 0) {
+                        boss.isActive = false
+                        gameState.accumulatedScore += 100 
+                    }
+                    gameState.spikeCompanionState = "ENTUSIASMADO"
+                    onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
+                }
+            }
+        }
+
         // Rastreamento de travamento
         if (spikeLastPosition == spikePos) {
             spikeStuckTimerSec += deltaTimeSec
@@ -645,16 +682,12 @@ class GameLogic(private val gameState: GameState) {
         val velocidade = if (gameState.spikeIsSlowedDown) SPIKE_SPEED_TILES_PER_SEC * 0.4f
                          else SPIKE_SPEED_TILES_PER_SEC
 
-        // Movimento fluído em direção ao Herói
+        // Movimento fluído em direção ao Herói com colisão simples
         val vx = (dx / distancia) * velocidade * deltaTimeSec
         val vy = (dy / distancia) * velocidade * deltaTimeSec
 
         val nextX = spikePos.x + vx
         val nextY = spikePos.y + vy
-
-        // Spike desliza em paredes (simples)
-        val indiceX = spikePos.y.toInt() * maze.width + nextX.toInt()
-        val indiceY = nextY.toInt() * maze.width + spikePos.x.toInt()
         
         var finalX = spikePos.x
         var finalY = spikePos.y
@@ -667,6 +700,8 @@ class GameLogic(private val gameState: GameState) {
         }
 
         gameState.spikePosition = Position(finalX, finalY)
+
+
         gameState.spikeCompanionState = when {
             gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
             distancia > 5f -> "CHAMANDO"
@@ -790,8 +825,8 @@ class GameLogic(private val gameState: GameState) {
         // Muda a fase para evitar processamento repetido da saída no mesmo frame
         gameState.phase = GamePhase.LOADING
 
-        // Verifica se é o último Map do Floor (3 Maps por Floor)
-        val totalMapsNoFloor = 3
+        // Verifica se é o último Map do Floor (2 Maps por Floor)
+        val totalMapsNoFloor = 2
         if (gameState.mapIndex >= totalMapsNoFloor - 1) {
             // Completou o Floor — Avança para o próximo Floor automaticamente (até o 120)
             if (gameState.floorNumber < 120) {
@@ -1000,13 +1035,11 @@ class GameLogic(private val gameState: GameState) {
                             val points = if (m.isBoss) 500 else 10
                             gameState.accumulatedScore += points
                             
-                            // Requisito: Recupera um coração após derrotar 2 chefes
+                            // Requisito: Recupera um coração após derrotar o Chefe
                             if (m.isBoss) {
                                 gameState.bossesDefeatedCount++
-                                if (gameState.bossesDefeatedCount % 2 == 0) {
-                                    gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(3)
-                                    onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
-                                }
+                                gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(3)
+                                onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                             }
                             
                             val popup = com.ericleber.joguinho.ui.ScorePopupPool.obtain(
@@ -1092,7 +1125,8 @@ class GameLogic(private val gameState: GameState) {
             movementPattern = MovementPattern.AMBUSH,
             isActive = true,
             hp = 2,
-            maxHp = 2
+            maxHp = 2,
+            rageMultiplier = 1.4f // Rápido ao despertar
         )
         gameState.monsters = gameState.monsters + ambushMonster
         

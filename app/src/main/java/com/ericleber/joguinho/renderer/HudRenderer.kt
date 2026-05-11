@@ -379,7 +379,7 @@ class HudRenderer {
 
         val andar = gameState.floorNumber
         val mapa = gameState.mapIndex + 1
-        val nomeBiomaTexto = nomeBioma(gameState.currentBiome)
+        val nomeBiomaTexto = gameState.currentBiomeWorld.displayName
         
         // Timer regressivo do mapa (5 minutos)
         val mTimerMs = gameState.mapTimerMs
@@ -388,7 +388,7 @@ class HudRenderer {
 
         val linhas = listOf(
             "Andar $andar",
-            "Mapa  $mapa/3",
+            "Mapa  $mapa/2",
             nomeBiomaTexto,
             timerTexto
         )
@@ -419,8 +419,7 @@ class HudRenderer {
         // Textos
         textPaint.textSize = tamanhoTexto
         textPaint.textAlign = Paint.Align.LEFT
-        val corBioma = com.ericleber.joguinho.biome.BIOME_PALETTES[gameState.currentBiome]?.accentColor
-            ?: 0xFFFFCC00.toInt()
+        val corBioma = gameState.currentBiomeWorld.portalColors.primary
 
         val cores = listOf(
             Color.rgb(230, 230, 210),   // andar — branco suave
@@ -518,26 +517,25 @@ class HudRenderer {
         val nomeBioma = nomeBioma(gameState.currentBiome)
         val andar = gameState.floorNumber
         val mapa = gameState.mapIndex + 1
-        val corBioma = com.ericleber.joguinho.biome.BIOME_PALETTES[gameState.currentBiome]?.accentColor
-            ?: 0xFFFFCC00.toInt()
 
         val margem = 12f
         val tx = w - margem
 
-        // Linha 1: "A12 · M2/3" — pequena, cinza
+        // Linha 1: "A12 · M2/2" — pequena, cinza
         textPaint.textSize = 11f
         textPaint.textAlign = Paint.Align.RIGHT
         textPaint.color = Color.argb((alpha * 0.6f).toInt(), 200, 200, 180)
-        canvas.drawText("A$andar · M$mapa/3", tx + 1f, 21f, textPaint)
+        canvas.drawText("A$andar · M$mapa/2", tx + 1f, 21f, textPaint)
         textPaint.color = Color.argb(alpha, 200, 200, 180)
-        canvas.drawText("A$andar · M$mapa/3", tx, 20f, textPaint)
+        canvas.drawText("A$andar · M$mapa/2", tx, 20f, textPaint)
 
         // Linha 2: nome do bioma — cor do acento
         textPaint.textSize = 13f
         textPaint.color = Color.argb((alpha * 0.5f).toInt(), 0, 0, 0)
-        canvas.drawText(nomeBioma, tx + 1f, 37f, textPaint)
+        canvas.drawText(gameState.currentBiomeWorld.displayName, tx + 1f, 37f, textPaint)
+        val corBioma = gameState.currentBiomeWorld.portalColors.primary // Usa cor do portal como destaque
         textPaint.color = Color.argb(alpha, Color.red(corBioma), Color.green(corBioma), Color.blue(corBioma))
-        canvas.drawText(nomeBioma, tx, 36f, textPaint)
+        canvas.drawText(gameState.currentBiomeWorld.displayName, tx, 36f, textPaint)
 
         textPaint.textAlign = Paint.Align.LEFT
     }
