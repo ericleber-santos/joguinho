@@ -19,7 +19,8 @@ enum class BiomeWorld(
     val displayEmoji: String,
     val portalColors: PortalColors,
     val lightingMode: LightingMode,
-    val minCorridorWidth: Int
+    val minCorridorWidth: Int,
+    val isOpenAir: Boolean = false // Se verdadeiro, o teto é transparente/céu visível
 ) {
 
     /** Andares 1–20: Minas e Cavernas Iniciais */
@@ -34,16 +35,17 @@ enum class BiomeWorld(
         minCorridorWidth = 2
     ),
 
-    /** Andares 11–20: Cristais e Fungos Luminescentes */
-    FLORESTA_SUBTERRANEA(
-        displayName     = "Floresta Subterrânea",
-        displayEmoji    = "🍄",
+    /** Andares 11–20: Árvores gigantes que funcionam como paredes */
+    FLORESTA_DE_ARVORES(
+        displayName     = "Floresta de Gigantes",
+        displayEmoji    = "🌳",
         portalColors    = PortalColors(
-            primary = Color.rgb(60, 200, 100),   // Verde bioluminescente
+            primary = Color.rgb(60, 200, 100),   // Verde folha
             accent  = Color.rgb(180, 255, 140)
         ),
-        lightingMode    = LightingMode.BIOLUMINESCENT,
-        minCorridorWidth = 2
+        lightingMode    = LightingMode.DAYLIGHT,
+        minCorridorWidth = 4,
+        isOpenAir       = true
     ),
 
     /** Andares 21–30: Água, Gelo e Riachos */
@@ -142,23 +144,24 @@ enum class BiomeWorld(
         minCorridorWidth = 2
     ),
 
-    /** Andares 111–120: O Cosmos — Base Lunar, Dinossauros, Portal do Tempo */
-    O_COSMOS(
-        displayName     = "O Cosmos",
-        displayEmoji    = "🚀",
+    /** Andares 111–120: O Cosmos — Base Lunar, Estrelas e Vazio */
+    BASE_LUNAR(
+        displayName     = "Base Lunar",
+        displayEmoji    = "🌙",
         portalColors    = PortalColors(
-            primary = Color.rgb(200, 220, 255),  // Branco cósmico
+            primary = Color.rgb(200, 220, 255),  // Azul lunar
             accent  = Color.rgb(255, 255, 255)
         ),
         lightingMode    = LightingMode.MOONLIGHT,
-        minCorridorWidth = 3
+        minCorridorWidth = 5,
+        isOpenAir       = true
     );
 
     companion object {
         /** Retorna o BiomeWorld correspondente ao número de andar. */
         fun fromFloor(floorNumber: Int): BiomeWorld = when (floorNumber) {
             in 1..10   -> ENTRANHAS
-            in 11..20  -> FLORESTA_SUBTERRANEA
+            in 11..20  -> FLORESTA_DE_ARVORES
             in 21..30  -> ABISMOS_AQUATICOS
             in 31..40  -> JARDIM_PROFUNDO
             in 41..60  -> MINAS_RIQUEZAS
@@ -167,7 +170,7 @@ enum class BiomeWorld(
             in 81..90  -> SUPERFICIE_ABERTA
             in 91..100 -> ABISMO_DO_VAZIO
             in 101..110 -> NUCLEO_DE_FOGO
-            else       -> O_COSMOS
+            else       -> BASE_LUNAR
         }
     }
 }

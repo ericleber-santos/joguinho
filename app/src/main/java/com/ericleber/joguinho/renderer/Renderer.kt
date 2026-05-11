@@ -51,6 +51,18 @@ class Renderer(
         style = Paint.Style.FILL
     }
 
+    /** Configuração para partículas de musgo (Soul Tiles). */
+    private val mossConfig = ParticleConfig(
+        vxRange = -30f..30f,
+        vyRange = -50f..-20f,
+        lifeRange = 0.4f..0.8f,
+        startColor = Color.rgb(60, 140, 40),
+        endColor = Color.argb(0, 40, 80, 20),
+        startSize = 6f,
+        endSize = 2f,
+        type = ParticleType.RECT
+    )
+
     /** Bioma do último frame — usado para detectar troca e reinicializar sistemas. */
     private var lastBiome: Biome? = null
     /** Mapa do último frame — usado para re-init do DripSystem. */
@@ -205,6 +217,11 @@ class Renderer(
         bgPaint.color = palette.backgroundColor
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo, bgPaint)
 
+        // --- Fase 10: Céu Estelar para mundos abertos ---
+        if (gameState.currentBiomeWorld.isOpenAir) {
+            renderSky(canvas, gameState)
+        }
+
         // Limita a área de desenho do jogo para não invadir o HUD (Culling)
         canvas.save()
         canvas.clipRect(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
@@ -286,15 +303,32 @@ class Renderer(
                 
                 // Calcula bitmask para AutoTiling
                 val mask = tileRenderer.getWallBitmask(tx, ty, mazeData)
-                val wallKey = "biome_${gameState.currentBiome.name}_wall_mask_$mask"
+                
+                // --- Fase 10: Paredes como Árvores ou Cristais ---
+                val isForest = gameState.currentBiomeWorld == com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES
+                val wallKey = if (isForest) {
+                    "biome_${gameState.currentBiome.name}_tree_variant_${(tx + ty) % 3}"
+                } else {
+                    "biome_${gameState.currentBiome.name}_wall_mask_$mask"
+                }
                 
                 renderList.add(object : Renderable {
                     override val ySort: Float = ty + 1.0f
                     override fun render(c: Canvas) {
                         val wallBitmap = spriteCache.getOrCreate(wallKey) {
-                            tileRenderer.createWallBitmap(tileW.toInt(), tileH.toInt(), palette, tx, ty, mazeData)
+                            if (isForest) {
+                                tileRenderer.createTreeBitmap(tileW.toInt(), tileH.toInt(), palette, tx, ty)
+                            } else {
+                                tileRenderer.createWallBitmap(tileW.toInt(), tileH.toInt(), palette, tx, ty, mazeData)
+                            }
                         }
-                        c.drawBitmap(wallBitmap, sx, sy, null)
+                        
+                        // Desenha o bitmap (árvores são desenhadas um pouco acima para parecerem altas)
+                        val drawY = if (isForest) sy - tileH * 0.8f else sy
+                        c.drawBitmap(wallBitmap, sx, drawY, null)
+                        
+                        // --- Fase 10: Soul Tiles (Micro-interações) ---
+                        renderSoulTileInteraction(c, sx, drawY, tileW, tileH, tx, ty, gameState)
                     }
                 })
             }
@@ -897,6 +931,72 @@ class Renderer(
             com.ericleber.joguinho.core.Direction.SOUTH_WEST -> HeroDirection.SW
             com.ericleber.joguinho.core.Direction.WEST -> HeroDirection.W
             com.ericleber.joguinho.core.Direction.NORTH_WEST -> HeroDirection.NW
+        }
+    }
+
+    // =========================================================================
+    // FASE 10: SISTEMAS DE IMERSÃO AVANÇADA
+    // =========================================================================
+
+    /**
+     * Renderiza o fundo de céu (Lua/Estrelas ou Sol) para biomas abertos.
+     */
+    private fun renderSky(canvas: Canvas, gameState: GameState) {
+        val isMoon = gameState.currentBiomeWorld == com.ericleber.joguinho.biome.BiomeWorld.BASE_LUNAR
+        val isForest = gameState.currentBiomeWorld == com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES
+        
+        // Gradiente de fundo
+        val topColor = if (isMoon) Color.rgb(5, 5, 20) else Color.rgb(100, 180, 255)
+        val botColor = if (isMoon) Color.rgb(20, 20, 40) else Color.rgb(180, 220, 255)
+        
+        // Desenhar estrelas se for Lua ou Noite
+        if (isMoon) {
+            val starRng = java.util.Random(gameState.mazeData?.seed ?: 0L)
+            bgPaint.color = Color.WHITE
+            for (i in 0..100) {
+                val sx = starRng.nextFloat() * screenWidth
+                val sy = starRng.nextFloat() * screenHeight
+                val size = 1f + starRng.nextFloat() * 2f
+                val alpha = (150 + sin(frameTotal * 0.05f + i) * 105).toInt()
+                bgPaint.alpha = alpha
+                canvas.drawRect(sx, sy, sx + size, sy + size, bgPaint)
+            }
+            bgPaint.alpha = 255
+        }
+    }
+
+    /**
+     * Implementa as micro-interações de "Soul Tiles" (Requisito 10.5).
+     * Reage a projéteis e proximidade do jogador.
+     */
+    private fun renderSoulTileInteraction(
+        c: Canvas, sx: Float, sy: Float, tw: Float, th: Float,
+        tx: Int, ty: Int, gameState: GameState
+    ) {
+        val biome = gameState.currentBiome.name
+        val isCrystal = biome.contains("MINA") || biome.contains("MAGIA")
+        val isMoss = biome.contains("JARDIM") || biome.contains("FLORESTA")
+        
+        // 1. Proximidade do Herói (Solta partículas de musgo)
+        if (isMoss) {
+            val dist = gameState.heroPosition.dist(com.ericleber.joguinho.core.Position(tx.toFloat(), ty.toFloat()))
+            if (dist < 1.2f) {
+                if (frameTotal % 15 == 0L) {
+                    particleSystem.emit(sx + tw/2f, sy + th/2f, 2, mossConfig)
+                }
+            }
+        }
+        
+        // 2. Impacto de Jato D'água (Faz o cristal brilhar)
+        if (isCrystal && gameState.isShooting) {
+            val impactPos = gameState.waterStreamImpactPos
+            if (impactPos != null && impactPos.ix == tx && impactPos.iy == ty) {
+                // Efeito de brilho branco intenso
+                bgPaint.color = Color.WHITE
+                bgPaint.alpha = (100 + sin(frameTotal * 0.2f) * 100).toInt()
+                c.drawRect(sx, sy, sx + tw, sy + th, bgPaint)
+                bgPaint.alpha = 255
+            }
         }
     }
 }

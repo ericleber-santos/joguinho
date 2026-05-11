@@ -174,6 +174,8 @@ class TileRenderer {
                     texturaConstrucao(canvas, x, y, tileW, tileH, palette, seed)
                 nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") ->
                     texturaVulcanica(canvas, x, y, tileW, tileH, palette, seed)
+                nome.contains("GIGANTE") || nome.contains("ARVORE") || nome.contains("ARBOREO") ->
+                    texturaFloresta(canvas, x, y, tileW, tileH, palette, seed)
                 else ->
                     texturaMina(canvas, x, y, tileW, tileH, palette, seed)
             }
@@ -307,6 +309,23 @@ class TileRenderer {
         paint.color = escurecer(p.wallColor, 0.30f)
         val px = x + ((seed * 9) and 0x7FFFFFFF) % ((tw * 0.5f).toInt().coerceAtLeast(1)) + tw * 0.2f
         canvas.drawOval(RectF(px, y + th * 0.6f, px + tw * 0.15f, y + th * 0.75f), paint)
+    }
+
+    // --- FLORESTA: Textura de casca de árvore e folhas ---
+    private fun texturaFloresta(canvas: Canvas, x: Float, y: Float, tw: Float, th: Float, p: BiomePalette, seed: Int) {
+        // Casca (linhas verticais marrom escuro)
+        paint.color = Color.argb(100, 60, 40, 20)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f
+        val rx = x + tw * 0.4f
+        canvas.drawLine(rx, y, rx, y + th, paint)
+        canvas.drawLine(rx + tw * 0.2f, y, rx + tw * 0.2f, y + th, paint)
+        paint.style = Paint.Style.FILL
+        // Folhas caindo na frente
+        if (seed % 2 == 0) {
+            paint.color = Color.argb(180, 40, 100, 40)
+            canvas.drawOval(RectF(x + tw * 0.1f, y + th * 0.2f, x + tw * 0.4f, y + th * 0.5f), paint)
+        }
     }
 
     // Mantido para compatibilidade
@@ -566,6 +585,42 @@ class TileRenderer {
         val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), tileH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
         renderWallTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY, mazeData)
+        return bitmap
+    }
+
+    /**
+     * Cria um bitmap de árvore (usado como parede em biomas de floresta).
+     * Requisito 10.5
+     */
+    fun createTreeBitmap(tileW: Int, tileH: Int, palette: BiomePalette, tx: Int, ty: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), (tileH * 2.2f).toInt(), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bitmap)
+        val tw = tileW.toFloat()
+        val th = tileH.toFloat()
+        val drawY = th * 1.2f // Base da árvore no bitmap estendido
+
+        // 1. Tronco
+        paint.color = Color.rgb(80, 55, 30)
+        c.drawRect(tw * 0.35f, drawY - th * 0.2f, tw * 0.65f, drawY + th, paint)
+        
+        // 2. Copa (Folhagem)
+        paint.color = Color.rgb(40, 120, 50)
+        val rng = java.util.Random((tx * 31 + ty * 17).toLong())
+        for (i in 0..2) {
+            val ly = drawY - th * 0.5f - (i * th * 0.4f)
+            val lw = tw * (1.0f - i * 0.15f)
+            c.drawOval(RectF(tw / 2f - lw / 2f, ly - th * 0.6f, tw / 2f + lw / 2f, ly + th * 0.3f), paint)
+            // Detalhes da copa
+            paint.color = clarear(paint.color, 0.1f)
+        }
+        
+        // 3. Frutos/Flores aleatórios
+        if (rng.nextFloat() > 0.6f) {
+            paint.color = palette.accentColor
+            c.drawRect(tw * 0.4f, drawY - th * 0.8f, tw * 0.45f, drawY - th * 0.75f, paint)
+            c.drawRect(tw * 0.6f, drawY - th * 0.5f, tw * 0.65f, drawY - th * 0.45f, paint)
+        }
+        
         return bitmap
     }
 
