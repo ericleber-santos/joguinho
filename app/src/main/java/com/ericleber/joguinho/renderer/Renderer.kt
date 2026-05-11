@@ -97,6 +97,16 @@ class Renderer(
         style = Paint.Style.FILL
     }
 
+    // --- Fase 12: Paints de Ecologia ---
+    private val fireVfxPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    private val blinkVfxPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+
     // Tamanho base do tile em dp — calculado dinamicamente em onSurfaceChanged
     // para que o mapa sempre preencha a tela inteira sem fundo preto
     private var tileWDinamico: Float = 28f
@@ -566,6 +576,17 @@ class Renderer(
                     when (vfx.type) {
                         com.ericleber.joguinho.core.VfxType.WATER_SPLASH -> characterRenderer.renderWaterSplash(c, vx, vy, tileW, progress)
                         com.ericleber.joguinho.core.VfxType.WATER_JET_MUZZLE -> characterRenderer.renderWaterMuzzle(c, vx, vy, tileW, progress, vfx.angle)
+                        com.ericleber.joguinho.core.VfxType.FIRE_TRAIL -> {
+                            fireVfxPaint.color = Color.rgb(255, (100 + 155 * (1f - progress)).toInt(), 0)
+                            fireVfxPaint.alpha = (200 * (1f - progress)).toInt()
+                            val radius = (tileW * 0.3f) * (0.8f + 0.4f * sin(progress * 10).toFloat())
+                            c.drawCircle(vx, vy, radius, fireVfxPaint)
+                        }
+                        com.ericleber.joguinho.core.VfxType.BLINK_SHADOW -> {
+                            blinkVfxPaint.color = Color.MAGENTA
+                            blinkVfxPaint.alpha = (150 * (1f - progress)).toInt()
+                            c.drawCircle(vx, vy, tileW * 0.5f * (1f + progress), blinkVfxPaint)
+                        }
                     }
                 }
             })

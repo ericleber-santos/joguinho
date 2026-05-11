@@ -14,8 +14,18 @@ enum class MovementPattern {
 }
 
 @Serializable
+enum class MonsterAIState {
+    IDLE,      // Parado
+    PATROL,    // Patrulhando área aleatória
+    CHASE,     // Perseguindo player via A*
+    AMBUSH,    // Escondido esperando proximidade
+    RETREAT,   // Fugindo (após levar dano)
+    STUNNED    // Paralisado por ataque
+}
+
+@Serializable
 enum class VfxType {
-    WATER_SPLASH, WATER_JET_MUZZLE
+    WATER_SPLASH, WATER_JET_MUZZLE, FIRE_TRAIL, BLINK_SHADOW
 }
 
 @Serializable
@@ -116,7 +126,13 @@ data class MonsterState(
     var hp: Int = 3,
     val maxHp: Int = 3,
     var lastHitTimeMs: Long = 0L,
-    var damageFlashRemainingMs: Long = 0L
+    var damageFlashRemainingMs: Long = 0L,
+    
+    // --- Fase 12: IA & Ecologia ---
+    var aiState: MonsterAIState = MonsterAIState.PATROL,
+    var targetPath: List<Position>? = null,
+    var ambushTriggerRadius: Float = 3.5f,
+    var patrolTarget: Position? = null
 )
 
 @Serializable

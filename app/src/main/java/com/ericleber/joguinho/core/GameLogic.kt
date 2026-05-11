@@ -4,8 +4,13 @@ import com.ericleber.joguinho.pcg.BSPMazeGenerator
 import com.ericleber.joguinho.audio.TipoEfeito
 import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.renderer.PortalState
+import com.ericleber.joguinho.core.MonsterAIState
+import com.ericleber.joguinho.core.Pathfinder
 import kotlin.math.abs
 import kotlin.math.sqrt
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Lógica central do jogo: colisões, movimento de entidades, detecção de Exit e ComboStreak.
@@ -92,6 +97,10 @@ class GameLogic(private val gameState: GameState) {
     private var wasShootingLastFrame = false
     private var damageAccumulatorMs = 0L
 
+    // Timers para atualização de IA (Fase 12)
+    private val monsterAiTimers: MutableMap<String, Long> = mutableMapOf()
+    private val monsterPathCooldowns: MutableMap<String, Long> = mutableMapOf()
+
     /**
      * Atualiza toda a lógica de jogo para o frame atual.
      * Deve ser chamado pelo GameLoop após o InputController processar o input.
@@ -156,6 +165,7 @@ class GameLogic(private val gameState: GameState) {
         atualizarMovimentoSpike(deltaTimeSec, maze)
         verificarHeroNoExit(maze)
         atualizarPortal(maze)          // Portal interdimensional
+        atualizarEcologia(deltaTimeSec, maze) // Fase 12: Ecologia por Bioma
         atualizarWaterStream(deltaTimeSec, maze)
         atualizarVfx(deltaMs)
         atualizarFeedbackCombate(deltaMs)
@@ -228,95 +238,108 @@ class GameLogic(private val gameState: GameState) {
     // -------------------------------------------------------------------------
 
     /**
-     * Move cada Monster ativo conforme seu padrão de movimento.
-     * Padrões: LINEAR, CIRCULAR, RANDOM, CHASE.
-     * Monsters não atravessam paredes.
+     * Move cada Monster ativo conforme seu padrão de movimento e estado de IA (FSM).
      */
     private fun atualizarMovimentoMonsters(deltaTimeSec: Float, maze: MazeData) {
         val heroPos = gameState.heroPosition
+        val currentTime = System.currentTimeMillis()
         
         gameState.monsters = gameState.monsters.map { monster ->
             if (!monster.isActive) return@map monster
 
-            // --- Lógica Específica do Boss ---
+            // 1. Lógica de Transição de Estados (FSM)
+            val distToHero = monster.position.dist(heroPos)
+            
+            // Boss sempre persegue ou ataca
             if (monster.isBoss) {
-                val state = gameState.bossFightState
-                // Boss atordoado (gelo) não se move
-                if (state.bossStunRemainingMs > 0) return@map monster
-                
-                // Calcula velocidade base do Boss com bônus de andar e Fase 3 (sem lama)
-                val phase3SpeedMult = if (state.elapsedMs >= 80000L) 1.5f else 1.0f
-                val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
-                val baseVel = MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult
-                val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
-                
-                val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
-                monsterTimers[monster.id] = timer
-
-                val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
-
-                // Lógica de Rage: Se o herói estiver longe (> 6 tiles), a raiva aumenta gradualmente
-                val distToHeroReal = monster.position.dist(heroPos)
-                var newRage = monster.rageMultiplier
-                if (distToHeroReal > 6f) {
-                    newRage = (newRage + 0.1f * deltaTimeSec).coerceAtMost(2.0f) // Máximo 2x velocidade
-                } else if (distToHeroReal < 3f) {
-                    newRage = (newRage - 0.2f * deltaTimeSec).coerceAtLeast(1.0f) // Acalma se perto
+                if (gameState.bossFightState.bossStunRemainingMs > 0) return@map monster
+                monster.aiState = MonsterAIState.CHASE
+            } else {
+                val newState = when (monster.aiState) {
+                    MonsterAIState.AMBUSH -> {
+                        if (distToHero < monster.ambushTriggerRadius) MonsterAIState.CHASE else MonsterAIState.AMBUSH
+                    }
+                    MonsterAIState.PATROL -> {
+                        if (distToHero < 5f) MonsterAIState.CHASE else MonsterAIState.PATROL
+                    }
+                    MonsterAIState.CHASE -> {
+                        if (distToHero > 8f) MonsterAIState.PATROL else MonsterAIState.CHASE
+                    }
+                    else -> monster.aiState
                 }
+                monster.aiState = newState
+            }
 
-                val velocidadeFinal = velocidade * newRage
-                var nextX = (monster.position.x + dx * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.width - 1f)
-                var nextY = (monster.position.y + dy * velocidadeFinal * deltaTimeSec).coerceIn(0f, maze.height - 1f)
-
-                // Repulsão do Portal (Bug Fix: Loop do Boss no Portal)
-                val portalX = maze.exitIndex % maze.width + 0.5f
-                val portalY = maze.exitIndex / maze.width + 0.5f
-                val distToPortal = Math.sqrt(Math.pow((nextX - portalX).toDouble(), 2.0) + Math.pow((nextY - portalY).toDouble(), 2.0)).toFloat()
-                
-                if (distToPortal < 1.5f) {
-                    val angleFromPortal = Math.atan2((nextY - portalY).toDouble(), (nextX - portalX).toDouble())
-                    nextX = portalX + (Math.cos(angleFromPortal) * 1.5f).toFloat()
-                    nextY = portalY + (Math.sin(angleFromPortal) * 1.5f).toFloat()
-                }
-
-                // Não atravessa paredes (checa com raio de 0.3 para evitar atravessamento lateral)
-                val isWall = checkMonsterCollision(nextX, nextY, maze, 0.3f)
-                // Evita ficar EXATAMENTE em cima do herói (mantém pequena distância)
-                val distToHero = monster.position.dist(heroPos)
-
-                if (isWall || distToHero < 0.5f) {
-                    return@map monster.copy(rageMultiplier = newRage)
-                } else {
-                    return@map monster.copy(position = Position(nextX, nextY), rageMultiplier = newRage)
+            // 2. Lógica de Pathfinding (CHASE)
+            if (monster.aiState == MonsterAIState.CHASE) {
+                val lastCalc = monsterPathCooldowns[monster.id] ?: 0L
+                val interval = if (monster.isBoss) 500L else 1200L // Boss recalcula mais rápido
+                if (currentTime - lastCalc > interval) {
+                    monster.targetPath = Pathfinder.findPath(monster.position, heroPos, maze)
+                    monsterPathCooldowns[monster.id] = currentTime
                 }
             }
 
-            // --- Lógica de Monstros Normais ---
-            val baseVel = if (monster.movementPattern == MovementPattern.TANK_SLOW) {
-                MONSTER_SPEED_TILES_PER_SEC * 0.5f // Metade da velocidade base
-            } else if (monster.movementPattern == MovementPattern.AMBUSH) {
-                MONSTER_SPEED_TILES_PER_SEC * 1.5f // 50% mais rápido quando se move
-            } else {
-                MONSTER_SPEED_TILES_PER_SEC
+            // 3. Execução do Movimento baseado no Estado
+            val (dx, dy) = when (monster.aiState) {
+                MonsterAIState.CHASE -> {
+                    val path = monster.targetPath
+                    if (path != null && path.size > 1) {
+                        val nextPoint = path[1]
+                        val pdx = nextPoint.x - monster.position.x
+                        val pdy = nextPoint.y - monster.position.y
+                        val pdist = sqrt(pdx * pdx + pdy * pdy)
+                        if (pdist > 0.05f) Pair(pdx / pdist, pdy / pdist) else Pair(0f, 0f)
+                    } else {
+                        // Perseguição direta (linear) se o path falhar ou for nulo
+                        val pdx = heroPos.x - monster.position.x
+                        val pdy = heroPos.y - monster.position.y
+                        val pdist = sqrt(pdx * pdx + pdy * pdy)
+                        if (pdist > 0.05f) Pair(pdx / pdist, pdy / pdist) else Pair(0f, 0f)
+                    }
+                }
+                MonsterAIState.PATROL -> {
+                    val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
+                    monsterTimers[monster.id] = timer
+                    calcularDirecaoMonster(monster, heroPos, timer)
+                }
+                else -> Pair(0f, 0f)
             }
-            val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f else baseVel
 
-            val timer = (monsterTimers[monster.id] ?: 0f) + deltaTimeSec
-            monsterTimers[monster.id] = timer
+            // 4. Velocidade e Aplicação de Movimento
+            val baseVel = when {
+                monster.isBoss -> {
+                    val phase3SpeedMult = if (gameState.bossFightState.elapsedMs >= 80000L) 1.5f else 1.0f
+                    val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
+                    MONSTER_SPEED_TILES_PER_SEC * (1.2f + bossFloorBonus) * phase3SpeedMult
+                }
+                monster.aiState == MonsterAIState.CHASE -> MONSTER_SPEED_TILES_PER_SEC * 1.15f
+                monster.movementPattern == MovementPattern.TANK_SLOW -> MONSTER_SPEED_TILES_PER_SEC * 0.6f
+                else -> MONSTER_SPEED_TILES_PER_SEC
+            }
+            
+            val rage = if (monster.isBoss) monster.rageMultiplier else 1.0f
+            val velocidade = if (gameState.heroIsSlowedDown) baseVel * 0.7f * rage else baseVel * rage
 
-            val (dx, dy) = calcularDirecaoMonster(monster, heroPos, timer)
+            var nextX = (monster.position.x + dx * velocidade * deltaTimeSec).coerceIn(0f, maze.width - 1f)
+            var nextY = (monster.position.y + dy * velocidade * deltaTimeSec).coerceIn(0f, maze.height - 1f)
 
-            val nextX = (monster.position.x + dx * velocidade * deltaTimeSec).coerceIn(0f, maze.width - 1f)
-            val nextY = (monster.position.y + dy * velocidade * deltaTimeSec).coerceIn(0f, maze.height - 1f)
+            // Repulsão do Portal (apenas Boss)
+            if (monster.isBoss) {
+                val pX = maze.exitIndex % maze.width + 0.5f
+                val pY = maze.exitIndex / maze.width + 0.5f
+                if (monster.position.dist(Position(pX, pY)) < 1.5f) {
+                    val angle = atan2((nextY - pY).toDouble(), (nextX - pX).toDouble())
+                    nextX = pX + (cos(angle) * 1.5f).toFloat()
+                    nextY = pY + (sin(angle) * 1.5f).toFloat()
+                }
+            }
 
-            // Não atravessa paredes (checa com raio de 0.3 para evitar atravessamento lateral)
-            val isWall = checkMonsterCollision(nextX, nextY, maze, 0.3f)
-            if (isWall) {
-                monster
-            } else {
+            if (!checkMonsterCollision(nextX, nextY, maze, 0.3f)) {
                 monster.position = Position(nextX, nextY)
-                monster
             }
+            
+            monster
         }
     }
 
@@ -1083,5 +1106,70 @@ class GameLogic(private val gameState: GameState) {
             createdAtMs = System.currentTimeMillis(),
             durationMs = 500L
         )
+    }
+
+    /**
+     * Fase 12: Implementa comportamentos únicos baseados no ecossistema do bioma.
+     */
+    private fun atualizarEcologia(deltaTimeSec: Float, maze: MazeData) {
+        val world = gameState.currentBiomeWorld
+        val currentTime = System.currentTimeMillis()
+
+        // 1. Efeitos nos Monstros e Geração de VFX de rastro
+        val newVfx = mutableListOf<VfxState>()
+        
+        gameState.monsters.forEach { monster ->
+            if (!monster.isActive) return@forEach
+            
+            // LAVA/VULCÂNICO: Rastro de fogo constante
+            if (world == BiomeWorld.NUCLEO_DE_FOGO) {
+                // A cada ~250ms gera um ponto de fogo
+                if ((currentTime / 250) % 100 != ((currentTime - (deltaTimeSec*1000).toLong()) / 250) % 100) {
+                    newVfx.add(VfxState(
+                        id = "fire_${monster.id}_${currentTime}",
+                        position = Position(monster.position.x, monster.position.y),
+                        type = VfxType.FIRE_TRAIL,
+                        createdAtMs = currentTime,
+                        durationMs = 2500L
+                    ))
+                }
+            }
+            
+            // ABISMO: Blink (Teletransporte aleatório sutil)
+            if (world == BiomeWorld.ABISMO_DO_VAZIO) {
+                val blinkSeed = monster.id.hashCode() + (currentTime / 3000).toInt()
+                if (monster.aiState == MonsterAIState.CHASE && (currentTime % 3000 < (deltaTimeSec * 1000))) {
+                    val angle = (blinkSeed % 360) * Math.PI / 180.0
+                    val bX = monster.position.x + (Math.cos(angle) * 2.2f).toFloat()
+                    val bY = monster.position.y + (Math.sin(angle) * 2.2f).toFloat()
+                    
+                    if (!checkMonsterCollision(bX, bY, maze, 0.4f)) {
+                         newVfx.add(VfxState(
+                            id = "blink_${monster.id}_$currentTime",
+                            position = monster.position,
+                            type = VfxType.BLINK_SHADOW,
+                            createdAtMs = currentTime,
+                            durationMs = 600L
+                         ))
+                         monster.position = Position(bX, bY)
+                         onSoundEffectRequested?.invoke(TipoEfeito.BOSS_RISADA) // Som de blink
+                    }
+                }
+            }
+        }
+        
+        if (newVfx.isNotEmpty()) {
+            gameState.vfxList = gameState.vfxList + newVfx
+        }
+
+        // 2. Interação do Hero com a Ecologia (Dano de área/Lentidão)
+        gameState.vfxList.forEach { vfx ->
+            if (vfx.type == VfxType.FIRE_TRAIL) {
+                if (gameState.heroPosition.dist(vfx.position) < 0.7f) {
+                    gameState.heroIsSlowedDown = true
+                    gameState.heroSlowdownRemainingMs = Math.max(gameState.heroSlowdownRemainingMs, 800L)
+                }
+            }
+        }
     }
 }
