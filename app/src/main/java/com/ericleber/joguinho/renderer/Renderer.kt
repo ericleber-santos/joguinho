@@ -410,55 +410,63 @@ class Renderer(
         renderList.add(object : Renderable {
             override val ySort: Float = gameState.spikePosition.y + 0.5f
             override fun render(c: Canvas) {
-                var drawSpikeSx = spikeSx
-                var drawSpikeSy = spikeSy
+                var renderSx = spikeSx
+                var renderSy = spikeSy
                 var scale = 1f
                 var rotation = 0f
                 var alpha = 255
                 
+                // 1. Lógica de Saída do Portal
                 if (gameState.isExiting) {
                     val progressBase = (gameState.exitAnimationTimerMs.toFloat() / 800f)
                     val progress = ((progressBase - 0.2f) * 1.25f).coerceIn(0f, 1f)
-                    
                     if (progress > 0f) {
                         val saidaTx = mazeData.exitIndex % mazeData.width
                         val saidaTy = mazeData.exitIndex / mazeData.width
                         val portalSx = saidaTx * tileW + cameraX + tileW / 2f
                         val portalSy = saidaTy * tileH + cameraY + tileH / 2f
-                        
-                        drawSpikeSx = spikeSx + (portalSx - spikeSx) * progress
-                        drawSpikeSy = spikeSy + (portalSy - tileH * 0.2f - spikeSy) * progress - (Math.sin(progress * Math.PI).toFloat() * tileH)
-                        
+                        renderSx = spikeSx + (portalSx - spikeSx) * progress
+                        renderSy = spikeSy + (portalSy - tileH * 0.2f - spikeSy) * progress - (Math.sin(progress * Math.PI).toFloat() * tileH)
                         scale = 1f - (progress * progress)
                         rotation = progress * 1080f
                         alpha = (255 * (1f - progress)).toInt().coerceIn(0, 255)
                     }
                 }
                 
+                // 2. Lógica de Combate (Lunge/Bote)
+                val jumpProgress = if (gameState.spikeAttackTimerMs > 0) {
+                    (600f - gameState.spikeAttackTimerMs) / 600f
+                } else 0f
+                val lungeProgress = if (jumpProgress <= 0.5f) jumpProgress * 2f else (1f - jumpProgress) * 2f
+                
+                val finalSx = renderSx + (gameState.spikeJumpOffsetX * lungeProgress * tileW)
+                val finalSy = renderSy + (gameState.spikeJumpOffsetY * lungeProgress * tileH)
+                val zOffset = gameState.spikeZ * tileH
+                
                 val facingLeft = when (gameState.heroDirection) {
                     com.ericleber.joguinho.core.Direction.WEST, com.ericleber.joguinho.core.Direction.NORTH_WEST, com.ericleber.joguinho.core.Direction.SOUTH_WEST -> true
                     else -> false
                 }
                 
+                // 3. Renderização Final
                 c.save()
                 if (gameState.isExiting && alpha < 255) {
-                    c.saveLayerAlpha(
-                        drawSpikeSx - tileW * 2f, 
-                        drawSpikeSy - tileH * 4f, 
-                        drawSpikeSx + tileW * 2f, 
-                        drawSpikeSy + tileH * 2f, 
-                        alpha
-                    )
+                    c.saveLayerAlpha(finalSx - tileW * 2f, finalSy - tileH * 4f, finalSx + tileW * 2f, finalSy + tileH * 2f, alpha)
                 }
                 if (gameState.isExiting) {
-                    c.translate(drawSpikeSx, drawSpikeSy - tileH * 0.5f)
+                    c.translate(finalSx, finalSy - tileH * 0.5f)
                     c.rotate(rotation)
                     c.scale(scale, scale)
-                    c.translate(-drawSpikeSx, -(drawSpikeSy - tileH * 0.5f))
+                    c.translate(-finalSx, -(finalSy - tileH * 0.5f))
                 }
-                
-                val zOffset = gameState.spikeZ * tileH
-                characterRenderer.drawDog(c, drawSpikeSx, drawSpikeSy, tileW, AnimState.WALK, facingLeft, zOffset)
+
+                val spikeAnim = when(gameState.spikeCompanionState) {
+                    "CORRENDO", "ENTUSIASMADO" -> com.ericleber.joguinho.renderer.AnimState.RUN
+                    "ANDANDO" -> com.ericleber.joguinho.renderer.AnimState.WALK
+                    else -> com.ericleber.joguinho.renderer.AnimState.IDLE
+                }
+
+                characterRenderer.drawDog(c, finalSx, finalSy, tileW, spikeAnim, facingLeft, zOffset)
                 
                 if (gameState.isExiting && alpha < 255) {
                     c.restore()

@@ -138,6 +138,8 @@ class GameState {
     // --- Estado comportamental do Spike (para o Renderer) ---
     var spikeCompanionState: String = "SEGUINDO"
     var spikeZ: Float = 0f // Altura do pulo (Eixo Z)
+    var spikeJumpOffsetX: Float = 0f // Deslocamento X durante o bote
+    var spikeJumpOffsetY: Float = 0f // Deslocamento Y durante o bote
     var spikeAttackTimerMs: Long = 0L // Timer para o ciclo do pulo de ataque
 
     // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---

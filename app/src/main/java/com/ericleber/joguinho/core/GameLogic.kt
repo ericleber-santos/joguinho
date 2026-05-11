@@ -640,25 +640,39 @@ class GameLogic(private val gameState: GameState) {
             // Spike ataca se o Boss estiver no alcance
             if (distHeroBoss < 6.0f && distSpikeBoss < 5.0f) {
                 if (gameState.spikeAttackTimerMs == 0L) {
-                    // Sistema de Cooldown Real (usa o timer acumulado)
                     val cooldownKey = "spike_attack_cooldown"
                     val lastAttack = monsterTimers[cooldownKey] ?: 0f
                     if (gameState.floorTimerMs.toFloat() - lastAttack > 1200f) {
                         gameState.spikeAttackTimerMs = 600L 
                         monsterTimers[cooldownKey] = gameState.floorTimerMs.toFloat()
+                        
+                        // Calcula vetor do bote (Lunge) em direção ao Boss
+                        val dxB = boss.position.x - spikePos.x
+                        val dyB = boss.position.y - spikePos.y
+                        val distB = sqrt(dxB * dxB + dyB * dyB)
+                        if (distB > 0.1f) {
+                            // Ele se projeta 1.5 tiles na direção do Boss
+                            gameState.spikeJumpOffsetX = (dxB / distB) * 1.5f
+                            gameState.spikeJumpOffsetY = (dyB / distB) * 1.5f
+                        }
                     }
                 }
             }
         }
 
-        // Processa animação de pulo (Z)
+        // Processa animação de pulo (Z e Lunge)
         if (gameState.spikeAttackTimerMs > 0) {
             val totalDur = 600f
             val progress = (totalDur - gameState.spikeAttackTimerMs) / totalDur // 0.0 a 1.0
             
-            // Parábola: z = 4 * height * progress * (1 - progress)
-            // Altura máxima de 1.2 tiles no ápice (300ms)
+            // Parábola Z (Altura)
             gameState.spikeZ = 4.8f * progress * (1f - progress)
+            
+            // Arco de Lunge (Vai e Volta)
+            // LungeProgress: 0.0 -> 1.0 (no ápice) -> 0.0 (no chão)
+            val lungeProgress = if (progress <= 0.5f) progress * 2f else (1f - progress) * 2f
+            // Aplicamos o offset baseado no vetor capturado no início
+            // (Note: as variáveis offsetX/Y originais guardam o vetor total do bote)
             
             // No ápice (progress approx 0.5), aplica o dano e o VFX
             if (progress >= 0.5f && progress < 0.5f + (deltaTimeSec * 1000 / totalDur)) {
@@ -688,9 +702,19 @@ class GameLogic(private val gameState: GameState) {
             gameState.spikeCompanionState = "ENTUSIASMADO"
         } else {
             gameState.spikeZ = 0f
+            gameState.spikeJumpOffsetX = 0f
+            gameState.spikeJumpOffsetY = 0f
         }
 
-        // Rastreamento de travamento
+        // Rastreamento de travamento e Estado de Animação (Patas)
+        val movDist = if (spikeLastPosition != null) gameState.spikePosition.dist(spikeLastPosition!!) else 0f
+        if (movDist > 0.01f) {
+            gameState.spikeCompanionState = if (movDist > 0.1f) "CORRENDO" else "ANDANDO"
+        } else if (gameState.spikeAttackTimerMs == 0L) {
+            gameState.spikeCompanionState = "SENTADO"
+        }
+        
+        spikeLastPosition = gameState.spikePosition.copy()
         if (spikeLastPosition == spikePos) {
             spikeStuckTimerSec += deltaTimeSec
         } else {
