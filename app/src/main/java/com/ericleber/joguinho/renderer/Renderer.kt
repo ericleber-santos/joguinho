@@ -9,8 +9,10 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BIOME_PALETTES
+import com.ericleber.joguinho.biome.BiomePalette
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
+import com.ericleber.joguinho.core.Position
 import kotlin.math.sin
 
 /**
@@ -220,6 +222,14 @@ class Renderer(
         // --- Fase 10: Céu Estelar para mundos abertos ---
         if (gameState.currentBiomeWorld.isOpenAir) {
             renderSky(canvas, gameState)
+        }
+
+        // --- FASE 11: Background Walls (Camada de Profundidade 0) ---
+        // Renderiza antes do clipRect para garantir cobertura total ou parallax
+        val bgMaze = gameState.mazeData
+        if (bgMaze != null) {
+            val visibleTilesForBg = getVisibleTiles(bgMaze, tileWDinamico, tileHDinamico)
+            renderBackgroundWalls(canvas, visibleTilesForBg, tileWDinamico, tileHDinamico, palette, gameState)
         }
 
         // Limita a área de desenho do jogo para não invadir o HUD (Culling)
@@ -607,7 +617,7 @@ class Renderer(
         particleSystem.render(canvas)
 
         // -----------------------------------------------------------------------
-        // Fase 10 — DripSystem + Partículas Ambiente + Luz Ambiente
+        // Fase 10 - DripSystem + Particulas Ambiente + Luz Ambiente
         // -----------------------------------------------------------------------
 
         // Reinicializar sistemas ao trocar de bioma ou mapa
@@ -645,7 +655,7 @@ class Renderer(
 
         // Overlay de cor de luz ambiente (MULTIPLY) — aplicado por último,
         // antes do restore, para não afetar o HUD
-        renderAmbientLight(canvas, gameState.currentBiome)
+        renderAmbientLight(canvas, gameState)
 
         // Restaura a área total de desenho para renderizar o HUD sobreposto
         canvas.restore()
@@ -759,46 +769,63 @@ class Renderer(
      * A cor deve ter alpha ~0x33–0x55 para efeito sutil.
      * Biomas mais claros (Calcário) usam alpha menor (0x33).
      */
-    private fun renderAmbientLight(canvas: Canvas, biome: Biome) {
-        val overlayColor = when (biome) {
-            Biome.MINA_ABANDONADA,
-            Biome.MINA_DE_CARVAO      -> 0x553D2B0A.toInt()  // sépia escuro
-            Biome.CAVERNA_UMIDA,
-            Biome.RIACHOS_SUBTERRANEOS,
-            Biome.TUNEIS_AQUATICOS    -> 0x550A1A2A.toInt()  // azul frio
-            Biome.JARDIM_DE_FUNGOS,
-            Biome.GRUTA_DOS_COGUMELOS -> 0x551A0A2A.toInt()  // roxo
-            Biome.CAVERNA_DE_CALCARIO -> 0x330A1A2A.toInt()  // azul claro (menos opaco)
-            Biome.TUNEIS_DE_TERRA,
-            Biome.CAVERNA_DAS_RAIZES  -> 0x552A1008.toInt()  // marrom
-            Biome.CAVERNA_DE_LAVA,
-            Biome.TUNEIS_VULCANICOS,
-            Biome.NUCLEO_DE_FOGO,
-            Biome.FORJA_INFERNAL,
-            Biome.ERA_DINOSSAUROS     -> 0x553A0A00.toInt()  // laranja escuro
-            Biome.ABISMO_PROFUNDO,
-            Biome.ABISMO_AZUL,
-            Biome.ABISMO_DE_PEDRA,
-            Biome.NUCLEO_ESCURO,
-            Biome.CAVERNA_DO_VAZIO    -> 0x66000010.toInt()  // vazio escuro
-            else                      -> return               // sem overlay para demais biomas
+    /**
+     * FASE 11: Iluminacao Pro Max.
+     * Alem do overlay MULTIPLY, adiciona luzes dinamicas via RadialGradient.
+     */
+    private fun renderAmbientLight(canvas: Canvas, gameState: GameState) {
+        val biome = gameState.currentBiome
+        val ambientColor = when (biome) {
+            Biome.MINA_ABANDONADA -> 0x660A0A0A.toInt()
+            Biome.CAVERNA_DE_LAVA -> 0x44220000.toInt()
+            Biome.ABISMO_PROFUNDO -> 0xAA000005.toInt()
+            else -> 0x55050510.toInt()
         }
 
-        // saveLayer isola o MULTIPLY do HUD (que está fora do clipRect)
-        val sc = canvas.saveLayer(
-            0f, 0f,
-            screenWidth.toFloat(), screenHeight * fracaoAreaJogo,
-            null
-        )
-        ambientLightPaint.color = overlayColor
-        ambientLightPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
-        canvas.drawRect(
-            0f, 0f,
-            screenWidth.toFloat(), screenHeight * fracaoAreaJogo,
-            ambientLightPaint
-        )
+        // 1. Camada de Escuridão (Multiply)
+        val sc = canvas.saveLayer(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), null)
+        canvas.drawColor(ambientColor)
+        
+        // 2. Luzes Dinâmicas (Clear / Screen)
+        ambientLightPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+        
+        // Luz do Herói
+        val heroX = gameState.heroPosition.x * tileWDinamico + cameraX
+        val heroY = gameState.heroPosition.y * tileHDinamico + cameraY
+        renderLightSource(canvas, heroX, heroY, tileWDinamico * 4f, 0.8f)
+
+        // Luz do Portal
+        val maze = gameState.mazeData
+        if (maze != null) {
+            val sTx = maze.exitIndex % maze.width
+            val sTy = maze.exitIndex / maze.width
+            val portalX = sTx * tileWDinamico + cameraX + tileWDinamico / 2f
+            val portalY = sTy * tileHDinamico + cameraY + tileHDinamico / 2f
+            renderLightSource(canvas, portalX, portalY, tileWDinamico * 6f, 0.6f)
+        }
+
+        // Luz dos Monstros (Bioluminescência)
+        for (m in gameState.monsters) {
+            if (m.isActive) {
+                val mx = m.position.x * tileWDinamico + cameraX
+                val my = m.position.y * tileHDinamico + cameraY
+                renderLightSource(canvas, mx, my, tileWDinamico * 2f, 0.4f)
+            }
+        }
+
         ambientLightPaint.xfermode = null
         canvas.restoreToCount(sc)
+    }
+
+    private fun renderLightSource(canvas: Canvas, x: Float, y: Float, radius: Float, intensity: Float) {
+        val gradient = android.graphics.RadialGradient(
+            x, y, radius,
+            intArrayOf(Color.argb((255 * intensity).toInt(), 255, 255, 255), Color.TRANSPARENT),
+            null, android.graphics.Shader.TileMode.CLAMP
+        )
+        ambientLightPaint.shader = gradient
+        canvas.drawCircle(x, y, radius, ambientLightPaint)
+        ambientLightPaint.shader = null
     }
 
     // -------------------------------------------------------------------------
@@ -998,6 +1025,46 @@ class Renderer(
                 bgPaint.alpha = 255
             }
         }
+    }
+
+    /**
+     * FASE 11: Renderiza as paredes de fundo com parallax leve.
+     */
+    private fun renderBackgroundWalls(
+        canvas: Canvas,
+        visibleTiles: List<Pair<Int, Int>>,
+        tileW: Float, tileH: Float,
+        palette: BiomePalette,
+        gameState: GameState
+    ) {
+        val bgCameraX = cameraX * 0.4f // Parallax: move-se menos que a câmera principal
+        val bgCameraY = cameraY * 0.4f
+        
+        bgPaint.color = escurecer(palette.wallColor, 0.5f) // Mais escura para profundidade
+        
+        val maze = gameState.mazeData ?: return
+        for (tile in visibleTiles) {
+            val tx = tile.first
+            val ty = tile.second
+            
+            if (ty * maze.width + tx < maze.tiles.size && maze.tiles[ty * maze.width + tx] == 1) {
+                val screenPos = IsometricProjection.worldToScreen(tx.toFloat(), ty.toFloat(), tileW, tileH)
+                canvas.drawRect(
+                    screenPos.x + bgCameraX, 
+                    screenPos.y + bgCameraY, 
+                    screenPos.x + bgCameraX + tileW, 
+                    screenPos.y + bgCameraY + tileH, 
+                    bgPaint
+                )
+            }
+        }
+    }
+
+    private fun escurecer(color: Int, factor: Float): Int {
+        val r = (Color.red(color) * (1f - factor)).toInt()
+        val g = (Color.green(color) * (1f - factor)).toInt()
+        val b = (Color.blue(color) * (1f - factor)).toInt()
+        return Color.rgb(r, g, b)
     }
 }
 
