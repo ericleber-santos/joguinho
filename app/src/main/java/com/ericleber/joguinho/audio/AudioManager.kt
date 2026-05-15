@@ -45,7 +45,7 @@ enum class TipoEfeito(
     POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL),
     SPIKE_BITE(1200f, 150, FormaOnda.QUADRADA),
     ESGUICHO_AGUA(4000f, -1, FormaOnda.SENOIDAL), // Frequência base ignorada, síntese específica
-    HERO_DEATH(220f, 1200, FormaOnda.SENOIDAL) // Tom descendente dramático para morte do herói
+    HERO_DEATH(220f, 1500, FormaOnda.SENOIDAL) // "thcururururummmmmmmmmmmmm" estilo game over clássico
 }
 
 /** Forma de onda para síntese de áudio procedural. */
@@ -96,7 +96,7 @@ class AudioManager(context: Context) {
     private var volumeEfeitos: Float = 1.0f
 
     // --- Estado de reprodução ---
-    private var emReproducao: Boolean = false
+    private var emReproducao: Boolean = true
 
     // --- Jobs de coroutines ---
     private var jobFade: Job? = null
@@ -207,26 +207,59 @@ class AudioManager(context: Context) {
     }
 
     /**
-     * Gera amostras PCM com varredura de frequência descendente (de freqInicialHz até freqFinalHz).
-     * Cria um efeito dramático de "caindo" para a morte do herói.
+     * Gera o som de morte "thcururururummmmmmmmmmmmm" em estilo game over clássico.
+     *
+     * - "thcu" → impacto percussivo (noise + thump 150Hz)
+     * - "ururururu" → 6 staccato descendentes em chip tune (659→247Hz)
+     * - "mmmmmmmmmmm" → drone grave descendente com vibrato lento
      */
-    private fun gerarTomDescendentePCM(
-        freqInicialHz: Float,
-        freqFinalHz: Float,
+    private fun gerarSomMortePitfall(
         duracaoMs: Int
     ): ShortArray {
-        val taxaAmostragem = 44100
-        val numAmostras = (taxaAmostragem * duracaoMs / 1000)
+        val sr = 44100
+        val numAmostras = (sr * duracaoMs / 1000)
         val amostras = ShortArray(numAmostras)
+        val random = java.util.Random()
+        var cursor = 0
 
-        for (i in 0 until numAmostras) {
-            val progresso = i.toFloat() / numAmostras
-            val freqAtual = freqInicialHz + (freqFinalHz - freqInicialHz) * progresso
-            val angularFreq = 2.0 * PI * freqAtual / taxaAmostragem
-            val envelope = calcularEnvelope(i, numAmostras) * (1f - progresso * 0.3f)
-            val amostra = sin(angularFreq * i) * envelope
-            amostras[i] = (amostra * Short.MAX_VALUE * 0.7).toInt().toShort()
+        // --- "thcu": impacto percussivo, 50ms ---
+        val thcLen = (sr * 0.050).toInt()
+        val thcFim = minOf(cursor + thcLen, numAmostras)
+        for (i in cursor until thcFim) {
+            val env = calcularEnvelope(i - cursor, thcLen)
+            val noise = (random.nextFloat() * 2.0 - 1.0) * env * 0.4
+            val thump = sin(2.0 * PI * 150.0 * i / sr) * env * 0.7
+            amostras[i] = ((noise + thump) * 0.5 * Short.MAX_VALUE * 0.7).toInt().toShort()
         }
+        cursor = thcFim
+
+        // --- "ururururu": 6 staccato descendentes (square wave, chip tune) ---
+        val freqs = floatArrayOf(659f, 523f, 440f, 349f, 294f, 247f)
+        val noteLen = (sr * 0.045).toInt()
+        for (freq in freqs) {
+            val noteFim = minOf(cursor + noteLen, numAmostras)
+            val angular = 2.0 * PI * freq / sr
+            for (i in cursor until noteFim) {
+                val env = calcularEnvelope(i - cursor, noteLen)
+                val amostra = (if (sin(angular * i) >= 0) 1.0 else -1.0) * env * 0.5
+                amostras[i] = (amostra * Short.MAX_VALUE * 0.6).toInt().toShort()
+            }
+            cursor = noteFim
+            if (cursor >= numAmostras) return amostras
+        }
+
+        // --- "mmmmmmmmmmm": drone grave descendente com vibrato ---
+        for (i in cursor until numAmostras) {
+            val progresso = (i - cursor).toFloat() / (numAmostras - cursor)
+            val freq = 150f + (60f - 150f) * progresso
+            val vibRate = 18f + (5f - 18f) * progresso
+            val angular = 2.0 * PI * freq / sr
+            val vibrato = 1.0 + 0.04 * sin(2.0 * PI * vibRate * i / sr)
+            val envelope = calcularEnvelope(i - cursor, numAmostras - cursor) * (1f - progresso * 0.5f)
+            val amostra = sin(angular * i) * vibrato * envelope * 0.7
+            amostras[i] = (amostra * Short.MAX_VALUE).toInt().toShort()
+        }
+
         return amostras
     }
 
@@ -253,11 +286,7 @@ class AudioManager(context: Context) {
     private fun reproduzirPCM(amostras: ShortArray, volumeAplicado: Float) {
         escopo.launch(Dispatchers.IO) {
             val taxaAmostragem = 44100
-            val bufferSize = AudioTrack.getMinBufferSize(
-                taxaAmostragem,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
+            val dataBytes = amostras.size * 2
             val audioTrack = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -272,16 +301,17 @@ class AudioManager(context: Context) {
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build()
                 )
-                .setBufferSizeInBytes(bufferSize)
+                .setBufferSizeInBytes(dataBytes)
                 .setTransferMode(AudioTrack.MODE_STATIC)
                 .build()
 
             try {
                 audioTrack.setVolume(volumeAplicado)
-                audioTrack.write(amostras, 0, amostras.size)
-                audioTrack.play()
-                // Aguarda a reprodução terminar antes de liberar
-                delay(amostras.size * 1000L / taxaAmostragem + 50)
+                val escrito = audioTrack.write(amostras, 0, amostras.size)
+                if (escrito == amostras.size) {
+                    audioTrack.play()
+                    delay(amostras.size * 1000L / taxaAmostragem + 50)
+                }
             } finally {
                 audioTrack.stop()
                 audioTrack.release()
@@ -305,7 +335,7 @@ class AudioManager(context: Context) {
         if (!emReproducao) return
         val volumeFinal = calcularVolumeEfeitoFinal(volumeEfeitos)
         val amostras = if (tipo == TipoEfeito.HERO_DEATH) {
-            gerarTomDescendentePCM(400f, 100f, tipo.duracaoMs)
+            gerarSomMortePitfall(tipo.duracaoMs)
         } else {
             gerarTomPCM(tipo.frequenciaHz, tipo.duracaoMs, tipo.formaOnda)
         }
