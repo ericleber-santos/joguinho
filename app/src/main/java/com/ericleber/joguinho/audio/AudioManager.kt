@@ -44,7 +44,8 @@ enum class TipoEfeito(
     BOSS_RISADA(100f, 1000, FormaOnda.QUADRADA),
     POWER_UP_COLETADO(880f, 400, FormaOnda.SENOIDAL),
     SPIKE_BITE(1200f, 150, FormaOnda.QUADRADA),
-    ESGUICHO_AGUA(4000f, -1, FormaOnda.SENOIDAL) // Frequência base ignorada, síntese específica
+    ESGUICHO_AGUA(4000f, -1, FormaOnda.SENOIDAL), // Frequência base ignorada, síntese específica
+    HERO_DEATH(220f, 1200, FormaOnda.SENOIDAL) // Tom descendente dramático para morte do herói
 }
 
 /** Forma de onda para síntese de áudio procedural. */
@@ -206,6 +207,30 @@ class AudioManager(context: Context) {
     }
 
     /**
+     * Gera amostras PCM com varredura de frequência descendente (de freqInicialHz até freqFinalHz).
+     * Cria um efeito dramático de "caindo" para a morte do herói.
+     */
+    private fun gerarTomDescendentePCM(
+        freqInicialHz: Float,
+        freqFinalHz: Float,
+        duracaoMs: Int
+    ): ShortArray {
+        val taxaAmostragem = 44100
+        val numAmostras = (taxaAmostragem * duracaoMs / 1000)
+        val amostras = ShortArray(numAmostras)
+
+        for (i in 0 until numAmostras) {
+            val progresso = i.toFloat() / numAmostras
+            val freqAtual = freqInicialHz + (freqFinalHz - freqInicialHz) * progresso
+            val angularFreq = 2.0 * PI * freqAtual / taxaAmostragem
+            val envelope = calcularEnvelope(i, numAmostras) * (1f - progresso * 0.3f)
+            val amostra = sin(angularFreq * i) * envelope
+            amostras[i] = (amostra * Short.MAX_VALUE * 0.7).toInt().toShort()
+        }
+        return amostras
+    }
+
+    /**
      * Calcula o envelope de amplitude para suavizar início e fim do som.
      * Evita cliques audíveis (pop) na reprodução.
      */
@@ -279,7 +304,11 @@ class AudioManager(context: Context) {
     fun reproduzirEfeito(tipo: TipoEfeito) {
         if (!emReproducao) return
         val volumeFinal = calcularVolumeEfeitoFinal(volumeEfeitos)
-        val amostras = gerarTomPCM(tipo.frequenciaHz, tipo.duracaoMs, tipo.formaOnda)
+        val amostras = if (tipo == TipoEfeito.HERO_DEATH) {
+            gerarTomDescendentePCM(400f, 100f, tipo.duracaoMs)
+        } else {
+            gerarTomPCM(tipo.frequenciaHz, tipo.duracaoMs, tipo.formaOnda)
+        }
         reproduzirPCM(amostras, volumeFinal)
     }
 

@@ -162,6 +162,10 @@ class GameLoop(
 
     private fun update(deltaTimeSec: Float) {
         if (gameState.phase != GamePhase.PLAYING) return
+        if (gameState.isRespawning) {
+            gameLogic?.update(deltaTimeSec) // Deixa o GameLogic gerenciar o timer de respawn
+            return
+        }
 
         val deltaMs = (deltaTimeSec * 1000f).toLong()
 

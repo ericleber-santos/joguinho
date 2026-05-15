@@ -50,6 +50,10 @@ class GameState {
     var exitAnimationTimerMs: Long = 0L // Timer para a animação de subida na escada
     var isExiting: Boolean = false      // Flag para travar movimento durante a animação
 
+    // --- Morte e Respawn ---
+    var isRespawning: Boolean = false   // Flag para animação de morte
+    var respawnTimerMs: Long = 0L       // Timer da animação de morte (1500ms)
+
     // --- Identificação do Floor/Map ---
     var floorNumber: Int = 1
     var mapIndex: Int = 0

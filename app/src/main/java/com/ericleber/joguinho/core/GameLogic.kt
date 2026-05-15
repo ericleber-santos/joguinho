@@ -70,6 +70,9 @@ class GameLogic(private val gameState: GameState) {
 
         /** Tempo inicial do mapa (5 minutos). */
         private const val MAP_TIMER_INITIAL_MS = 300000L
+
+        /** Duração da animação de morte/respawn em ms. */
+        private const val RESPAWN_DURATION_MS = 1500L
     }
 
     // REMOVIDO: Acumuladores de movimento sub-tile (Agora usamos movimento fluído direto)
@@ -147,6 +150,15 @@ class GameLogic(private val gameState: GameState) {
                 gameState.spikeIsSlowedDown = false
                 gameState.spikeSlowdownRemainingMs = 0
             }
+        }
+
+        // Se estiver em animação de morte/respawn, processa o timer
+        if (gameState.isRespawning) {
+            gameState.respawnTimerMs += (deltaTimeSec * 1000).toLong()
+            if (gameState.respawnTimerMs >= RESPAWN_DURATION_MS) {
+                processarRespawn(maze)
+            }
+            return
         }
 
         // Se estiver em animação de saída, processa o timer e a transição
@@ -557,26 +569,15 @@ class GameLogic(private val gameState: GameState) {
                 onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
             }
             
-            // MECÂNICA DE RESET: Se após o dano estiver com 0, volta ao início do mapa
+            // MECÂNICA DE RESET: Se após o dano estiver com 0, inicia animação de morte
             if (gameState.heroLives <= 0) {
                 gameState.heroLives = 0 // Garante 0
-                // Som de derrota sutil (risada do boss ou lentidão)
-                onSoundEffectRequested?.invoke(TipoEfeito.BOSS_RISADA)
+                // Som dramático de morte (descendente)
+                onSoundEffectRequested?.invoke(TipoEfeito.HERO_DEATH)
                 
-                // REQUISITO: Se morrer no boss (andar par, mapa index 1), volta para o mapa 0 do mesmo andar
-                if (gameState.floorNumber % 2 == 0 && gameState.mapIndex == 1) {
-                    gameState.mapIndex = 0
-                    onMapCompleted?.invoke()
-                } else {
-                    // Respawn no início do mapa atual
-                    gameState.heroPosition = Position((maze.startIndex % maze.width) + 0.5f, (maze.startIndex / maze.width) + 0.5f)
-                }
-                
-                gameState.heroIsSlowedDown = false
-                gameState.heroSlowdownRemainingMs = 0
-                
-                // Penalidade: Herói ganha 1 vida para poder continuar tentando
-                gameState.heroLives = 1 
+                // Inicia animação de morte/respawn
+                gameState.isRespawning = true
+                gameState.respawnTimerMs = 0L
             } else {
                 // Se ainda tem vida, aplica o recuo e um pequeno slowdown visual
                 gameState.heroIsSlowedDown = true
@@ -915,6 +916,33 @@ class GameLogic(private val gameState: GameState) {
             onHeroReachedExit?.invoke()
         }
     }
+    /**
+     * Processa o respawn do herói após a animação de morte.
+     * Reseta posição, slows e dá 1 vida de volta para continuar.
+     */
+    private fun processarRespawn(maze: MazeData) {
+        gameState.isRespawning = false
+        gameState.respawnTimerMs = 0L
+
+        // Se morrer no boss (andar par, mapa index 1), volta para o mapa 0 do mesmo andar
+        if (gameState.floorNumber % 2 == 0 && gameState.mapIndex == 1) {
+            gameState.mapIndex = 0
+            onMapCompleted?.invoke()
+        } else {
+            // Respawn no início do mapa atual
+            gameState.heroPosition = Position(
+                (maze.startIndex % maze.width) + 0.5f,
+                (maze.startIndex / maze.width) + 0.5f
+            )
+        }
+
+        gameState.heroIsSlowedDown = false
+        gameState.heroSlowdownRemainingMs = 0
+
+        // Penalidade: Herói ganha 1 vida para poder continuar tentando
+        gameState.heroLives = 1
+    }
+
     private fun atualizarVfx(deltaMs: Long) {
         val currentTime = System.currentTimeMillis()
         gameState.vfxList = gameState.vfxList.filter { 

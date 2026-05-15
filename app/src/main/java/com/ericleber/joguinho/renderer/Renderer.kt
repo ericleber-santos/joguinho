@@ -500,8 +500,15 @@ class Renderer(
                     alpha = (255 * (1f - progress)).toInt().coerceIn(0, 255)
                 }
 
+                if (gameState.isRespawning) {
+                    val progress = (gameState.respawnTimerMs.toFloat() / 1500f).coerceIn(0f, 1f)
+                    scale = 1f - progress * 0.7f
+                    alpha = (255 * (1f - progress * progress)).toInt().coerceIn(0, 255)
+                    rotation = progress * 360f
+                }
+
                 c.save()
-                if (gameState.isExiting && alpha < 255) {
+                if ((gameState.isExiting || gameState.isRespawning) && alpha < 255) {
                     c.saveLayerAlpha(
                         drawHeroSx - tileW * 2f, 
                         drawHeroSy - tileH * 4f, 
@@ -511,6 +518,12 @@ class Renderer(
                     )
                 }
                 if (gameState.isExiting) {
+                    c.translate(drawHeroSx, drawHeroSy - tileH)
+                    c.rotate(rotation)
+                    c.scale(scale, scale)
+                    c.translate(-drawHeroSx, -(drawHeroSy - tileH))
+                }
+                if (gameState.isRespawning) {
                     c.translate(drawHeroSx, drawHeroSy - tileH)
                     c.rotate(rotation)
                     c.scale(scale, scale)
@@ -531,7 +544,7 @@ class Renderer(
                     shootingAngle = gameState.shootingAngle
                 )
 
-                if (gameState.isExiting && alpha < 255) {
+                if ((gameState.isExiting || gameState.isRespawning) && alpha < 255) {
                     c.restore()
                 }
                 c.restore()
@@ -686,6 +699,15 @@ class Renderer(
         // Overlay de cor de luz ambiente (MULTIPLY) — aplicado por último,
         // antes do restore, para não afetar o HUD
         renderAmbientLight(canvas, gameState)
+
+        // Overlay de flash vermelho durante animação de morte/respawn
+        if (gameState.isRespawning) {
+            val progress = (gameState.respawnTimerMs.toFloat() / 1500f).coerceIn(0f, 1f)
+            val flashAlpha = ((1f - progress) * 120).toInt().coerceIn(0, 120)
+            bgPaint.color = Color.argb(flashAlpha, 180, 0, 0)
+            canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo, bgPaint)
+            bgPaint.alpha = 255
+        }
 
         // Restaura a área total de desenho para renderizar o HUD sobreposto
         canvas.restore()
