@@ -40,3 +40,6 @@ google-services.json
 MemoriaSapo/
 .MemoriaSapo/
 .opencode/
+
+# Simple Context
+.simple-context/
