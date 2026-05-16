@@ -160,6 +160,7 @@ class GameViewModel : ViewModel() {
             .firstOrNull { gameState.floorNumber in it.floorRange }
             ?: com.ericleber.joguinho.biome.Biome.MINA_ABANDONADA
         onMapGenerated?.invoke(maze, currentBiome, 0f)
+        audioManager?.transicionarParaBioma(currentBiome)
         
         // Garante que a fase volte para PLAYING após a geração
         gameState.phase = GamePhase.PLAYING
@@ -275,6 +276,7 @@ class GameViewModel : ViewModel() {
                     
                     // Inicia o GameLoop após a restauração (Requisito 21.4)
                     gameLoop?.start()
+                    audioManager?.transicionarParaBioma(gameState.currentBiome)
                     
                     Logger.error(TAG, "Estado restaurado e jogo iniciado do snapshot ${resultado.indiceSnapshot}")
                 }
