@@ -47,8 +47,8 @@ class SettingsActivity : Activity() {
     private lateinit var configView: ConfigView
 
     // Valores atuais das configurações
-    private var volumeMusica = 80
-    private var volumeEfeitos = 80
+    private var volumeMusica = 20
+    private var volumeEfeitos = 20
     private var tamanhoJoystick = 100
     private var posicaoJoystick = "esquerda"
     private var modoAltoContraste = false
@@ -71,8 +71,8 @@ class SettingsActivity : Activity() {
 
     /** Carrega configurações salvas ou aplica valores padrão. */
     private fun carregarConfiguracoes() {
-        volumeMusica = prefs.getInt("volumeMusica", 80)
-        volumeEfeitos = prefs.getInt("volumeEfeitos", 80)
+        volumeMusica = prefs.getInt("volumeMusica", 20)
+        volumeEfeitos = prefs.getInt("volumeEfeitos", 20)
         tamanhoJoystick = prefs.getInt("tamanhoJoystick", 100)
         posicaoJoystick = prefs.getString("posicaoJoystick", "esquerda") ?: "esquerda"
         modoAltoContraste = prefs.getBoolean("modoAltoContraste", false)

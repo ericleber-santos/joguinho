@@ -153,8 +153,8 @@ class GameActivity : AppCompatActivity() {
         }
 
         // Aplica volumes de áudio das configurações (Requisito 12.1)
-        gerenciadorAudio.setVolumeMusicaPercent(prefs.getInt("volumeMusica", 80) / 100f)
-        gerenciadorAudio.setVolumeEfeitosPercent(prefs.getInt("volumeEfeitos", 80) / 100f)
+        gerenciadorAudio.setVolumeMusicaPercent(prefs.getInt("volumeMusica", 20) / 100f)
+        gerenciadorAudio.setVolumeEfeitosPercent(prefs.getInt("volumeEfeitos", 20) / 100f)
 
         setContentView(superficieJogo)
 
@@ -206,6 +206,12 @@ class GameActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
+        
+        // Recarregar configurações de volume ao voltar para o jogo
+        val prefs = getSharedPreferences(SettingsActivity.PREFS_NOME, Context.MODE_PRIVATE)
+        gerenciadorAudio.setVolumeMusicaPercent(prefs.getInt("volumeMusica", 20) / 100f)
+        gerenciadorAudio.setVolumeEfeitosPercent(prefs.getInt("volumeEfeitos", 20) / 100f)
+        
         viewModel.retomarJogo()
         cancelarNotificacaoReengajamento()
     }
