@@ -119,6 +119,11 @@ class EntityPlacer(private val random: Random) {
             val pos = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f)
             val pattern = patterns[random.nextInt(patterns.size)]
             val monsterHp = 1 + (floorNumber / 15)
+            val archetype = when(pattern) {
+                MovementPattern.ZONING_DEFENDER -> com.ericleber.joguinho.core.MonsterArchetype.SHOOTER
+                MovementPattern.CHASE -> if(random.nextFloat() < 0.4f) com.ericleber.joguinho.core.MonsterArchetype.DASHER else com.ericleber.joguinho.core.MonsterArchetype.MELEE
+                else -> com.ericleber.joguinho.core.MonsterArchetype.MELEE
+            }
             MonsterState(
                 id = "monster_${floorNumber}_${mapIndex}_$i",
                 position = pos,
@@ -126,7 +131,8 @@ class EntityPlacer(private val random: Random) {
                 isActive = true,
                 anchorPosition = if (pattern == MovementPattern.ZONING_DEFENDER) pos else null,
                 hp = monsterHp,
-                maxHp = monsterHp
+                maxHp = monsterHp,
+                archetype = archetype
             )
         })
         

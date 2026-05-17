@@ -171,6 +171,9 @@ class InputController(
     // Atualização de movimento (chamada pelo GameLoop a cada frame)
     // -------------------------------------------------------------------------
 
+    private var currentVelocityX: Float = 0f
+    private var currentVelocityY: Float = 0f
+
     fun update(deltaTimeSec: Float, mazeData: MazeData?, hapticEnabled: Boolean = true) {
         val direction = getActiveDirection()
         val movementVector = if (useDPad) {
@@ -196,8 +199,47 @@ class InputController(
             }
         }
 
-        if (movementVector == null || (movementVector.x == 0f && movementVector.y == 0f)) {
+        val world = com.ericleber.joguinho.biome.BiomeWorld.fromFloor(gameState.floorNumber)
+        val isIce = world == com.ericleber.joguinho.biome.BiomeWorld.ABISMOS_AQUATICOS
+        val isForest = world == com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES
+
+        var targetVx = 0f
+        var targetVy = 0f
+        
+        if (movementVector != null) {
+             targetVx = movementVector.x
+             targetVy = movementVector.y
+        }
+
+        // Calcula velocidade efetiva
+        val baseSpeed = BASE_SPEED_TILES_PER_SEC
+        var speedMultiplier = when {
+            gameState.heroIsSlowedDown -> SLOWDOWN_MULTIPLIER
+            runButtonPressed -> RUN_MULTIPLIER
+            else -> 1f
+        }
+        
+        if (gameState.heroHasSpeedBuff) speedMultiplier *= 1.5f
+        if (isForest) speedMultiplier *= 0.65f // Lentidão da floresta (Hazard)
+        
+        val effectiveSpeed = baseSpeed * speedMultiplier
+        targetVx *= effectiveSpeed
+        targetVy *= effectiveSpeed
+
+        if (isIce) {
+            // Inércia do gelo (Hazard)
+            val acceleration = if (movementVector != null && (movementVector.x != 0f || movementVector.y != 0f)) 3f else 1.5f
+            currentVelocityX += (targetVx - currentVelocityX) * acceleration * deltaTimeSec
+            currentVelocityY += (targetVy - currentVelocityY) * acceleration * deltaTimeSec
+        } else {
+            currentVelocityX = targetVx
+            currentVelocityY = targetVy
+        }
+
+        if (kotlin.math.abs(currentVelocityX) < 0.05f && kotlin.math.abs(currentVelocityY) < 0.05f && targetVx == 0f && targetVy == 0f) {
             // Hero parado
+            currentVelocityX = 0f
+            currentVelocityY = 0f
             heroMoved = false
             heroStoppedDurationSec += deltaTimeSec
             gameState.heroStoppedDurationSec = heroStoppedDurationSec
@@ -208,25 +250,11 @@ class InputController(
         heroStoppedDurationSec = 0f
         gameState.heroStoppedDurationSec = 0f
 
-        // Calcula velocidade efetiva
-        val baseSpeed = BASE_SPEED_TILES_PER_SEC
-        var speedMultiplier = when {
-            gameState.heroIsSlowedDown -> SLOWDOWN_MULTIPLIER
-            runButtonPressed -> RUN_MULTIPLIER
-            else -> 1f
-        }
-        
-        // Aplica buff de velocidade (+50%) se ativo
-        if (gameState.heroHasSpeedBuff) {
-            speedMultiplier *= 1.5f
-        }
-        
-        val effectiveSpeed = baseSpeed * speedMultiplier
         val currentPos = gameState.heroPosition
 
-        // Vetor de movimento por frame
-        val dx = movementVector.x * effectiveSpeed * deltaTimeSec
-        val dy = movementVector.y * effectiveSpeed * deltaTimeSec
+        // Vetor de movimento por frame usando a velocidade atual (com ou sem inércia)
+        val dx = currentVelocityX * deltaTimeSec
+        val dy = currentVelocityY * deltaTimeSec
 
         if (mazeData == null) {
             gameState.heroPosition = Position(currentPos.x + dx, currentPos.y + dy)

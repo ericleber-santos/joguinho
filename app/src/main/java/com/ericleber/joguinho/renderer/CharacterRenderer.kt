@@ -33,7 +33,8 @@ data class MonsterAppearance(
     val shapeVariant: Int,
     val animVariant: Int,
     val isBoss: Boolean = false,
-    val isHit: Boolean = false
+    val isHit: Boolean = false,
+    val archetype: com.ericleber.joguinho.core.MonsterArchetype = com.ericleber.joguinho.core.MonsterArchetype.MELEE
 )
 
 class CharacterRenderer {
@@ -708,11 +709,52 @@ class CharacterRenderer {
         paintFill.color = Color.argb(60, 0, 0, 0)
         canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
 
+        // Desenhar Pernas (Balanço baseado no tempo e velocidade do monstro)
+        val legSwing = Math.sin(t * Math.PI * 4).toFloat() * 4 * s
+        paintFill.color = Color.rgb(40, 40, 40)
+        // Perna esquerda (atrás)
+        canvas.drawRoundRect(RectF(cx - 5 * s, cy + 5 * s - legSwing, cx - 1 * s, cy + 12 * s - legSwing), 2 * s, 2 * s, paintFill)
+        // Perna direita (frente)
+        canvas.drawRoundRect(RectF(cx + 1 * s, cy + 5 * s + legSwing, cx + 5 * s, cy + 12 * s + legSwing), 2 * s, 2 * s, paintFill)
+
+        // Corpo
         when (appearance.shapeVariant % 4) {
             0 -> monsterRedondo(canvas, cx, cy, s, t, actualAppearance)
             1 -> monsterEspinhoso(canvas, cx, cy, s, t, actualAppearance)
             2 -> monsterQuadrado(canvas, cx, cy, s, t, actualAppearance)
             3 -> monsterAlto(canvas, cx, cy, s, t, actualAppearance)
+        }
+
+        // Braços/Armas (Acessórios de Arquétipo)
+        val armSwing = -legSwing * 0.8f // Movimento oposto às pernas
+        
+        if (appearance.archetype == com.ericleber.joguinho.core.MonsterArchetype.SHOOTER) {
+            // Braço Atirador e Arma
+            paintFill.color = actualAppearance.bodyColor
+            canvas.drawRoundRect(RectF(cx + 2 * s, cy + 2 * s + armSwing, cx + 8 * s, cy + 5 * s + armSwing), 2 * s, 2 * s, paintFill)
+            
+            // Bastão / Arma Mágica
+            paintFill.color = Color.rgb(100, 60, 20) // Madeira escurecida
+            canvas.drawRect(cx + 6 * s, cy - 2 * s + armSwing, cx + 13 * s, cy + 1 * s + armSwing, paintFill)
+            
+            // Orbe / Ponta da Arma
+            paintFill.color = Color.CYAN
+            canvas.drawCircle(cx + 14 * s, cy - 0.5f * s + armSwing, 2.5f * s, paintFill)
+        } else if (appearance.archetype == com.ericleber.joguinho.core.MonsterArchetype.DASHER) {
+            // Braços grandes ou ombreiras
+            paintContorno.color = Color.LTGRAY
+            paintContorno.strokeWidth = 2.5f * s
+            canvas.drawLine(cx - 7 * s, cy - 7 * s, cx + 7 * s, cy - 3 * s, paintContorno)
+            canvas.drawLine(cx - 7 * s, cy - 3 * s, cx + 7 * s, cy - 7 * s, paintContorno)
+            paintContorno.strokeWidth = 1.5f
+            
+            // Braço brawler
+            paintFill.color = actualAppearance.bodyColor
+            canvas.drawCircle(cx + 6 * s, cy + 4 * s + armSwing, 3 * s, paintFill)
+        } else {
+            // Melee padrão (Braços simples balançando)
+            paintFill.color = actualAppearance.bodyColor
+            canvas.drawRoundRect(RectF(cx + 4 * s, cy + 1 * s + armSwing, cx + 7 * s, cy + 6 * s + armSwing), 1.5f * s, 1.5f * s, paintFill)
         }
 
         if (appearance.isBoss) {

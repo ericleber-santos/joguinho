@@ -20,7 +20,9 @@ enum class MonsterAIState {
     CHASE,     // Perseguindo player via A*
     AMBUSH,    // Escondido esperando proximidade
     RETREAT,   // Fugindo (após levar dano)
-    STUNNED    // Paralisado por ataque
+    STUNNED,   // Paralisado por ataque
+    ATTACKING, // Atirando ou preparando ataque
+    DASHING    // Avançando rapidamente
 }
 
 @Serializable
@@ -99,7 +101,8 @@ data class ProjectileState(
     val position: Position,
     val direction: Direction,
     val speed: Float = 10f,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val isEnemyProjectile: Boolean = false
 )
 
 @Serializable
@@ -132,8 +135,19 @@ data class MonsterState(
     var aiState: MonsterAIState = MonsterAIState.PATROL,
     var targetPath: List<Position>? = null,
     var ambushTriggerRadius: Float = 3.5f,
-    var patrolTarget: Position? = null
+    var patrolTarget: Position? = null,
+    
+    // --- Fase 13: Revisão de Imersão (Biomas e Monstros) ---
+    var archetype: MonsterArchetype = MonsterArchetype.MELEE,
+    var attackCooldownMs: Long = 0L
 )
+
+@Serializable
+enum class MonsterArchetype {
+    MELEE,   // Anda até o player (padrão)
+    DASHER,  // Dá dashes curtos
+    SHOOTER  // Atira projéteis lentos
+}
 
 @Serializable
 data class ItemState(

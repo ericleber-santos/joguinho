@@ -179,6 +179,7 @@ class GameLogic(private val gameState: GameState) {
         atualizarPortal(maze)          // Portal interdimensional
         atualizarEcologia(deltaTimeSec, maze) // Fase 12: Ecologia por Bioma
         atualizarWaterStream(deltaTimeSec, maze)
+        atualizarProjeteis(deltaTimeSec, maze) // Fase 13: Projéteis
         atualizarVfx(deltaMs)
         atualizarFeedbackCombate(deltaMs)
         
@@ -267,17 +268,50 @@ class GameLogic(private val gameState: GameState) {
                 if (gameState.bossFightState.bossStunRemainingMs > 0) return@map monster
                 monster.aiState = MonsterAIState.CHASE
             } else {
-                val newState = when (monster.aiState) {
-                    MonsterAIState.AMBUSH -> {
-                        if (distToHero < monster.ambushTriggerRadius) MonsterAIState.CHASE else MonsterAIState.AMBUSH
-                    }
-                    MonsterAIState.PATROL -> {
-                        if (distToHero < 5f) MonsterAIState.CHASE else MonsterAIState.PATROL
-                    }
+                var newState = monster.aiState
+                when (monster.aiState) {
+                    MonsterAIState.AMBUSH -> if (distToHero < monster.ambushTriggerRadius) newState = MonsterAIState.CHASE
+                    MonsterAIState.PATROL -> if (distToHero < 6f) newState = MonsterAIState.CHASE
                     MonsterAIState.CHASE -> {
-                        if (distToHero > 8f) MonsterAIState.PATROL else MonsterAIState.CHASE
+                        if (distToHero > 8f) newState = MonsterAIState.PATROL
+                        else if (monster.archetype == com.ericleber.joguinho.core.MonsterArchetype.SHOOTER && distToHero < 5.5f) {
+                            if (currentTime - monster.attackCooldownMs > 2500L) {
+                                newState = MonsterAIState.ATTACKING
+                                monster.attackCooldownMs = currentTime
+                                
+                                val dx = heroPos.x - monster.position.x
+                                val dy = heroPos.y - monster.position.y
+                                val mag = sqrt(dx*dx + dy*dy)
+                                if (mag > 0.1f) {
+                                    val angle = atan2(dy, dx)
+                                    val projDir = angleToDirection(angle)
+                                    val projSpeed = 2.5f + (gameState.floorNumber * 0.05f) // Lento e escalável
+                                    gameState.projectiles = gameState.projectiles + com.ericleber.joguinho.core.ProjectileState(
+                                        id = "proj_${monster.id}_$currentTime",
+                                        position = Position(monster.position.x, monster.position.y),
+                                        direction = projDir,
+                                        speed = projSpeed,
+                                        isActive = true,
+                                        isEnemyProjectile = true
+                                    )
+                                }
+                            }
+                        } else if (monster.archetype == com.ericleber.joguinho.core.MonsterArchetype.DASHER && distToHero < 3.5f) {
+                            if (currentTime - monster.attackCooldownMs > 3000L) {
+                                newState = MonsterAIState.DASHING
+                                monster.attackCooldownMs = currentTime
+                                monsterTimers["dash_${monster.id}_x"] = (heroPos.x - monster.position.x)
+                                monsterTimers["dash_${monster.id}_y"] = (heroPos.y - monster.position.y)
+                            }
+                        }
                     }
-                    else -> monster.aiState
+                    MonsterAIState.ATTACKING -> {
+                        if (currentTime - monster.attackCooldownMs > 500L) newState = MonsterAIState.CHASE
+                    }
+                    MonsterAIState.DASHING -> {
+                        if (currentTime - monster.attackCooldownMs > 400L) newState = MonsterAIState.CHASE
+                    }
+                    else -> {}
                 }
                 monster.aiState = newState
             }
@@ -321,11 +355,19 @@ class GameLogic(private val gameState: GameState) {
                     monsterTimers[monster.id] = timer
                     calcularDirecaoMonster(monster, heroPos, timer)
                 }
+                monster.aiState == MonsterAIState.DASHING -> {
+                    val dashX = monsterTimers["dash_${monster.id}_x"] ?: 0f
+                    val dashY = monsterTimers["dash_${monster.id}_y"] ?: 0f
+                    val mag = sqrt(dashX*dashX + dashY*dashY)
+                    if (mag > 0.05f) Pair(dashX/mag, dashY/mag) else Pair(0f, 0f)
+                }
                 else -> Pair(0f, 0f)
             }
 
             // 4. Velocidade e Aplicação de Movimento
             val baseVel = when {
+                monster.aiState == MonsterAIState.DASHING -> MONSTER_SPEED_TILES_PER_SEC * 3.5f
+                monster.aiState == MonsterAIState.ATTACKING -> 0f
                 monster.isBoss -> {
                     val phase3SpeedMult = if (gameState.bossFightState.elapsedMs >= 80000L) 1.5f else 1.0f
                     val bossFloorBonus = gameState.floorNumber * BOSS_SPEED_SCALING_PER_FLOOR
@@ -1292,6 +1334,73 @@ class GameLogic(private val gameState: GameState) {
                     gameState.heroSlowdownRemainingMs = Math.max(gameState.heroSlowdownRemainingMs, 800L)
                 }
             }
+        }
+    }
+    private fun atualizarProjeteis(deltaTimeSec: Float, maze: MazeData) {
+        val heroPos = gameState.heroPosition
+        
+        gameState.projectiles = gameState.projectiles.map { proj ->
+            if (!proj.isActive) return@map proj
+            
+            val dx = when(proj.direction) {
+                Direction.NORTH -> 0f; Direction.SOUTH -> 0f
+                Direction.EAST -> 1f; Direction.WEST -> -1f
+                Direction.NORTH_EAST -> 0.707f; Direction.NORTH_WEST -> -0.707f
+                Direction.SOUTH_EAST -> 0.707f; Direction.SOUTH_WEST -> -0.707f
+            }
+            val dy = when(proj.direction) {
+                Direction.EAST -> 0f; Direction.WEST -> 0f
+                Direction.NORTH -> -1f; Direction.SOUTH -> 1f
+                Direction.NORTH_EAST -> -0.707f; Direction.NORTH_WEST -> -0.707f
+                Direction.SOUTH_EAST -> 0.707f; Direction.SOUTH_WEST -> 0.707f
+            }
+            
+            val nx = proj.position.x + dx * proj.speed * deltaTimeSec
+            val ny = proj.position.y + dy * proj.speed * deltaTimeSec
+            
+            if (nx < 0 || ny < 0 || nx >= maze.width || ny >= maze.height || maze.tiles[ny.toInt() * maze.width + nx.toInt()] == 1) {
+                return@map proj.copy(isActive = false)
+            }
+            
+            val newPos = Position(nx, ny)
+            
+            if (proj.isEnemyProjectile && newPos.dist(heroPos) < 0.5f) {
+                if (gameState.heroLives > 0) {
+                    gameState.heroLives--
+                    onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+                }
+                if (gameState.heroLives <= 0) {
+                    gameState.heroLives = 0
+                    onSoundEffectRequested?.invoke(TipoEfeito.HERO_DEATH)
+                    gameState.isRespawning = true
+                    gameState.respawnTimerMs = 0L
+                } else {
+                    gameState.heroIsSlowedDown = true
+                    gameState.heroSlowdownRemainingMs = SLOWDOWN_MONSTER_MS
+                }
+                gameState.currentMapClean = false
+                gameState.mapSlowdownCount++
+                gameState.resetComboStreak()
+                return@map proj.copy(isActive = false)
+            }
+            
+            proj.copy(position = newPos)
+        }
+    }
+    
+    private fun angleToDirection(angle: Float): Direction {
+        val deg = Math.toDegrees(angle.toDouble()).toFloat()
+        var norm = deg % 360
+        if (norm < 0) norm += 360
+        return when {
+            norm >= 337.5 || norm < 22.5 -> Direction.EAST
+            norm in 22.5..67.5 -> Direction.SOUTH_EAST
+            norm in 67.5..112.5 -> Direction.SOUTH
+            norm in 112.5..157.5 -> Direction.SOUTH_WEST
+            norm in 157.5..202.5 -> Direction.WEST
+            norm in 202.5..247.5 -> Direction.NORTH_WEST
+            norm in 247.5..292.5 -> Direction.NORTH
+            else -> Direction.NORTH_EAST
         }
     }
 }
