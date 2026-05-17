@@ -83,6 +83,17 @@ class Renderer(
         style = Paint.Style.FILL
     }
 
+    private val bgLayerPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    private val bgPath = Path()
+
+    enum class BgCategory {
+        CAVERN, FOREST, VOLCANIC, CRYSTAL, VOID
+    }
+
+
     // Paint para os popups de score (Estilo Clean/Android)
     private val popupPaint = Paint().apply {
         isAntiAlias = true
@@ -234,13 +245,8 @@ class Renderer(
             renderSky(canvas, gameState)
         }
 
-        // --- FASE 11: Background Walls (Camada de Profundidade 0) ---
-        // Renderiza antes do clipRect para garantir cobertura total ou parallax
-        val bgMaze = gameState.mazeData
-        if (bgMaze != null) {
-            val visibleTilesForBg = getVisibleTiles(bgMaze, tileWDinamico, tileHDinamico)
-            renderBackgroundWalls(canvas, visibleTilesForBg, tileWDinamico, tileHDinamico, palette, gameState)
-        }
+        // --- FASE 11: Background Parallax em Camadas de Profundidade ---
+        renderLayeredBackground(canvas, palette, gameState)
 
         // Limita a área de desenho do jogo para não invadir o HUD (Culling)
         canvas.save()
@@ -347,6 +353,11 @@ class Renderer(
                         val drawY = if (isForest) sy - tileH * 0.8f else sy
                         c.drawBitmap(wallBitmap, sx, drawY, null)
                         
+                        // --- Detalhes de Paredes Procedurais por WallDetailType ---
+                        if (!isForest) {
+                            tileRenderer.renderWallDetail(c, sx, drawY, tileW, tileH, palette, tx, ty)
+                        }
+
                         // --- Fase 10: Soul Tiles (Micro-interações) ---
                         renderSoulTileInteraction(c, sx, drawY, tileW, tileH, tx, ty, gameState)
                     }
@@ -1085,46 +1096,308 @@ class Renderer(
         }
     }
 
-    /**
-     * FASE 11: Renderiza as paredes de fundo com parallax leve.
-     */
-    private fun renderBackgroundWalls(
+    private fun renderLayeredBackground(
         canvas: Canvas,
-        visibleTiles: List<Pair<Int, Int>>,
-        tileW: Float, tileH: Float,
         palette: BiomePalette,
         gameState: GameState
     ) {
-        val bgCameraX = cameraX * 0.4f // Parallax: move-se menos que a câmera principal
-        val bgCameraY = cameraY * 0.4f
-        
-        bgPaint.color = escurecer(palette.wallColor, 0.5f) // Mais escura para profundidade
-        
-        val maze = gameState.mazeData ?: return
-        for (tile in visibleTiles) {
-            val tx = tile.first
-            val ty = tile.second
-            
-            if (ty * maze.width + tx < maze.tiles.size && maze.tiles[ty * maze.width + tx] == 1) {
-                val screenPos = IsometricProjection.worldToScreen(tx.toFloat(), ty.toFloat(), tileW, tileH)
-                canvas.drawRect(
-                    screenPos.x + bgCameraX, 
-                    screenPos.y + bgCameraY, 
-                    screenPos.x + bgCameraX + tileW, 
-                    screenPos.y + bgCameraY + tileH, 
-                    bgPaint
-                )
+        val gameHeight = screenHeight * fracaoAreaJogo
+        val bgCategory = getBgCategory(gameState.currentBiomeWorld)
+        val time = System.currentTimeMillis()
+
+        // ---------------------------------------------------------------------
+        // CAMADA -3: Distante, quase estática (Fator de movimento: 0.1f)
+        // ---------------------------------------------------------------------
+        if (bgCategory != BgCategory.VOID) {
+            val ox3 = cameraX * 0.1f
+            val oy3 = cameraY * 0.1f
+            val spacingX = 350f
+            val spacingY = 400f
+
+            val startCellX = ((-ox3) / spacingX).toInt() - 1
+            val endCellX = ((screenWidth - ox3) / spacingX).toInt() + 1
+            val startCellY = ((-oy3) / spacingY).toInt() - 1
+            val endCellY = ((gameHeight - oy3) / spacingY).toInt() + 1
+
+            for (cx in startCellX..endCellX) {
+                for (cy in startCellY..endCellY) {
+                    val elemSeed = cx * 101 + cy * 73
+                    val rng = java.util.Random(elemSeed.toLong())
+
+                    val bx = cx * spacingX + ox3 + rng.nextFloat() * 120f
+                    val by = cy * spacingY + oy3 + rng.nextFloat() * 120f
+
+                    bgLayerPaint.reset()
+                    bgLayerPaint.isAntiAlias = true
+                    bgLayerPaint.style = Paint.Style.FILL
+
+                    when (bgCategory) {
+                        BgCategory.CAVERN -> {
+                            bgLayerPaint.color = escurecer(palette.wallColor, 0.7f)
+                            bgLayerPaint.alpha = 140
+
+                            val w = 80f + rng.nextFloat() * 70f
+                            val h = 160f + rng.nextFloat() * 120f
+
+                            bgPath.reset()
+                            bgPath.moveTo(bx - w / 2f, by)
+                            bgPath.lineTo(bx, by + h)
+                            bgPath.lineTo(bx + w / 2f, by)
+                            bgPath.close()
+                            canvas.drawPath(bgPath, bgLayerPaint)
+                        }
+                        BgCategory.FOREST -> {
+                            bgLayerPaint.color = escurecer(palette.wallColor, 0.6f)
+                            bgLayerPaint.alpha = 120
+                            bgLayerPaint.style = Paint.Style.STROKE
+                            bgLayerPaint.strokeWidth = 25f + rng.nextFloat() * 20f
+                            bgLayerPaint.strokeCap = Paint.Cap.ROUND
+
+                            bgPath.reset()
+                            bgPath.moveTo(bx, by - 150f)
+                            bgPath.quadTo(bx + 120f, by + 100f, bx - 50f, by + 300f)
+                            canvas.drawPath(bgPath, bgLayerPaint)
+                        }
+                        BgCategory.VOLCANIC -> {
+                            val colW = 70f + rng.nextFloat() * 40f
+                            bgLayerPaint.color = Color.rgb(40, 20, 20)
+                            bgLayerPaint.alpha = 200
+                            canvas.drawRect(bx - colW/2f, 0f, bx + colW/2f, gameHeight, bgLayerPaint)
+
+                            bgLayerPaint.color = Color.rgb(255, 60, 0)
+                            bgLayerPaint.alpha = 100 + (sin(time * 0.002 + elemSeed) * 50).toInt()
+                            bgLayerPaint.strokeWidth = 6f
+                            bgLayerPaint.style = Paint.Style.STROKE
+                            bgPath.reset()
+                            bgPath.moveTo(bx, 0f)
+                            bgPath.lineTo(bx - 10f, gameHeight * 0.3f)
+                            bgPath.lineTo(bx + 10f, gameHeight * 0.6f)
+                            bgPath.lineTo(bx, gameHeight)
+                            canvas.drawPath(bgPath, bgLayerPaint)
+                        }
+                        BgCategory.CRYSTAL -> {
+                            bgLayerPaint.color = palette.crystalColor
+                            bgLayerPaint.alpha = 70
+
+                            val cw = 60f + rng.nextFloat() * 60f
+                            val ch = 120f + rng.nextFloat() * 100f
+
+                            bgPath.reset()
+                            bgPath.moveTo(bx, by + ch)
+                            bgPath.lineTo(bx - cw/2f, by + ch * 0.3f)
+                            bgPath.lineTo(bx, by)
+                            bgPath.lineTo(bx + cw/2f, by + ch * 0.3f)
+                            bgPath.close()
+                            canvas.drawPath(bgPath, bgLayerPaint)
+                        }
+                        else -> {}
+                    }
+                }
             }
         }
+
+        // ---------------------------------------------------------------------
+        // CAMADA -2: Intermediária, movimento lento (Fator de movimento: 0.25f)
+        // ---------------------------------------------------------------------
+        val ox2 = cameraX * 0.25f
+        val oy2 = cameraY * 0.25f
+        val spacingX2 = 250f
+        val spacingY2 = 300f
+
+        val startCellX2 = ((-ox2) / spacingX2).toInt() - 1
+        val endCellX2 = ((screenWidth - ox2) / spacingX2).toInt() + 1
+        val startCellY2 = ((-oy2) / spacingY2).toInt() - 1
+        val endCellY2 = ((gameHeight - oy2) / spacingY2).toInt() + 1
+
+        for (cx in startCellX2..endCellX2) {
+            for (cy in startCellY2..endCellY2) {
+                val elemSeed = cx * 79 + cy * 53
+                val rng = java.util.Random(elemSeed.toLong())
+
+                val bx = cx * spacingX2 + ox2 + rng.nextFloat() * 80f
+                val by = cy * spacingY2 + oy2 + rng.nextFloat() * 80f
+
+                bgLayerPaint.reset()
+                bgLayerPaint.isAntiAlias = true
+                bgLayerPaint.style = Paint.Style.FILL
+
+                when (bgCategory) {
+                    BgCategory.CAVERN -> {
+                        bgLayerPaint.color = escurecer(palette.wallColor, 0.5f)
+                        bgLayerPaint.alpha = 180
+
+                        val size = 40f + rng.nextFloat() * 30f
+                        bgPath.reset()
+                        for (i in 0 until 8) {
+                            val angle = i * (Math.PI * 2 / 8)
+                            val r = size * (0.8f + rng.nextFloat() * 0.4f)
+                            val px = bx + kotlin.math.cos(angle).toFloat() * r
+                            val py = by + sin(angle).toFloat() * r
+                            if (i == 0) bgPath.moveTo(px, py) else bgPath.lineTo(px, py)
+                        }
+                        bgPath.close()
+                        canvas.drawPath(bgPath, bgLayerPaint)
+                    }
+                    BgCategory.FOREST -> {
+                        bgLayerPaint.color = escurecer(palette.wallColor, 0.4f)
+                        bgLayerPaint.alpha = 160
+
+                        val stemW = 10f + rng.nextFloat() * 8f
+                        val stemH = 40f + rng.nextFloat() * 30f
+                        val capR = 25f + rng.nextFloat() * 20f
+
+                        canvas.drawRect(bx - stemW/2f, by, bx + stemW/2f, by + stemH, bgLayerPaint)
+                        bgPath.reset()
+                        bgPath.arcTo(RectF(bx - capR, by - capR, bx + capR, by + capR), 180f, 180f)
+                        bgPath.close()
+                        canvas.drawPath(bgPath, bgLayerPaint)
+                    }
+                    BgCategory.VOLCANIC -> {
+                        bgLayerPaint.color = Color.rgb(90, 30, 20)
+                        bgLayerPaint.alpha = 220
+                        val size = 20f + rng.nextFloat() * 15f
+                        canvas.drawCircle(bx, by, size, bgLayerPaint)
+
+                        bgLayerPaint.color = Color.rgb(255, 120, 0)
+                        bgLayerPaint.alpha = 150 + (sin(time * 0.003 + elemSeed) * 80).toInt()
+                        canvas.drawCircle(bx, by, size * 0.4f, bgLayerPaint)
+                    }
+                    BgCategory.CRYSTAL -> {
+                        bgLayerPaint.color = clarear(palette.crystalColor, 0.2f)
+                        bgLayerPaint.alpha = 140
+
+                        val size = 25f + rng.nextFloat() * 20f
+                        bgPath.reset()
+                        bgPath.moveTo(bx, by - size)
+                        bgPath.lineTo(bx + size * 0.6f, by)
+                        bgPath.lineTo(bx, by + size)
+                        bgPath.lineTo(bx - size * 0.6f, by)
+                        bgPath.close()
+                        canvas.drawPath(bgPath, bgLayerPaint)
+                    }
+                    BgCategory.VOID -> {
+                        bgLayerPaint.color = Color.rgb(30, 20, 50)
+                        bgLayerPaint.alpha = 100
+                        val size = 30f + rng.nextFloat() * 30f
+                        if (elemSeed % 2 == 0) {
+                            canvas.drawCircle(bx, by, size, bgLayerPaint)
+                        } else {
+                            canvas.drawRect(bx - size, by - size, bx + size, by + size, bgLayerPaint)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // CAMADA -1: Próxima, movimento rápido (Fator de movimento: 0.45f)
+        // ---------------------------------------------------------------------
+        val ox1 = cameraX * 0.45f
+        val oy1 = cameraY * 0.45f
+        val spacingX1 = 150f
+        val spacingY1 = 150f
+
+        val startCellX1 = ((-ox1) / spacingX1).toInt() - 1
+        val endCellX1 = ((screenWidth - ox1) / spacingX1).toInt() + 1
+        val startCellY1 = ((-oy1) / spacingY1).toInt() - 1
+        val endCellY1 = ((gameHeight - oy1) / spacingY1).toInt() + 1
+
+        for (cx in startCellX1..endCellX1) {
+            for (cy in startCellY1..endCellY1) {
+                val elemSeed = cx * 67 + cy * 43
+                val rng = java.util.Random(elemSeed.toLong())
+
+                val speedFactorX = 0.01f + rng.nextFloat() * 0.02f
+                val speedFactorY = -0.015f - rng.nextFloat() * 0.02f
+                
+                val driftX = (time * speedFactorX) % spacingX1
+                val driftY = (time * speedFactorY) % spacingY1
+
+                val bx = cx * spacingX1 + ox1 + rng.nextFloat() * 50f + driftX
+                val by = cy * spacingY1 + oy1 + rng.nextFloat() * 50f + driftY
+
+                val finalX = (bx % screenWidth + screenWidth) % screenWidth
+                val finalY = (by % gameHeight + gameHeight) % gameHeight
+
+                bgLayerPaint.reset()
+                bgLayerPaint.isAntiAlias = true
+                bgLayerPaint.style = Paint.Style.FILL
+
+                when (bgCategory) {
+                    BgCategory.CAVERN -> {
+                        bgLayerPaint.color = palette.backgroundColor
+                        bgLayerPaint.alpha = 25 + (sin(time * 0.001 + elemSeed) * 10).toInt()
+                        canvas.drawCircle(finalX, finalY, 60f + rng.nextFloat() * 40f, bgLayerPaint)
+                    }
+                    BgCategory.FOREST -> {
+                        bgLayerPaint.color = Color.rgb(120, 240, 100)
+                        bgLayerPaint.alpha = 100 + (sin(time * 0.004 + elemSeed) * 80).toInt()
+                        canvas.drawCircle(finalX, finalY, 3f + rng.nextFloat() * 3f, bgLayerPaint)
+                    }
+                    BgCategory.VOLCANIC -> {
+                        val tColorVal = (sin(time * 0.005 + elemSeed) * 50f + 200f).toInt()
+                        bgLayerPaint.color = Color.rgb(255, tColorVal.coerceIn(100, 255), 0)
+                        bgLayerPaint.alpha = 150 + (sin(time * 0.006 + elemSeed) * 100).toInt()
+                        canvas.drawCircle(finalX, finalY, 2f + rng.nextFloat() * 2.5f, bgLayerPaint)
+                    }
+                    BgCategory.CRYSTAL -> {
+                        bgLayerPaint.color = Color.WHITE
+                        bgLayerPaint.alpha = 120 + (sin(time * 0.005 + elemSeed) * 80).toInt()
+                        
+                        val sz = 4f + rng.nextFloat() * 4f
+                        bgPath.reset()
+                        bgPath.moveTo(finalX, finalY - sz)
+                        bgPath.lineTo(finalX + sz * 0.7f, finalY)
+                        bgPath.lineTo(finalX, finalY + sz)
+                        bgPath.lineTo(finalX - sz * 0.7f, finalY)
+                        bgPath.close()
+                        canvas.drawPath(bgPath, bgLayerPaint)
+                    }
+                    BgCategory.VOID -> {
+                        bgLayerPaint.color = Color.rgb(10, 5, 20)
+                        bgLayerPaint.alpha = 40 + (sin(time * 0.001 + elemSeed) * 20).toInt()
+                        canvas.drawCircle(finalX, finalY, 80f + rng.nextFloat() * 60f, bgLayerPaint)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getBgCategory(world: com.ericleber.joguinho.biome.BiomeWorld): BgCategory {
+        return when (world) {
+            com.ericleber.joguinho.biome.BiomeWorld.ENTRANHAS,
+            com.ericleber.joguinho.biome.BiomeWorld.MINAS_RIQUEZAS,
+            com.ericleber.joguinho.biome.BiomeWorld.RUINAS_ANCESTRAIS -> BgCategory.CAVERN
+            
+            com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES,
+            com.ericleber.joguinho.biome.BiomeWorld.JARDIM_PROFUNDO,
+            com.ericleber.joguinho.biome.BiomeWorld.SUPERFICIE_ABERTA -> BgCategory.FOREST
+            
+            com.ericleber.joguinho.biome.BiomeWorld.NUCLEO_DE_FOGO -> BgCategory.VOLCANIC
+            
+            com.ericleber.joguinho.biome.BiomeWorld.REINO_DA_MAGIA,
+            com.ericleber.joguinho.biome.BiomeWorld.ABISMOS_AQUATICOS -> BgCategory.CRYSTAL
+            
+            com.ericleber.joguinho.biome.BiomeWorld.ABISMO_DO_VAZIO,
+            com.ericleber.joguinho.biome.BiomeWorld.BASE_LUNAR -> BgCategory.VOID
+        }
+    }
+
+    private fun clarear(color: Int, factor: Float): Int {
+        val r = (Color.red(color) + (255 - Color.red(color)) * factor).toInt()
+        val g = (Color.green(color) + (255 - Color.green(color)) * factor).toInt()
+        val b = (Color.blue(color) + (255 - Color.blue(color)) * factor).toInt()
+        return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
     }
 
     private fun escurecer(color: Int, factor: Float): Int {
         val r = (Color.red(color) * (1f - factor)).toInt()
         val g = (Color.green(color) * (1f - factor)).toInt()
         val b = (Color.blue(color) * (1f - factor)).toInt()
-        return Color.rgb(r, g, b)
+        return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
     }
 }
+
 
 /**
  * Extensões do GameState para o Renderer.

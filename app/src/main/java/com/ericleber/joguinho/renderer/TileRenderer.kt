@@ -8,8 +8,10 @@ import android.graphics.Path
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomePalette
+import com.ericleber.joguinho.biome.WallDetailType
 import com.ericleber.joguinho.core.MazeData
 import java.util.Random
+import kotlin.math.sin
 
 enum class TileType {
     WALL, FLOOR,
@@ -407,5 +409,283 @@ class TileRenderer {
             (Color.green(color) - f).coerceAtLeast(0),
             (Color.blue(color) - f).coerceAtLeast(0)
         )
+    }
+
+    fun renderWallDetail(
+        canvas: Canvas,
+        x: Float, y: Float,
+        tw: Float, th: Float,
+        p: BiomePalette,
+        tileX: Int, tileY: Int
+    ) {
+        val detailType = p.wallDetailType
+        if (detailType == WallDetailType.NONE) return
+
+        val seed = tileX * 31 + tileY * 17
+        val rng = Random(seed.toLong())
+
+        // Configurar paint para detalhes
+        paint.reset()
+        paint.isAntiAlias = true
+
+        when (detailType) {
+            WallDetailType.CRYSTAL_VEIN -> {
+                val crystalColor = p.crystalColor
+                paint.color = crystalColor
+                
+                // 1. Linhas diagonais (veios do cristal)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = tw * 0.05f
+                val numVeins = 1 + (seed % 2)
+                for (i in 0 until numVeins) {
+                    val startX = x + tw * (0.2f + i * 0.4f)
+                    val startY = y + th * (0.1f + i * 0.3f)
+                    val endX = startX + tw * 0.4f
+                    val endY = startY + th * 0.5f
+                    canvas.drawLine(startX, startY, endX, endY, paint)
+                }
+
+                // 2. Pequenos losangos incrustados
+                paint.style = Paint.Style.FILL
+                val numDiamonds = 1 + (seed % 2)
+                for (i in 0 until numDiamonds) {
+                    val cx = x + tw * (0.3f + rng.nextFloat() * 0.4f)
+                    val cy = y + th * (0.3f + rng.nextFloat() * 0.4f)
+                    val size = tw * (0.08f + rng.nextFloat() * 0.06f)
+                    
+                    path.reset()
+                    path.moveTo(cx, cy - size)
+                    path.lineTo(cx + size * 0.7f, cy)
+                    path.lineTo(cx, cy + size)
+                    path.lineTo(cx - size * 0.7f, cy)
+                    path.close()
+                    canvas.drawPath(path, paint)
+
+                    // 3. Brilho especular nos vértices
+                    if (rng.nextFloat() > 0.3f) {
+                        paint.color = Color.WHITE
+                        val specSize = tw * 0.03f
+                        canvas.drawCircle(cx, cy - size, specSize, paint)
+                        
+                        val pulse = (sin(System.currentTimeMillis() * 0.01 + seed) * 1.5f + 1.5f).toFloat()
+                        paint.style = Paint.Style.STROKE
+                        paint.strokeWidth = 1.5f
+                        canvas.drawLine(cx - specSize * pulse, cy - size, cx + specSize * pulse, cy - size, paint)
+                        canvas.drawLine(cx, cy - size - specSize * pulse, cx, cy - size + specSize * pulse, paint)
+                        
+                        paint.style = Paint.Style.FILL
+                        paint.color = crystalColor
+                    }
+                }
+            }
+            WallDetailType.MOSS -> {
+                val mossColor = p.accentColor
+                
+                // 1. Manchas circulares com alpha variável
+                val numPatches = 3 + (seed % 3)
+                for (i in 0 until numPatches) {
+                    val cx = x + tw * (0.2f + rng.nextFloat() * 0.6f)
+                    val cy = y + th * (0.2f + rng.nextFloat() * 0.6f)
+                    val radius = tw * (0.1f + rng.nextFloat() * 0.15f)
+                    val alphaVar = 100 + (rng.nextFloat() * 80).toInt()
+                    paint.style = Paint.Style.FILL
+                    paint.color = mossColor
+                    paint.alpha = alphaVar
+                    canvas.drawCircle(cx, cy, radius, paint)
+                }
+
+                // 2. Bordas orgânicas na borda inferior da parede
+                paint.color = mossColor
+                paint.alpha = 230
+                paint.style = Paint.Style.FILL
+                path.reset()
+                path.moveTo(x, y + th)
+                
+                val segments = 4
+                val segW = tw / segments
+                for (i in 0 until segments) {
+                    val startX = x + i * segW
+                    val endX = startX + segW
+                    val ctrlX = startX + segW / 2f
+                    val curveHeight = th * (0.08f + rng.nextFloat() * 0.12f)
+                    val ctrlY = y + th - curveHeight
+                    
+                    path.quadTo(ctrlX, ctrlY, endX, y + th)
+                }
+                path.lineTo(x + tw, y + th + 4f)
+                path.lineTo(x, y + th + 4f)
+                path.close()
+                canvas.drawPath(path, paint)
+
+                // 3. Gotículas
+                paint.style = Paint.Style.FILL
+                val numDroplets = 2 + (seed % 3)
+                for (i in 0 until numDroplets) {
+                    val dx = x + tw * rng.nextFloat()
+                    val dy = y + th + (rng.nextFloat() * 8f)
+                    val r = 2f + rng.nextFloat() * 2f
+                    paint.alpha = 150 + (rng.nextFloat() * 100).toInt()
+                    canvas.drawCircle(dx, dy, r, paint)
+                }
+            }
+            WallDetailType.EMBER -> {
+                val time = System.currentTimeMillis()
+                
+                // 1. Calor ondulante
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 2f
+                val numHeatWaves = 2
+                for (i in 0 until numHeatWaves) {
+                    paint.color = Color.rgb(255, 120 + i * 50, 0)
+                    paint.alpha = 50 - i * 20
+                    
+                    path.reset()
+                    val freq = 0.05f
+                    val amp = 3f
+                    val speed = 0.005f
+                    
+                    var first = true
+                    for (step in 0..10) {
+                        val px = x + tw * (step / 10f)
+                        val angle = (step * freq * tw) + (time * speed) + seed
+                        val py = y + (th * 0.15f) + (sin(angle) * amp)
+                        
+                        if (first) {
+                            path.moveTo(px, py)
+                            first = false
+                        } else {
+                            path.lineTo(px, py)
+                        }
+                    }
+                    canvas.drawPath(path, paint)
+                }
+
+                // 2. Partículas ascendentes
+                paint.style = Paint.Style.FILL
+                val numEmbers = 3 + (seed % 3)
+                for (i in 0 until numEmbers) {
+                    val partSeed = seed + i * 23
+                    val pRng = Random(partSeed.toLong())
+                    val startX = x + tw * (0.2f + pRng.nextFloat() * 0.6f)
+                    
+                    val duration = 1200L + (partSeed % 600)
+                    val t = ((time + partSeed) % duration) / duration.toFloat()
+                    
+                    val py = y + th * 0.9f - (t * th * 0.8f)
+                    val px = startX + sin(t * 10f + partSeed) * 5f
+                    
+                    val r = 255
+                    val g = (100 + t * 155).toInt().coerceIn(0, 255)
+                    val b = (t * 100).toInt().coerceIn(0, 255)
+                    paint.color = Color.rgb(r, g, b)
+                    paint.alpha = (255 * (1f - t)).toInt().coerceIn(0, 255)
+                    
+                    val radius = 1.5f + (1f - t) * 2f
+                    canvas.drawCircle(px, py, radius, paint)
+                }
+            }
+            WallDetailType.ICE_DRIP -> {
+                // 1. Reflexo diagonal
+                paint.color = Color.WHITE
+                paint.alpha = 80
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 1.5f
+                canvas.drawLine(x + tw * 0.2f, y + th * 0.2f, x + tw * 0.8f, y + th * 0.8f, paint)
+
+                // 2. Estalactites triangulares
+                paint.style = Paint.Style.FILL
+                val numStalactites = 2 + (seed % 3)
+                for (i in 0 until numStalactites) {
+                    val cx = x + tw * (0.25f + i * 0.25f)
+                    val cy = y
+                    val w = tw * 0.12f
+                    val h = th * (0.2f + rng.nextFloat() * 0.25f)
+                    
+                    paint.color = Color.rgb(180, 210, 240)
+                    paint.alpha = 240
+                    
+                    path.reset()
+                    path.moveTo(cx - w/2f, cy)
+                    path.lineTo(cx, cy + h)
+                    path.lineTo(cx + w/2f, cy)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                    
+                    paint.color = Color.WHITE
+                    paint.alpha = 180
+                    path.reset()
+                    path.moveTo(cx - w/2f, cy)
+                    path.lineTo(cx, cy + h)
+                    path.lineTo(cx - w/4f, cy)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                }
+            }
+            WallDetailType.RUNE_GLOW -> {
+                val time = System.currentTimeMillis()
+                val pulse = (120 + sin(time * 0.003f + seed) * 80f).toInt().coerceIn(0, 255)
+                
+                val cx = x + tw * 0.5f
+                val cy = y + th * 0.45f
+                val runeSize = tw * 0.15f
+                
+                // 1. Halo difuso
+                val glowColor = p.accentColor
+                paint.color = glowColor
+                paint.style = Paint.Style.FILL
+                paint.alpha = (pulse * 0.2f).toInt()
+                canvas.drawCircle(cx, cy, runeSize * 2.2f, paint)
+
+                // 2. Runa
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = tw * 0.05f
+                paint.strokeCap = Paint.Cap.ROUND
+                paint.color = glowColor
+                paint.alpha = pulse
+                
+                path.reset()
+                when (seed % 4) {
+                    0 -> {
+                        path.moveTo(cx, cy + runeSize)
+                        path.lineTo(cx, cy - runeSize)
+                        path.moveTo(cx - runeSize * 0.7f, cy - runeSize * 0.3f)
+                        path.lineTo(cx, cy - runeSize)
+                        path.lineTo(cx + runeSize * 0.7f, cy - runeSize * 0.3f)
+                    }
+                    1 -> {
+                        path.moveTo(cx - runeSize, cy - runeSize)
+                        path.lineTo(cx + runeSize, cy + runeSize)
+                        path.moveTo(cx + runeSize, cy - runeSize)
+                        path.lineTo(cx - runeSize, cy + runeSize)
+                        path.moveTo(cx - runeSize * 0.8f, cy)
+                        path.lineTo(cx + runeSize * 0.8f, cy)
+                    }
+                    2 -> {
+                        path.moveTo(cx - runeSize, cy - runeSize)
+                        path.lineTo(cx + runeSize, cy - runeSize)
+                        path.moveTo(cx - runeSize, cy + runeSize)
+                        path.lineTo(cx + runeSize, cy + runeSize)
+                        path.lineTo(cx - runeSize, cy - runeSize)
+                    }
+                    3 -> {
+                        path.moveTo(cx, cy + runeSize)
+                        path.lineTo(cx, cy - runeSize)
+                        path.moveTo(cx - runeSize * 0.8f, cy - runeSize * 0.8f)
+                        path.lineTo(cx, cy - runeSize * 0.2f)
+                        path.moveTo(cx + runeSize * 0.8f, cy - runeSize * 0.8f)
+                        path.lineTo(cx, cy - runeSize * 0.2f)
+                    }
+                }
+                canvas.drawPath(path, paint)
+                paint.strokeCap = Paint.Cap.BUTT
+            }
+            WallDetailType.NONE -> {}
+        }
+
+        // Restaurar paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
     }
 }
