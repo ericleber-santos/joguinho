@@ -34,7 +34,8 @@ data class MonsterAppearance(
     val animVariant: Int,
     val isBoss: Boolean = false,
     val isHit: Boolean = false,
-    val archetype: com.ericleber.joguinho.core.MonsterArchetype = com.ericleber.joguinho.core.MonsterArchetype.MELEE
+    val archetype: com.ericleber.joguinho.core.MonsterArchetype = com.ericleber.joguinho.core.MonsterArchetype.MELEE,
+    val isMoving: Boolean = true
 )
 
 class CharacterRenderer {
@@ -709,8 +710,8 @@ class CharacterRenderer {
         paintFill.color = Color.argb(60, 0, 0, 0)
         canvas.drawOval(RectF(cx - 8 * s, y + 10 * s, cx + 8 * s, y + 15 * s), paintFill)
 
-        // Desenhar Pernas (Balanço baseado no tempo e velocidade do monstro)
-        val legSwing = Math.sin(t * Math.PI * 4).toFloat() * 4 * s
+        // Pernas: só balançam quando o monstro está se movendo
+        val legSwing = if (appearance.isMoving) Math.sin(t * Math.PI * 4).toFloat() * 4 * s else 0f
         paintFill.color = Color.rgb(40, 40, 40)
         // Perna esquerda (atrás)
         canvas.drawRoundRect(RectF(cx - 5 * s, cy + 5 * s - legSwing, cx - 1 * s, cy + 12 * s - legSwing), 2 * s, 2 * s, paintFill)

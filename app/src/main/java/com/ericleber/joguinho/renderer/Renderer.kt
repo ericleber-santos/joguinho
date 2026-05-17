@@ -386,7 +386,13 @@ class Renderer(
             val bodyColor = if (monster.isBoss) Color.rgb(200, 40, 40) else Color.rgb(150 + (seed % 100), 50, 50)
             val eyeColor = if (monster.isBoss) Color.YELLOW else Color.RED
             val isHit = (System.currentTimeMillis() - monster.lastHitTimeMs) < 150L
-            val appearance = MonsterAppearance(bodyColor, eyeColor, finalScale, seed and 0x3, seed shr 4 and 0x3, monster.isBoss, isHit, monster.archetype)
+            val isMoving = monster.aiState in listOf(
+                com.ericleber.joguinho.core.MonsterAIState.CHASE,
+                com.ericleber.joguinho.core.MonsterAIState.PATROL,
+                com.ericleber.joguinho.core.MonsterAIState.DASHING,
+                com.ericleber.joguinho.core.MonsterAIState.RETREAT
+            )
+            val appearance = MonsterAppearance(bodyColor, eyeColor, finalScale, seed and 0x3, seed shr 4 and 0x3, monster.isBoss, isHit, monster.archetype, isMoving)
 
             renderList.add(object : Renderable {
                 override val ySort: Float = monster.position.y + 0.5f
