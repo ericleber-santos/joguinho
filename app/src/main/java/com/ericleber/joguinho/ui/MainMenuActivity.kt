@@ -385,15 +385,17 @@ class MainMenuActivity : AppCompatActivity() {
                 }
             }
 
-            // Hero entrando da esquerda (Requisito 1.1)
-            val posHeroX = -largura * 0.15f + easeOut * (centroX - largura * 0.08f)
-            val posHeroY = centroY + altura * 0.05f
-            desenharHeroSimples(canvas, posHeroX, posHeroY, altura * 0.12f)
-
-            // Spike entrando da direita (Requisito 1.1)
-            val posSpikeX = largura * 1.15f - easeOut * (largura * 0.15f + centroX - largura * 0.08f)
-            val posSpikeY = centroY + altura * 0.05f
+            // Spike fugindo da esquerda para a direita (Requisito 1.1)
+            val posSpikeX = -largura * 0.2f + (largura * 1.4f) * progressoIntro
+            val saltoSpike = Math.abs(Math.sin(progressoIntro.toDouble() * Math.PI * 12)).toFloat()
+            val posSpikeY = centroY + altura * 0.05f - saltoSpike * (altura * 0.08f)
             desenharSpikeSimples(canvas, posSpikeX, posSpikeY, altura * 0.10f)
+
+            // Hero correndo atrás do Spike (Requisito 1.1)
+            val posHeroX = posSpikeX - largura * 0.15f
+            val saltoHero = Math.abs(Math.sin(progressoIntro.toDouble() * Math.PI * 10)).toFloat()
+            val posHeroY = centroY + altura * 0.05f - saltoHero * (altura * 0.05f)
+            desenharHeroSimples(canvas, posHeroX, posHeroY, altura * 0.12f)
 
             // Título do jogo com fade-in
             val alphaTexto = (easeOut * 255).toInt().coerceIn(0, 255)
