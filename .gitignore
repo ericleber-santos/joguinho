@@ -35,6 +35,7 @@ google-services.json
 
 # AI Agent / GSD / Kiro configuration (not part of Android project)
 .agent/
+.agents/
 .planning/
 .kiro/
 MemoriaSapo/
@@ -43,3 +44,5 @@ MemoriaSapo/
 
 # Simple Context
 .simple-context/
+
+CLAUDE.md
