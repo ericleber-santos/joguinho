@@ -387,15 +387,13 @@ class MainMenuActivity : AppCompatActivity() {
 
             // Spike fugindo da esquerda para a direita (Requisito 1.1)
             val posSpikeX = -largura * 0.2f + (largura * 1.4f) * progressoIntro
-            val saltoSpike = Math.abs(Math.sin(progressoIntro.toDouble() * Math.PI * 12)).toFloat()
-            val posSpikeY = centroY + altura * 0.05f - saltoSpike * (altura * 0.08f)
-            desenharSpikeSimples(canvas, posSpikeX, posSpikeY, altura * 0.10f)
+            val posSpikeY = centroY + altura * 0.05f
+            desenharSpikeSimples(canvas, posSpikeX, posSpikeY, altura * 0.10f, progressoIntro)
 
             // Hero correndo atrás do Spike (Requisito 1.1)
-            val posHeroX = posSpikeX - largura * 0.15f
-            val saltoHero = Math.abs(Math.sin(progressoIntro.toDouble() * Math.PI * 10)).toFloat()
-            val posHeroY = centroY + altura * 0.05f - saltoHero * (altura * 0.05f)
-            desenharHeroSimples(canvas, posHeroX, posHeroY, altura * 0.12f)
+            val posHeroX = posSpikeX - largura * 0.22f
+            val posHeroY = centroY + altura * 0.05f
+            desenharHeroSimples(canvas, posHeroX, posHeroY, altura * 0.12f, progressoIntro)
 
             // Título do jogo com fade-in
             val alphaTexto = (easeOut * 255).toInt().coerceIn(0, 255)
@@ -412,44 +410,86 @@ class MainMenuActivity : AppCompatActivity() {
         }
 
         /** Desenha representação simples do Hero via Canvas. */
-        private fun desenharHeroSimples(canvas: Canvas, x: Float, y: Float, tamanho: Float) {
-            // Corpo (azul)
-            tintaPersonagem.color = 0xFF1565C0.toInt()
-            canvas.drawRoundRect(
-                RectF(x - tamanho * 0.3f, y - tamanho * 0.5f, x + tamanho * 0.3f, y + tamanho * 0.5f),
-                tamanho * 0.1f, tamanho * 0.1f, tintaPersonagem
-            )
-            // Cabeça
+        private fun desenharHeroSimples(canvas: Canvas, x: Float, y: Float, tamanho: Float, progresso: Float = 0f) {
+            val block = tamanho * 0.15f
+            val legOffset = Math.sin(progresso.toDouble() * Math.PI * 20).toFloat() * block * 1.5f
+            val armOffset = -legOffset * 0.8f // Braços movem oposto às pernas
+            
+            // Pernas (marrom escuro)
+            tintaPersonagem.color = 0xFF3E2723.toInt()
+            canvas.drawRect(x - block * 1.5f + legOffset, y + block * 1.5f, x - block * 0.5f + legOffset, y + block * 3.5f, tintaPersonagem) // Perna de trás
+            canvas.drawRect(x + block * 0.5f - legOffset, y + block * 1.5f, x + block * 1.5f - legOffset, y + block * 3.5f, tintaPersonagem) // Perna da frente
+
+            // Corpo (camisa azul)
+            tintaPersonagem.color = 0xFF4285F4.toInt()
+            canvas.drawRect(x - block * 2f, y - block * 1.5f, x + block * 2f, y + block * 1.5f, tintaPersonagem)
+
+            // Cabeça (pele clara)
             tintaPersonagem.color = 0xFFFFCC80.toInt()
-            canvas.drawCircle(x, y - tamanho * 0.65f, tamanho * 0.22f, tintaPersonagem)
-            // Capacete
-            tintaPersonagem.color = 0xFF0D47A1.toInt()
-            canvas.drawArc(
-                RectF(x - tamanho * 0.25f, y - tamanho * 0.9f, x + tamanho * 0.25f, y - tamanho * 0.43f),
-                180f, 180f, true, tintaPersonagem
-            )
+            canvas.drawRect(x - block * 1.5f, y - block * 4.5f, x + block * 1.5f, y - block * 1.5f, tintaPersonagem)
+
+            // Cabelo (marrom)
+            tintaPersonagem.color = 0xFF5D4037.toInt()
+            canvas.drawRect(x - block * 1.5f, y - block * 4.5f, x + block * 1.5f, y - block * 3.5f, tintaPersonagem) // Topo
+            canvas.drawRect(x - block * 1.5f, y - block * 3.5f, x - block * 0.5f, y - block * 2f, tintaPersonagem) // Nuca
+            
+            // Olho (preto)
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x + block * 0.5f, y - block * 3.5f, x + block * 1.0f, y - block * 3.0f, tintaPersonagem)
+
+            // Braço balançando
+            tintaPersonagem.color = 0xFF4285F4.toInt()
+            canvas.drawRect(x - block * 0.5f + armOffset, y - block * 0.5f, x + block * 0.5f + armOffset, y + block * 1.5f, tintaPersonagem) // Manga/Braço
+            tintaPersonagem.color = 0xFFFFCC80.toInt()
+            canvas.drawRect(x - block * 0.5f + armOffset, y + block * 1.5f, x + block * 0.5f + armOffset, y + block * 2.5f, tintaPersonagem) // Mão
         }
 
         /** Desenha representação simples do Spike via Canvas. */
-        private fun desenharSpikeSimples(canvas: Canvas, x: Float, y: Float, tamanho: Float) {
-            // Corpo (laranja)
-            tintaPersonagem.color = 0xFFE65100.toInt()
-            canvas.drawRoundRect(
-                RectF(x - tamanho * 0.28f, y - tamanho * 0.45f, x + tamanho * 0.28f, y + tamanho * 0.45f),
-                tamanho * 0.1f, tamanho * 0.1f, tintaPersonagem
-            )
+        private fun desenharSpikeSimples(canvas: Canvas, x: Float, y: Float, tamanho: Float, progresso: Float = 0f) {
+            val block = tamanho * 0.15f
+            val legOffset = Math.sin(progresso.toDouble() * Math.PI * 24).toFloat() * block * 1.5f
+
+            // Pernas traseiras
+            tintaPersonagem.color = 0xFFDDDDDD.toInt()
+            canvas.drawRect(x - block * 1.5f - legOffset, y + block * 1f, x - block * 0.5f - legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x - block * 1.5f - legOffset, y + block * 2.5f, x - block * 0.5f - legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFFFFFFFF.toInt()
+            canvas.drawRect(x - block * 3f + legOffset, y + block * 1f, x - block * 2f + legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x - block * 3f + legOffset, y + block * 2.5f, x - block * 2f + legOffset, y + block * 3f, tintaPersonagem)
+
+            // Pernas dianteiras
+            tintaPersonagem.color = 0xFFDDDDDD.toInt()
+            canvas.drawRect(x + block * 2.5f + legOffset, y + block * 1f, x + block * 3.5f + legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x + block * 2.5f + legOffset, y + block * 2.5f, x + block * 3.5f + legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFFFFFFFF.toInt()
+            canvas.drawRect(x + block * 1f - legOffset, y + block * 1f, x + block * 2f - legOffset, y + block * 3f, tintaPersonagem)
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x + block * 1f - legOffset, y + block * 2.5f, x + block * 2f - legOffset, y + block * 3f, tintaPersonagem)
+
+            // Corpo
+            tintaPersonagem.color = 0xFFFFFFFF.toInt()
+            canvas.drawRect(x - block * 3.5f, y - block * 1.5f, x + block * 3.5f, y + block * 1.5f, tintaPersonagem)
+
+            // Manchas
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x - block * 1f, y - block * 1f, x + block * 1f, y + block * 0.5f, tintaPersonagem)
+            canvas.drawRect(x - block * 3f, y - block * 0.5f, x - block * 2f, y + block * 0.5f, tintaPersonagem)
+
+            // Rabo
+            tintaPersonagem.color = 0xFFFFFFFF.toInt()
+            canvas.drawRect(x - block * 5f, y - block * 2.5f, x - block * 3.5f, y - block * 1f, tintaPersonagem)
+
             // Cabeça
-            tintaPersonagem.color = 0xFFFFCC80.toInt()
-            canvas.drawCircle(x, y - tamanho * 0.6f, tamanho * 0.20f, tintaPersonagem)
-            // Espinhos no topo
-            tintaPersonagem.color = 0xFFBF360C.toInt()
-            for (i in -2..2) {
-                canvas.drawLine(
-                    x + i * tamanho * 0.08f, y - tamanho * 0.78f,
-                    x + i * tamanho * 0.04f, y - tamanho * 0.95f,
-                    tintaPersonagem.apply { strokeWidth = tamanho * 0.04f }
-                )
-            }
+            canvas.drawRect(x + block * 3.5f, y - block * 2.5f, x + block * 6.5f, y + block * 0.5f, tintaPersonagem)
+
+            // Orelha e Focinho
+            tintaPersonagem.color = 0xFF000000.toInt()
+            canvas.drawRect(x + block * 4f, y - block * 3f, x + block * 5.5f, y - block * 1.5f, tintaPersonagem)
+            canvas.drawRect(x + block * 5.5f, y - block * 1.5f, x + block * 6.5f, y - block * 0.5f, tintaPersonagem) // Focinho
+            canvas.drawRect(x + block * 4.5f, y - block * 1.5f, x + block * 5.0f, y - block * 1.0f, tintaPersonagem) // Olho
         }
 
         // =====================================================================
