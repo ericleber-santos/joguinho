@@ -3,9 +3,11 @@ package com.ericleber.joguinho.renderer
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomePalette
 import com.ericleber.joguinho.biome.BiomeWorld
@@ -144,6 +146,11 @@ class TileRenderer {
 
         if (worldAtual == BiomeWorld.ENTRANHAS) {
             renderEntranhasWall(canvas, x, y, tw, th, seed, tileX, tileY, s)
+            return
+        }
+
+        if (worldAtual == BiomeWorld.ABISMOS_AQUATICOS) {
+            renderAbismoWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
             return
         }
 
@@ -592,7 +599,7 @@ class TileRenderer {
         p: BiomePalette,
         tileX: Int, tileY: Int
     ) {
-        if (worldAtual == BiomeWorld.ENTRANHAS) return
+        if (worldAtual == BiomeWorld.ENTRANHAS || worldAtual == BiomeWorld.ABISMOS_AQUATICOS) return
 
         val detailType = p.wallDetailType
         if (detailType == WallDetailType.NONE) return
@@ -982,6 +989,170 @@ class TileRenderer {
             }
         }
         
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderAbismoWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
+    ) {
+        val baseColorHex = "#1a2a3a"
+        val baseColor = Color.parseColor(baseColorHex)
+        val baseR = 26
+        val baseG = 42
+        val baseB = 58
+
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+
+        // 1. Desenhar a base com cantos expostos arredondados suavemente (raio 6px) e sem dentes laterais
+        val needsRounding = (!n && !w) || (!n && !e) || (!s && !e) || (!s && !w)
+        if (needsRounding) {
+            val radii = floatArrayOf(
+                if (!n && !w) 6f else 0f, if (!n && !w) 6f else 0f, // Top-left
+                if (!n && !e) 6f else 0f, if (!n && !e) 6f else 0f, // Top-right
+                if (!s && !e) 6f else 0f, if (!s && !e) 6f else 0f, // Bottom-right
+                if (!s && !w) 6f else 0f, if (!s && !w) 6f else 0f  // Bottom-left
+            )
+            path.reset()
+            path.addRoundRect(RectF(x, y, x + tw, y + th), radii, Path.Direction.CW)
+            
+            // Desenhar base sólida sob o path
+            paint.color = baseColor
+            canvas.drawPath(path, paint)
+            
+            // Salvar clipe para manter os pixels internos perfeitamente alinhados ao path arredondado!
+            canvas.save()
+            canvas.clipPath(path)
+        } else {
+            // Desenhar base sólida retangular
+            paint.color = baseColor
+            canvas.drawRect(x, y, x + tw, y + th, paint)
+        }
+
+        // 2. Textura de gelo: pixels em diagonal (45°) com tons alternados claro/escuro alinhados globalmente
+        val colsGlobalOffset = tileX * cols
+        val rowsGlobalOffset = tileY * rows
+
+        for (r in 0 until rows) {
+            // Se houver vizinho ao norte, a primeira linha de pixels é cor base sólida
+            // Se houver vizinho ao sul, a última linha de pixels é cor base sólida
+            // Isso garante 100% de fusão nas junções horizontais
+            if (n && r == 0) continue
+            if (s && r == rows - 1) continue
+
+            for (c in 0 until cols) {
+                val globalCol = colsGlobalOffset + c
+                val globalRow = rowsGlobalOffset + r
+                
+                // 45° Slanted Stripe Formula: globalCol + globalRow
+                val diag = globalCol + globalRow
+                val stripe = diag % 8
+                
+                val factor = when (stripe) {
+                    0, 1 -> 0.12f  // Claro
+                    4, 5 -> -0.12f // Escuro
+                    else -> 0f      // Base
+                }
+                
+                if (factor != 0f) {
+                    val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                    val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                    val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                    paint.color = Color.rgb(vr, vg, vb)
+                    canvas.drawRect(
+                        x + c * pixelSize,
+                        y + r * pixelSize,
+                        (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                        (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                        paint
+                    )
+                }
+            }
+        }
+
+        // 3. Reflexo especular: linha diagonal de pixels brancos (alpha 60-80) em 50% dos tiles
+        if (tileRng.nextFloat() < 0.50f) {
+            val specAlpha = 60 + tileRng.nextInt(21) // alpha 60-80
+            paint.color = Color.argb(specAlpha, 255, 255, 255)
+            
+            // Escolhe uma diagonal aleatória que corte no meio do tile
+            val targetDiag = 6 + tileRng.nextInt((cols - 6).coerceAtLeast(1))
+            val specLength = 8 + tileRng.nextInt(7) // comprimento 8-14px
+            val startC = tileRng.nextInt((cols - specLength).coerceAtLeast(1))
+            
+            for (i in 0 until specLength) {
+                val c = startC + i
+                val r = targetDiag - c
+                
+                // Não desenha sobre a linha de fusão se houver vizinhos
+                if (n && r == 0) continue
+                if (s && r == rows - 1) continue
+                
+                if (r in 0 until rows && c in 0 until cols) {
+                    canvas.drawRect(
+                        x + c * pixelSize,
+                        y + r * pixelSize,
+                        (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                        (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                        paint
+                    )
+                }
+            }
+        }
+
+        // Restaurar clipe se aplicamos arredondamento
+        if (needsRounding) {
+            canvas.restore()
+        }
+
+        // 4. Estalactites na borda SUPERIOR: triângulos de 4-8px de altura, 3-5px de base
+        if (!n) {
+            paint.reset()
+            paint.isAntiAlias = true
+            paint.style = Paint.Style.FILL
+
+            val spacing = 6f + tileRng.nextFloat() * 4f // Espaçamento irregular 6-10px
+            var curX = x + 2f
+            while (curX < x + tw - 2f) {
+                val baseW = 3f + tileRng.nextFloat() * 2f // 3-5px de base
+                val height = 4f + tileRng.nextFloat() * 4f // 4-8px de altura
+                
+                val cx = curX + baseW / 2f
+                if (cx + baseW / 2f < x + tw) {
+                    path.reset()
+                    path.moveTo(cx - baseW / 2f, y)
+                    path.lineTo(cx + baseW / 2f, y)
+                    path.lineTo(cx, y + height)
+                    path.close()
+                    
+                    val gradient = LinearGradient(
+                        cx, y, cx, y + height,
+                        Color.parseColor("#8ab8d8"),
+                        Color.parseColor("#c8e8f8"),
+                        Shader.TileMode.CLAMP
+                    )
+                    paint.shader = gradient
+                    canvas.drawPath(path, paint)
+                    paint.shader = null
+                }
+                curX += baseW + spacing
+            }
+        }
+
+        // Restaurar estado padrão do paint
         paint.reset()
         paint.isAntiAlias = false
         paint.isFilterBitmap = false
