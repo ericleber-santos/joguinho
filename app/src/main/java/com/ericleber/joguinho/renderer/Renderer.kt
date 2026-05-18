@@ -227,6 +227,7 @@ class Renderer(
 
         spriteCache.currentBiome = gameState.currentBiome.name
         tileRenderer.setBiome(gameState.currentBiome)
+        tileRenderer.setBiomeWorld(gameState.currentBiomeWorld)
 
         frameCounter++
         frameTotal++

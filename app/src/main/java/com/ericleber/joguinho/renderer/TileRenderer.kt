@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomePalette
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.biome.WallDetailType
 import com.ericleber.joguinho.core.MazeData
 import java.util.Random
@@ -101,8 +102,10 @@ class TileRenderer {
 
     // Bioma atual para diferenciação visual das paredes
     private var biomeAtual: Biome = Biome.MINA_ABANDONADA
+    private var worldAtual: BiomeWorld = BiomeWorld.ENTRANHAS
     
     fun setBiome(biome: Biome) { biomeAtual = biome }
+    fun setBiomeWorld(world: BiomeWorld) { worldAtual = world }
 
     fun renderWallTile(
         canvas: Canvas,
@@ -138,6 +141,11 @@ class TileRenderer {
         val e = (mask and 4) != 0
         val s = (mask and 16) != 0
         val w = (mask and 64) != 0
+
+        if (worldAtual == BiomeWorld.ENTRANHAS) {
+            renderEntranhasWall(canvas, x, y, tw, th, seed, tileX, tileY, s)
+            return
+        }
 
         // 1. Base sólida (mesma cor entre vizinhos = sem linhas de grid)
         paint.color = corBase
@@ -584,6 +592,8 @@ class TileRenderer {
         p: BiomePalette,
         tileX: Int, tileY: Int
     ) {
+        if (worldAtual == BiomeWorld.ENTRANHAS) return
+
         val detailType = p.wallDetailType
         if (detailType == WallDetailType.NONE) return
 
@@ -849,6 +859,129 @@ class TileRenderer {
         }
 
         // Restaurar paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderEntranhasWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int, s: Boolean
+    ) {
+        val baseR = 58  // 0x3a
+        val baseG = 46  // 0x2e
+        val baseB = 36  // 0x24
+        
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        // 1. Textura base: marrom-cinza escuro com variação de +-20% por pixel
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+        
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+        
+        // Pinta a base sólida
+        paint.color = Color.rgb(baseR, baseG, baseB)
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val factor = -0.20f + tileRng.nextFloat() * 0.40f
+                val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize, 
+                    y + r * pixelSize, 
+                    (x + (c + 1) * pixelSize).coerceAtMost(x + tw), 
+                    (y + (r + 1) * pixelSize).coerceAtMost(y + th), 
+                    paint
+                )
+            }
+        }
+
+        // 2. Rachaduras diagonais em 40% dos tiles (linhas de 10-20px)
+        if (tileRng.nextFloat() < 0.40f) {
+            paint.color = Color.rgb(18, 14, 11)
+            paint.strokeWidth = 2f
+            paint.style = Paint.Style.STROKE
+            
+            val rx = x + 6f + tileRng.nextFloat() * (tw - 26f)
+            val ry = y + 6f + tileRng.nextFloat() * (th - 26f)
+            val length = 10f + tileRng.nextFloat() * 10f
+            val angle = if (tileRng.nextBoolean()) (Math.PI / 4.0) else (3.0 * Math.PI / 4.0)
+            val endX = (rx + cos(angle) * length).toFloat()
+            val endY = (ry + sin(angle) * length).toFloat()
+            
+            canvas.drawLine(rx, ry, endX, endY, paint)
+            
+            paint.style = Paint.Style.FILL
+            paint.strokeWidth = 0f
+        }
+
+        // 3. Pequenas pedras salientes: drawCircle de 3-5px em 15% dos tiles, cor+25%
+        if (tileRng.nextFloat() < 0.15f) {
+            val salR = (baseR * 1.25f).toInt().coerceIn(0, 255)
+            val salG = (baseG * 1.25f).toInt().coerceIn(0, 255)
+            val salB = (baseB * 1.25f).toInt().coerceIn(0, 255)
+            
+            val radius = 3f + tileRng.nextFloat() * 2f
+            val px = x + radius + 4f + tileRng.nextFloat() * (tw - radius * 2f - 8f)
+            val py = y + radius + 4f + tileRng.nextFloat() * (th - radius * 2f - 8f)
+            
+            paint.color = Color.rgb(15, 12, 10)
+            canvas.drawCircle(px, py + 1.5f, radius, paint)
+            
+            paint.color = Color.rgb(salR, salG, salB)
+            canvas.drawCircle(px, py, radius, paint)
+            
+            paint.color = clarear(Color.rgb(salR, salG, salB), 0.3f)
+            canvas.drawCircle(px - radius * 0.3f, py - radius * 0.3f, radius * 0.3f, paint)
+        }
+
+        // 4. Borda inferior: dentes de 2-4px de altura, espaçados irregularmente a cada 3-6px
+        if (!s) {
+            paint.color = Color.rgb(20, 16, 12)
+            paint.style = Paint.Style.FILL
+            
+            var curX = x
+            while (curX < x + tw) {
+                val toothW = 3f + tileRng.nextFloat() * 3f
+                val toothH = 2f + tileRng.nextFloat() * 2f
+                
+                canvas.drawRect(
+                    curX, 
+                    y + th, 
+                    (curX + toothW).coerceAtMost(x + tw), 
+                    y + th + toothH, 
+                    paint
+                )
+                curX += toothW
+            }
+        }
+
+        // 5. Gotas d'água: 1-2 gotas por tile em 20% dos tiles (circle 2px, azul #4a6a8a)
+        if (tileRng.nextFloat() < 0.20f) {
+            paint.color = Color.parseColor("#4a6a8a")
+            val numDrops = 1 + tileRng.nextInt(2)
+            for (i in 0 until numDrops) {
+                val dx = x + 6f + tileRng.nextFloat() * (tw - 12f)
+                val dy = y + 6f + tileRng.nextFloat() * (th - 12f)
+                
+                canvas.drawCircle(dx, dy, 2f, paint)
+                
+                paint.color = Color.parseColor("#8faac4")
+                canvas.drawCircle(dx - 0.5f, dy - 0.5f, 0.7f, paint)
+                paint.color = Color.parseColor("#4a6a8a")
+            }
+        }
+        
         paint.reset()
         paint.isAntiAlias = false
         paint.isFilterBitmap = false
