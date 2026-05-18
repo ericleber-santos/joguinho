@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.RadialGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -151,6 +152,11 @@ class TileRenderer {
 
         if (worldAtual == BiomeWorld.ABISMOS_AQUATICOS) {
             renderAbismoWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
+            return
+        }
+
+        if (worldAtual == BiomeWorld.JARDIM_PROFUNDO) {
+            renderJardimWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
             return
         }
 
@@ -599,7 +605,7 @@ class TileRenderer {
         p: BiomePalette,
         tileX: Int, tileY: Int
     ) {
-        if (worldAtual == BiomeWorld.ENTRANHAS || worldAtual == BiomeWorld.ABISMOS_AQUATICOS) return
+        if (worldAtual == BiomeWorld.ENTRANHAS || worldAtual == BiomeWorld.ABISMOS_AQUATICOS || worldAtual == BiomeWorld.JARDIM_PROFUNDO) return
 
         val detailType = p.wallDetailType
         if (detailType == WallDetailType.NONE) return
@@ -1150,6 +1156,191 @@ class TileRenderer {
                 }
                 curX += baseW + spacing
             }
+        }
+
+        // Restaurar estado padrão do paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderJardimWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
+    ) {
+        // Paleta base: pedra escura esverdeada
+        val baseR = 26  // 0x1a
+        val baseG = 42  // 0x2a
+        val baseB = 26  // 0x1a
+        val baseColor = Color.rgb(baseR, baseG, baseB)
+
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+
+        // 1. Textura base: pedra escura esverdeada com variação sutil por pixel
+        paint.color = baseColor
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val factor = -0.12f + tileRng.nextFloat() * 0.24f
+                val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize,
+                    y + r * pixelSize,
+                    (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                    (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                    paint
+                )
+            }
+        }
+
+        // 2. Musgo INTEGRADO: clusters de pixels verdes na borda inferior e laterais
+        val mossColors = intArrayOf(Color.parseColor("#2d6a2d"), Color.parseColor("#3d8a3d"))
+
+        // Borda inferior: musgo cresce de baixo para cima (3-6 linhas de pixels)
+        if (!s) {
+            val mossHeight = 3 + tileRng.nextInt(4) // 3-6 pixels de altura
+            for (r in 0 until mossHeight) {
+                for (c in 0 until cols) {
+                    // Probabilidade diminui com a altura (mais musgo embaixo)
+                    val prob = 0.85f - r * 0.15f
+                    if (tileRng.nextFloat() < prob) {
+                        paint.color = mossColors[tileRng.nextInt(2)]
+                        val py = rows - 1 - r
+                        if (py >= 0) {
+                            canvas.drawRect(
+                                x + c * pixelSize,
+                                y + py * pixelSize,
+                                (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                                (y + (py + 1) * pixelSize).coerceAtMost(y + th),
+                                paint
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Borda lateral esquerda: musgo esparso (2-3 pixels de largura)
+        if (!w) {
+            val mossW = 2 + tileRng.nextInt(2)
+            for (c in 0 until mossW) {
+                for (r in 0 until rows) {
+                    if (tileRng.nextFloat() < 0.5f) {
+                        paint.color = mossColors[tileRng.nextInt(2)]
+                        canvas.drawRect(
+                            x + c * pixelSize,
+                            y + r * pixelSize,
+                            (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                            (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                            paint
+                        )
+                    }
+                }
+            }
+        }
+
+        // Borda lateral direita: musgo esparso
+        if (!e) {
+            val mossW = 2 + tileRng.nextInt(2)
+            for (c in 0 until mossW) {
+                for (r in 0 until rows) {
+                    if (tileRng.nextFloat() < 0.5f) {
+                        paint.color = mossColors[tileRng.nextInt(2)]
+                        val px = cols - 1 - c
+                        if (px >= 0) {
+                            canvas.drawRect(
+                                x + px * pixelSize,
+                                y + r * pixelSize,
+                                (x + (px + 1) * pixelSize).coerceAtMost(x + tw),
+                                (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                                paint
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Gotas de musgo: linhas de 1px caindo da borda superior, comprimento 4-12px
+        if (!n) {
+            paint.color = Color.parseColor("#2d6a2d")
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+
+            val numDrips = 3 + tileRng.nextInt(4) // 3-6 gotas
+            for (i in 0 until numDrips) {
+                val dx = x + 3f + tileRng.nextFloat() * (tw - 6f)
+                val dripLen = 4f + tileRng.nextFloat() * 8f // 4-12px
+                canvas.drawLine(dx, y, dx, y + dripLen, paint)
+            }
+            paint.style = Paint.Style.FILL
+            paint.strokeWidth = 0f
+        }
+
+        // 4. Raízes: linhas curvas de 1px em marrom escuro (#3a2010) cruzando o tile
+        val numRoots = 1 + tileRng.nextInt(2) // 1-2 raízes
+        paint.color = Color.parseColor("#3a2010")
+        paint.strokeWidth = 1f
+        paint.style = Paint.Style.STROKE
+        paint.isAntiAlias = true
+
+        for (i in 0 until numRoots) {
+            path.reset()
+            val startX = x + tileRng.nextFloat() * tw
+            val startY = y + tileRng.nextFloat() * th * 0.3f
+            val endX = x + tileRng.nextFloat() * tw
+            val endY = y + th * 0.7f + tileRng.nextFloat() * th * 0.3f
+            val ctrlX = x + tileRng.nextFloat() * tw
+            val ctrlY = y + th * 0.3f + tileRng.nextFloat() * th * 0.4f
+
+            path.moveTo(startX, startY)
+            path.quadTo(ctrlX, ctrlY, endX, endY)
+            canvas.drawPath(path, paint)
+        }
+
+        paint.style = Paint.Style.FILL
+        paint.isAntiAlias = false
+        paint.strokeWidth = 0f
+
+        // 5. Pontinhos luminosos: 3-5 pixels de verde-limão (#aaff44) bioluminescentes
+        val sporeColor = Color.parseColor("#aaff44")
+        val numSpores = 3 + tileRng.nextInt(3) // 3-5 esporos
+
+        for (i in 0 until numSpores) {
+            val sx = x + 4f + tileRng.nextFloat() * (tw - 8f)
+            val sy = y + 4f + tileRng.nextFloat() * (th - 8f)
+
+            // RadialGradient sutil em torno do esporo (raio 4px, alpha 40)
+            paint.isAntiAlias = true
+            val glowGradient = RadialGradient(
+                sx, sy, 4f,
+                Color.argb(40, 170, 255, 68),
+                Color.argb(0, 170, 255, 68),
+                Shader.TileMode.CLAMP
+            )
+            paint.shader = glowGradient
+            canvas.drawCircle(sx, sy, 4f, paint)
+            paint.shader = null
+            paint.isAntiAlias = false
+
+            // Ponto central brilhante de 1px
+            paint.color = sporeColor
+            canvas.drawRect(sx - 0.5f, sy - 0.5f, sx + 0.5f, sy + 0.5f, paint)
         }
 
         // Restaurar estado padrão do paint
