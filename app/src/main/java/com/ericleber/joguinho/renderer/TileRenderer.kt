@@ -11,6 +11,7 @@ import com.ericleber.joguinho.biome.BiomePalette
 import com.ericleber.joguinho.biome.WallDetailType
 import com.ericleber.joguinho.core.MazeData
 import java.util.Random
+import kotlin.math.cos
 import kotlin.math.sin
 
 enum class TileType {
@@ -31,6 +32,11 @@ class TileRenderer {
     }
     private val path = Path()
 
+    private fun tileRandom(tileX: Int, tileY: Int, index: Int = 0): Float {
+        val seed = tileX * 73856093 xor tileY * 19349663 xor index * 83492791
+        return (seed and 0x7FFFFFFF).toFloat() / 0x7FFFFFFF.toFloat()
+    }
+
     // =========================================================================
     // CHÃO
     // =========================================================================
@@ -42,49 +48,54 @@ class TileRenderer {
         palette: BiomePalette,
         tileX: Int = 0, tileY: Int = 0
     ) {
-        val hash = (tileX * 13 + tileY * 7 + tileX * tileY * 3) and 0xFF
-        val microVar = ((hash shr 2) % 6) - 3
-        val corFinal = variarCor(palette.floorColor, microVar)
+        val corBase = palette.floorColor
 
-        paint.color = corFinal
+        paint.color = corBase
         canvas.drawRect(x, y, x + tileW, y + tileH, paint)
 
-        val seed = tileX * 11 + tileY * 17
-        val rng = Random(seed.toLong())
+        if (tileW <= 8f) return
 
-        // Detalhes de Textura (Style Stardew)
-        if (tileW > 8f) {
-            // 1. Ruído de cor (manchas de terra/pedra)
-            if (rng.nextFloat() > 0.6f) {
-                paint.color = clarear(corFinal, 0.08f)
-                val sw = tileW * (0.2f + rng.nextFloat() * 0.3f)
-                val sh = tileH * (0.2f + rng.nextFloat() * 0.3f)
-                canvas.drawRect(x + rng.nextFloat() * (tileW - sw), y + rng.nextFloat() * (tileH - sh), x + sw, y + sh, paint)
-            }
+        val lightTone = clarear(corBase, 0.15f)
+        val darkTone = escurecer(corBase, 0.20f)
 
-            // 2. Grãos e Cracks
-            paint.color = escurecer(corFinal, 0.20f)
-            val n = 3 + rng.nextInt(3)
-            for (i in 0 until n) {
-                val gx = x + rng.nextFloat() * (tileW - 2f)
-                val gy = y + rng.nextFloat() * (tileH - 2f)
-                canvas.drawRect(gx, gy, gx + 2f, gy + 2f, paint)
-                
-                // Pequena rachadura ocasional
-                if (rng.nextFloat() > 0.85f) {
-                    canvas.drawLine(gx, gy, gx + 4f, gy + 4f, paint)
-                }
-            }
+        // Manchas de pedra procedural (3 tons: base, claro, escuro)
+        val numPatches = 10 + (tileRandom(tileX, tileY, 100) * 5).toInt()
+        for (i in 0 until numPatches) {
+            val r = tileRandom(tileX, tileY, i * 137 + 200)
+            paint.color = if (r > 0.5f) lightTone else darkTone
 
-            // 3. Poças de Água (Biomas Úmidos/Pântano)
-            if (palette.hasDrips && rng.nextFloat() > 0.92f) {
-                paint.color = Color.argb(120, 100, 150, 255)
-                val pw = tileW * 0.4f
-                val ph = tileH * 0.2f
-                val px = x + rng.nextFloat() * (tileW - pw)
-                val py = y + rng.nextFloat() * (tileH - ph)
-                canvas.drawOval(RectF(px, py, px + pw, py + ph), paint)
-            }
+            val patchW = 4 + (tileRandom(tileX, tileY, i * 137 + 300) * 6).toInt()
+            val patchH = 4 + (tileRandom(tileX, tileY, i * 137 + 400) * 6).toInt()
+            val px = x + tileRandom(tileX, tileY, i * 137 + 500) * (tileW - patchW)
+            val py = y + tileRandom(tileX, tileY, i * 137 + 600) * (tileH - patchH)
+            canvas.drawRect(px, py, px + patchW, py + patchH, paint)
+        }
+
+        // Rachaduras finas (1px, 8-15px comprimento) em 30% dos tiles
+        if (tileRandom(tileX, tileY, 9999) < 0.3f) {
+            paint.color = escurecer(corBase, 0.40f)
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+            val startX = x + tileRandom(tileX, tileY, 7777) * (tileW - 2f)
+            val startY = y + tileRandom(tileX, tileY, 6666) * (tileH - 2f)
+            val crackLen = 8 + (tileRandom(tileX, tileY, 8888) * 7).toInt()
+            val angle = tileRandom(tileX, tileY, 5555) * Math.PI.toFloat() * 2
+            val endX = startX + cos(angle) * crackLen
+            val endY = startY + sin(angle) * crackLen
+            canvas.drawLine(startX, startY, endX, endY, paint)
+            paint.style = Paint.Style.FILL
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeWidth = 0f
+
+        // Poças de água (biomas úmidos)
+        if (palette.hasDrips && tileRandom(tileX, tileY, 4444) > 0.92f) {
+            paint.color = Color.argb(120, 100, 150, 255)
+            val pw = tileW * 0.4f
+            val ph = tileH * 0.2f
+            val px = x + tileRandom(tileX, tileY, 3333) * (tileW - pw)
+            val py = y + tileRandom(tileX, tileY, 2222) * (tileH - ph)
+            canvas.drawOval(RectF(px, py, px + pw, py + ph), paint)
         }
     }
 
@@ -102,81 +113,233 @@ class TileRenderer {
         mazeData: MazeData? = null
     ) {
         val seed = tileX * 7 + tileY * 13
-        val varBase = ((seed * 3) % 14) - 7
-        val corBase = variarCor(palette.wallColor, varBase)
-        val corTopo = palette.wallTopColor
-        val corSombra = palette.wallShadowColor
 
-        // Bitmask de vizinhos (Blob 8-neighbor)
         val mask = getWallBitmask(tileX, tileY, mazeData)
-        
-        // --- Fase 11: Renderização Orgânica (Blob Tileset) ---
-        renderOrganicWall(canvas, x, y, tileW, tileH, palette, mask, seed)
+
+        renderOrganicWall(canvas, x, y, tileW, tileH, palette, mask, seed, tileX, tileY)
     }
 
     /**
-     * Renderiza a parede com quinas arredondadas e conexões orgânicas (47 variantes simuladas).
+     * Renderiza a parede com bordas dentadas orgânicas, textura de pedra procedural
+     * e detalhes de bioma integrados (MOSS, ICE_DRIP, CRYSTAL_VEIN).
      */
     private fun renderOrganicWall(
         canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
-        p: BiomePalette, mask: Int, seed: Int
+        p: BiomePalette, mask: Int, seed: Int,
+        tileX: Int, tileY: Int
     ) {
-        val corBase = variarCor(p.wallColor, (seed % 10) - 5)
+        val corBase = variarCor(p.wallColor, seed % 10 - 5)
+        val borderColor = escurecer(corBase, 0.3f)
+        val lightTone = clarear(corBase, 0.15f)
+        val darkTone = escurecer(corBase, 0.20f)
         val corTopo = p.wallTopColor
-        val corSombra = p.wallShadowColor
-        
-        // 1. Base sólida com textura procedural
-        val texture = when {
-            biomeAtual.name.contains("FLORESTA") || biomeAtual.name.contains("JARDIM") -> 
-                HighFidelitySpriteEngine.getWoodTexture(tw.toInt(), corBase, seed.toLong())
-            else -> 
-                HighFidelitySpriteEngine.getStoneTexture(tw.toInt(), corBase, seed.toLong())
-        }
-        canvas.drawBitmap(texture, x, y, paint)
 
-        // 2. Extração de vizinhos da bitmask (N=1, NE=2, E=4, SE=8, S=16, SW=32, W=64, NW=128)
         val n = (mask and 1) != 0
         val e = (mask and 4) != 0
         val s = (mask and 16) != 0
         val w = (mask and 64) != 0
-        
-        // 3. Renderização de Quinas (Aumenta o "Organic Feel")
-        val cornerSize = tw * 0.25f
-        
-        // TOP-LEFT
-        renderCorner(canvas, x, y, cornerSize, corTopo, 
-            isOuter = !n && !w, 
-            isInner = n && w && (mask and 128) == 0)
-            
-        // TOP-RIGHT
-        renderCorner(canvas, x + tw - cornerSize, y, cornerSize, corTopo,
-            isOuter = !n && !e,
-            isInner = n && e && (mask and 2) == 0)
-            
-        // BOTTOM-LEFT
-        renderCorner(canvas, x, y + th - cornerSize, cornerSize, corSombra,
-            isOuter = !s && !w,
-            isInner = s && w && (mask and 32) == 0)
-            
-        // BOTTOM-RIGHT
-        renderCorner(canvas, x + tw - cornerSize, y + th - cornerSize, cornerSize, corSombra,
-            isOuter = !s && !e,
-            isInner = s && e && (mask and 8) == 0)
 
-        // 4. Detalhes de profundidade (Face frontal e Topo)
-        if (!n) { // Topo visível
+        // 1. Base sólida (mesma cor entre vizinhos = sem linhas de grid)
+        paint.color = corBase
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        // 2. Textura de pedra com ruído procedural (3 tons)
+        val numPatches = 12 + (seed % 6)
+        for (i in 0 until numPatches) {
+            val r = tileRandom(tileX, tileY, i * 137 + 200)
+            paint.color = if (r > 0.5f) lightTone else darkTone
+
+            val patchW = 3 + (tileRandom(tileX, tileY, i * 137 + 300) * 5).toInt()
+            val patchH = 3 + (tileRandom(tileX, tileY, i * 137 + 400) * 5).toInt()
+            val px = x + tileRandom(tileX, tileY, i * 137 + 500) * (tw - patchW)
+            val py = y + tileRandom(tileX, tileY, i * 137 + 600) * (th - patchH)
+            canvas.drawRect(px, py, px + patchW, py + patchH, paint)
+        }
+
+        // 3. Borda inferior dentada (se exposta)
+        if (!s) {
+            paint.color = borderColor
+            val segments = (tw / 3).toInt().coerceAtLeast(6)
+            val segW = tw / segments
+            path.reset()
+            path.moveTo(x, y + th)
+            path.lineTo(x, y + th + 5f)
+            for (i in 1 until segments) {
+                val lx = x + i * segW
+                val out = tileRandom(tileX, tileY, i * 53 + 77) * 5f - 1f
+                path.lineTo(lx, y + th + out)
+            }
+            path.lineTo(x + tw, y + th + 5f)
+            path.lineTo(x + tw, y + th)
+            path.close()
+            canvas.drawPath(path, paint)
+
+            // Projeções alternadas de 1-3px
+            val projCount = (tw / 6).toInt().coerceAtLeast(3)
+            for (i in 0 until projCount) {
+                val px2 = x + tileRandom(tileX, tileY, i * 100 + 50) * tw
+                val proj = if (tileRandom(tileX, tileY, i * 100 + 51) > 0.5f) 3f else -2f
+                canvas.drawRect(px2, y + th, px2 + 2f, y + th + proj, paint)
+            }
+        }
+
+        // 4. Borda direita dentada (se exposta)
+        if (!e) {
+            paint.color = borderColor
+            val segments = (th / 3).toInt().coerceAtLeast(6)
+            val segH = th / segments
+            path.reset()
+            path.moveTo(x + tw, y)
+            path.lineTo(x + tw + 5f, y)
+            for (i in 1 until segments) {
+                val ly = y + i * segH
+                val out = tileRandom(tileX, tileY, i * 61 + 88) * 5f - 1f
+                path.lineTo(x + tw + out, ly)
+            }
+            path.lineTo(x + tw + 5f, y + th)
+            path.lineTo(x + tw, y + th)
+            path.close()
+            canvas.drawPath(path, paint)
+        }
+
+        // 5. Borda esquerda dentada (se exposta)
+        if (!w) {
+            paint.color = borderColor
+            val segments = (th / 3).toInt().coerceAtLeast(6)
+            val segH = th / segments
+            path.reset()
+            path.moveTo(x, y)
+            path.lineTo(x - 5f, y)
+            for (i in 1 until segments) {
+                val ly = y + i * segH
+                val out = tileRandom(tileX + 1, tileY, i * 71 + 99) * 5f - 1f
+                path.lineTo(x - out - 1f, ly)
+            }
+            path.lineTo(x - 5f, y + th)
+            path.lineTo(x, y + th)
+            path.close()
+            canvas.drawPath(path, paint)
+        }
+
+        // 6. Topo visível (quando sem vizinho norte)
+        if (!n) {
             paint.color = corTopo
-            canvas.drawRect(x + 2f, y, x + tw - 2f, y + 4f, paint)
-        }
-        if (!s) { // Face frontal visível
-            paint.color = corSombra
-            canvas.drawRect(x, y + th * 0.7f, x + tw, y + th, paint)
+            canvas.drawRect(x + 2f, y, x + tw - 2f, y + 3f, paint)
         }
 
-        // 5. Props Decorativos (Cipós/Raízes) - 15% de chance em biomas orgânicos
+        // 7. Rachaduras finas (1px, 8-15px) em 30% dos tiles
+        if (tileRandom(tileX, tileY, 9999) < 0.3f) {
+            paint.color = escurecer(corBase, 0.40f)
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+            val startX = x + tileRandom(tileX, tileY, 7777) * (tw - 2f)
+            val startY = y + tileRandom(tileX, tileY, 6666) * (th - 2f)
+            val crackLen = 8 + (tileRandom(tileX, tileY, 8888) * 7).toInt()
+            val angle = tileRandom(tileX, tileY, 5555) * Math.PI.toFloat() * 2
+            val endX = startX + cos(angle) * crackLen
+            val endY = startY + sin(angle) * crackLen
+            canvas.drawLine(startX, startY, endX, endY, paint)
+            paint.style = Paint.Style.FILL
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeWidth = 0f
+
+        // 8. Detalhes de bioma integrados na textura
+        when (p.wallDetailType) {
+            WallDetailType.MOSS -> {
+                val mossColor = Color.rgb(45, 106, 45)
+                val mossPatches = 6 + (seed % 4)
+                for (i in 0 until mossPatches) {
+                    if (tileRandom(tileX, tileY, i * 73 + 1000) > 0.5f) continue
+                    val mx = x + tileRandom(tileX, tileY, i * 73 + 1100) * tw
+                    val my = y + th * 0.5f + tileRandom(tileX, tileY, i * 73 + 1200) * th * 0.5f
+                    val mw = 2 + (tileRandom(tileX, tileY, i * 73 + 1300) * 3).toInt()
+                    val mh = 2 + (tileRandom(tileX, tileY, i * 73 + 1400) * 3).toInt()
+                    paint.color = mossColor
+                    paint.alpha = 180
+                    canvas.drawRect(mx, my, mx + mw, my + mh, paint)
+                }
+                paint.alpha = 255
+
+                if (!n && tileRandom(tileX, tileY, 444) > 0.6f) {
+                    val numDrops = 2 + (seed % 3)
+                    for (i in 0 until numDrops) {
+                        val dx = x + tileRandom(tileX, tileY, i * 50 + 2000) * tw
+                        val dropH = 3 + (tileRandom(tileX, tileY, i * 50 + 2100) * 4).toInt()
+                        paint.color = Color.rgb(35, 90, 35)
+                        canvas.drawRect(dx, y, dx + 2f, y + dropH, paint)
+                    }
+                }
+            }
+            WallDetailType.ICE_DRIP -> {
+                paint.color = Color.WHITE
+                paint.alpha = 60
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 1.5f
+                canvas.drawLine(x + tw * 0.2f, y + th * 0.2f, x + tw * 0.8f, y + th * 0.8f, paint)
+                paint.style = Paint.Style.FILL
+                paint.alpha = 255
+
+                if (!n) {
+                    val numStalactites = 2 + (seed % 3)
+                    for (i in 0 until numStalactites) {
+                        val cx2 = x + tw * (0.25f + i * 0.25f)
+                        val h = 3 + tileRandom(tileX, tileY, i * 31 + 500) * 3f
+                        val w = tw * 0.1f
+                        paint.color = Color.rgb(180, 210, 240)
+                        paint.alpha = 240
+                        path.reset()
+                        path.moveTo(cx2 - w/2f, y)
+                        path.lineTo(cx2, y - h)
+                        path.lineTo(cx2 + w/2f, y)
+                        path.close()
+                        canvas.drawPath(path, paint)
+                    }
+                    paint.alpha = 255
+                }
+            }
+            WallDetailType.CRYSTAL_VEIN -> {
+                val veinColor = p.crystalColor
+                paint.color = veinColor
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = tw * 0.04f
+                val numVeins = 1 + (seed % 2)
+                for (i in 0 until numVeins) {
+                    val sx2 = x + tw * (0.2f + i * 0.4f)
+                    val sy2 = y + th * (0.1f + i * 0.3f)
+                    canvas.drawLine(sx2, sy2, sx2 + tw * 0.4f, sy2 + th * 0.5f, paint)
+                }
+
+                paint.style = Paint.Style.FILL
+                val numDiamonds = 1 + (seed % 2)
+                for (i in 0 until numDiamonds) {
+                    val dcx = x + tw * (0.3f + tileRandom(tileX, tileY, i * 41 + 600) * 0.4f)
+                    val dcy = y + th * (0.3f + tileRandom(tileX, tileY, i * 41 + 700) * 0.4f)
+                    val dsize = tw * (0.08f + tileRandom(tileX, tileY, i * 41 + 800) * 0.06f)
+                    path.reset()
+                    path.moveTo(dcx, dcy - dsize)
+                    path.lineTo(dcx + dsize * 0.7f, dcy)
+                    path.lineTo(dcx, dcy + dsize)
+                    path.lineTo(dcx - dsize * 0.7f, dcy)
+                    path.close()
+                    paint.color = veinColor
+                    canvas.drawPath(path, paint)
+
+                    if (tileRandom(tileX, tileY, i * 41 + 900) > 0.3f) {
+                        paint.color = Color.WHITE
+                        canvas.drawCircle(dcx, dcy - dsize, tw * 0.03f, paint)
+                    }
+                }
+                paint.style = Paint.Style.FILL
+            }
+            else -> {}
+        }
+
+        paint.alpha = 255
+
+        // Cipós decorativos (15% em biomas orgânicos)
         if (!s && (biomeAtual.name.contains("FLORESTA") || biomeAtual.name.contains("JARDIM") || biomeAtual.name.contains("CAVERNA"))) {
-            val rng = Random(seed.toLong())
-            if (rng.nextFloat() < 0.15f) {
+            if (tileRandom(tileX, tileY, 777) < 0.15f) {
                 renderVines(canvas, x + tw * 0.3f, y + th * 0.8f, tw * 0.4f, p.accentColor, seed)
             }
         }
@@ -374,9 +537,12 @@ class TileRenderer {
     }
 
     fun createWallBitmap(tileW: Int, tileH: Int, palette: BiomePalette, tileX: Int, tileY: Int, mazeData: MazeData): Bitmap {
-        val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), tileH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val margin = 16
+        val bmpW = tileW + margin * 2
+        val bmpH = tileH + margin * 2
+        val bitmap = Bitmap.createBitmap(bmpW.coerceAtLeast(1), bmpH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
-        renderWallTile(c, 0f, 0f, tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY, mazeData)
+        renderWallTile(c, margin.toFloat(), margin.toFloat(), tileW.toFloat(), tileH.toFloat(), palette, tileX, tileY, mazeData)
         return bitmap
     }
     fun createTreeBitmap(tileW: Int, tileH: Int, palette: BiomePalette, tx: Int, ty: Int): Bitmap {

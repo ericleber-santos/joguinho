@@ -351,7 +351,11 @@ class Renderer(
                         
                         // Desenha o bitmap (árvores são desenhadas um pouco acima para parecerem altas)
                         val drawY = if (isForest) sy - tileH * 0.8f else sy
-                        c.drawBitmap(wallBitmap, sx, drawY, null)
+                        if (isForest) {
+                            c.drawBitmap(wallBitmap, sx, drawY, null)
+                        } else {
+                            c.drawBitmap(wallBitmap, sx - 16f, drawY - 16f, null)
+                        }
                         
                         // --- Detalhes de Paredes Procedurais por WallDetailType ---
                         if (!isForest) {
