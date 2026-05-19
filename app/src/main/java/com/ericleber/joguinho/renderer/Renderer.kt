@@ -283,7 +283,13 @@ class Renderer(
             proceduralBackground = ProceduralBackground(gameState.floorNumber)
         }
         
-        if (gameState.currentBiomeWorld.lightingMode == com.ericleber.joguinho.biome.LightingMode.SUBTERRANEAN) {
+        val currentLightingMode = gameState.currentBiomeWorld.lightingMode
+        if (currentLightingMode == com.ericleber.joguinho.biome.LightingMode.SUBTERRANEAN ||
+            currentLightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT ||
+            currentLightingMode == com.ericleber.joguinho.biome.LightingMode.VOID_DARK ||
+            currentLightingMode == com.ericleber.joguinho.biome.LightingMode.DAYLIGHT ||
+            currentLightingMode == com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW ||
+            currentLightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) {
             proceduralBackground?.render(
                 canvas,
                 cameraX,
@@ -291,7 +297,9 @@ class Renderer(
                 screenWidth,
                 (screenHeight * fracaoAreaJogo).toInt(),
                 System.currentTimeMillis(),
-                palette.wallColor
+                palette.wallColor,
+                palette.accentColor,
+                currentLightingMode
             )
         }
 
