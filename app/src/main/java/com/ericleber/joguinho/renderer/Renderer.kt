@@ -7,9 +7,9 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
-import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.biome.BiomePalette
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.Position
@@ -66,7 +66,7 @@ class Renderer(
     )
 
     /** Bioma do último frame — usado para detectar troca e reinicializar sistemas. */
-    private var lastBiome: Biome? = null
+    private var lastWorld: BiomeWorld? = null
     /** Mapa do último frame — usado para re-init do DripSystem. */
     private var lastMaze: MazeData? = null
 
@@ -225,12 +225,11 @@ class Renderer(
         val tileW = tileWDinamico
         val tileH = tileHDinamico
 
-        val basePalette = BIOME_PALETTES[gameState.currentBiome]
+        val basePalette = BIOME_PALETTES[gameState.currentBiomeWorld]
             ?: BIOME_PALETTES.values.first()
         val palette = com.ericleber.joguinho.biome.applyDepthHueShiftToPalette(basePalette, gameState.floorNumber)
 
-        spriteCache.currentBiome = gameState.currentBiome.name
-        tileRenderer.setBiome(gameState.currentBiome)
+        spriteCache.currentBiome = gameState.currentBiomeWorld.name
         tileRenderer.setBiomeWorld(gameState.currentBiomeWorld)
 
         frameCounter++
@@ -324,20 +323,20 @@ class Renderer(
                 if ((tx == entradaTx && ty == entradaTy) || (tx == saidaTx && ty == saidaTy)) continue
                 
                 // Desativar decorativos para o Bioma Úmido
-                if (gameState.currentBiome.name.contains("UMIDO") || gameState.currentBiome.name.contains("PANTANO")) continue
+                if (gameState.currentBiomeWorld.name.contains("UMIDO") || gameState.currentBiomeWorld.name.contains("PANTANO")) continue
 
                 val decorSeed = (tx * 31 + ty * 17 + mazeData.seed.toInt()) % 15
                 if (decorSeed != 0) continue
                 val variant = (tx + ty) % 4
                 val sx = tx * tileW + cameraX
                 val sy = ty * tileH + cameraY
-                val decorKey = "biome_${gameState.currentBiome.name}_floor_${gameState.floorNumber}_decor_$variant"
+                val decorKey = "biome_${gameState.currentBiomeWorld.name}_floor_${gameState.floorNumber}_decor_$variant"
                 val decorBitmap = spriteCache.getOrCreate(decorKey) {
                     tileRenderer.createTileBitmap(
                         when (variant) {
                             0 -> TileType.DECORATIVE_0; 1 -> TileType.DECORATIVE_1
                             2 -> TileType.DECORATIVE_2; else -> TileType.DECORATIVE_3
-                        }, tileW.toInt(), tileH.toInt(), palette, biome = gameState.currentBiome
+                        }, tileW.toInt(), tileH.toInt(), palette, world = gameState.currentBiomeWorld
                     )
                 }
                 canvas.drawBitmap(decorBitmap, sx, sy, null)
@@ -366,9 +365,9 @@ class Renderer(
                 // --- Fase 10: Paredes como Árvores ou Cristais ---
                 val isForest = gameState.currentBiomeWorld == com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES
                 val wallKey = if (isForest) {
-                    "biome_${gameState.currentBiome.name}_tree_variant_${(tx + ty) % 3}"
+                    "biome_${gameState.currentBiomeWorld.name}_tree_variant_${(tx + ty) % 3}"
                 } else {
-                    "biome_${gameState.currentBiome.name}_wall_mask_$mask"
+                    "biome_${gameState.currentBiomeWorld.name}_wall_mask_$mask"
                 }
                 
                 renderList.add(object : Renderable {
@@ -718,27 +717,27 @@ class Renderer(
         // -----------------------------------------------------------------------
 
         // Reinicializar sistemas ao trocar de bioma ou mapa
-        val biomeAtualFrame = gameState.currentBiome
+        val worldAtualFrame = gameState.currentBiomeWorld
         val mazeAtualFrame = gameState.mazeData
         
-        if (biomeAtualFrame != lastBiome || mazeAtualFrame != lastMaze) {
-            lastBiome = biomeAtualFrame
+        if (worldAtualFrame != lastWorld || mazeAtualFrame != lastMaze) {
+            lastWorld = worldAtualFrame
             lastMaze = mazeAtualFrame
             
             // Re-init partículas ambiente
-            val cfg = AmbientParticleSystem.CONFIGS[biomeAtualFrame]
+            val cfg = AmbientParticleSystem.CONFIGS[worldAtualFrame]
             val bounds = RectF(0f, 0f, screenWidth.toFloat(), screenHeight * fracaoAreaJogo)
             ambientParticles.init(cfg, bounds)
             
             // Re-init DripSystem (fontes de goteira dependem do mapa)
             if (mazeAtualFrame != null) {
-                val pal = BIOME_PALETTES[biomeAtualFrame] ?: BIOME_PALETTES.values.first()
+                val pal = BIOME_PALETTES[worldAtualFrame] ?: BIOME_PALETTES.values.first()
                 dripSystem.init(mazeAtualFrame, pal)
             }
         }
 
         // Atualizar e renderizar goteiras (apenas biomas com hasDrips)
-        val paletteForDrip = BIOME_PALETTES[gameState.currentBiome]
+        val paletteForDrip = BIOME_PALETTES[gameState.currentBiomeWorld]
         if (paletteForDrip?.hasDrips == true) {
             dripSystem.update(deltaMs, tileWDinamico)
             dripSystem.render(canvas, cameraX, cameraY)
@@ -839,7 +838,7 @@ class Renderer(
         spriteCache.recycleAll()
         dripSystem.reset()
         ambientParticles.clear()
-        lastBiome = null
+        lastWorld = null
     }
 
     /**
@@ -880,11 +879,11 @@ class Renderer(
      * Alem do overlay MULTIPLY, adiciona luzes dinamicas via RadialGradient.
      */
     private fun renderAmbientLight(canvas: Canvas, gameState: GameState) {
-        val biome = gameState.currentBiome
-        val ambientColor = when (biome) {
-            Biome.MINA_ABANDONADA -> 0x660A0A0A.toInt()
-            Biome.CAVERNA_DE_LAVA -> 0x44220000.toInt()
-            Biome.ABISMO_PROFUNDO -> 0xAA000005.toInt()
+        val world = gameState.currentBiomeWorld
+        val ambientColor = when (world) {
+            BiomeWorld.ENTRANHAS -> 0x660A0A0A.toInt()
+            BiomeWorld.NUCLEO_DE_FOGO -> 0x44220000.toInt()
+            BiomeWorld.ABISMO_DO_VAZIO -> 0xAA000005.toInt()
             else -> 0x55050510.toInt()
         }
 
@@ -1106,9 +1105,9 @@ class Renderer(
         c: Canvas, sx: Float, sy: Float, tw: Float, th: Float,
         tx: Int, ty: Int, gameState: GameState
     ) {
-        val biome = gameState.currentBiome.name
-        val isCrystal = biome.contains("MINA") || biome.contains("MAGIA")
-        val isMoss = biome.contains("JARDIM") || biome.contains("FLORESTA")
+        val world = gameState.currentBiomeWorld
+        val isCrystal = world.name.contains("MINA") || world.name.contains("MAGIA") || world.name.contains("ENTRANHAS")
+        val isMoss = world.name.contains("JARDIM") || world.name.contains("FLORESTA")
         
         // 1. Proximidade do Herói (Solta partículas de musgo)
         if (isMoss) {

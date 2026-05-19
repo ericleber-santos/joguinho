@@ -1,6 +1,6 @@
 package com.ericleber.joguinho.pcg
 
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.core.ItemState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.MonsterState
@@ -79,8 +79,8 @@ class PCGEngine {
                 val entityRandom = Random(attemptSeed xor 0xDEADBEEF)
                 val placer = EntityPlacer(entityRandom)
 
-                val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
-                val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
+                val currentWorld = BiomeWorld.fromFloor(floorNumber)
+                val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentWorld)
                 val monsterIndices = monsters.map { it.position.iy * maze.width + it.position.ix }.toSet()
                 val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
                 val trapIndices = traps.map { it.position.iy * maze.width + it.position.ix }.toSet()
@@ -176,8 +176,8 @@ class PCGEngine {
 
         val criticalPath = computeCriticalPath(maze)
         val placer = EntityPlacer(Random(seed))
-        val currentBiome = Biome.entries.firstOrNull { floorNumber in it.floorRange } ?: Biome.MINA_ABANDONADA
-        val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentBiome)
+        val currentWorld = BiomeWorld.fromFloor(floorNumber)
+        val monsters = placer.placeMonsters(maze, floorNumber, mapIndex, criticalPath, currentWorld)
         val monsterIndices = monsters.map { it.position.iy * w + it.position.ix }.toSet()
         val traps = placer.placeTraps(maze, floorNumber, criticalPath, monsterIndices)
         val trapIndices = traps.map { it.position.iy * w + it.position.ix }.toSet()

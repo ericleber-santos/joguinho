@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
-import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomePalette
 import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.biome.WallDetailType
@@ -103,11 +102,8 @@ class TileRenderer {
         }
     }
 
-    // Bioma atual para diferenciação visual das paredes
-    private var biomeAtual: Biome = Biome.MINA_ABANDONADA
     private var worldAtual: BiomeWorld = BiomeWorld.ENTRANHAS
     
-    fun setBiome(biome: Biome) { biomeAtual = biome }
     fun setBiomeWorld(world: BiomeWorld) { worldAtual = world }
 
     fun renderWallTile(
@@ -417,7 +413,7 @@ class TileRenderer {
         paint.alpha = 255
 
         // Cipós decorativos (15% em biomas orgânicos)
-        if (!s && (biomeAtual.name.contains("FLORESTA") || biomeAtual.name.contains("JARDIM") || biomeAtual.name.contains("CAVERNA"))) {
+        if (!s && (worldAtual.name.contains("FLORESTA") || worldAtual.name.contains("JARDIM") || worldAtual.name.contains("ENTRANHAS"))) {
             if (tileRandom(tileX, tileY, 777) < 0.15f) {
                 renderVines(canvas, x + tw * 0.3f, y + th * 0.8f, tw * 0.4f, p.accentColor, seed)
             }
@@ -570,7 +566,7 @@ class TileRenderer {
     fun renderDecorativeTile(
         canvas: Canvas, x: Float, y: Float, tileW: Float, tileH: Float,
         palette: BiomePalette, variant: Int,
-        biome: Biome = Biome.MINA_ABANDONADA, tileX: Int = 0, tileY: Int = 0
+        world: BiomeWorld = BiomeWorld.ENTRANHAS, tileX: Int = 0, tileY: Int = 0
     ) {
         renderFloorTile(canvas, x, y, tileW, tileH, palette, tileX, tileY)
         val cx = x + tileW / 2f
@@ -603,7 +599,7 @@ class TileRenderer {
 
     fun createTileBitmap(
         tileType: TileType, tileW: Int, tileH: Int, palette: BiomePalette,
-        tileX: Int = 0, tileY: Int = 0, biome: Biome = Biome.MINA_ABANDONADA
+        tileX: Int = 0, tileY: Int = 0, world: BiomeWorld = BiomeWorld.ENTRANHAS
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(tileW.coerceAtLeast(1), tileH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)

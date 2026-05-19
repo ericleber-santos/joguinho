@@ -4,7 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import kotlin.random.Random
 
 /**
@@ -41,7 +41,7 @@ private class AmbientParticle {
  * Sistema de partículas ambientais por bioma (poeira, esporos, terra caindo, etc.).
  *
  * Restrições:
- *  - Pool pré-alocado de MAX_POOL partículas — zero new() em update/render.
+ *  - Pool pré-alocado de MAX_POOL partículas — zero new() in update/render.
  *  - Caps: MINA=15, FUNGOS=25, CALCARIO=8, TERRA=12, UMIDA=0
  */
 class AmbientParticleSystem {
@@ -51,29 +51,29 @@ class AmbientParticleSystem {
         private const val LIFE_MIN_MS = 2000f
         private const val LIFE_MAX_MS = 5000f
 
-        /** Configurações padrão por bioma (5 biomas prioritários). */
-        val CONFIGS: Map<Biome, AmbientParticleConfig> = mapOf(
-            Biome.MINA_ABANDONADA to AmbientParticleConfig(
+        /** Configurações padrão por mundo. */
+        val CONFIGS: Map<BiomeWorld, AmbientParticleConfig> = mapOf(
+            BiomeWorld.ENTRANHAS to AmbientParticleConfig(
                 maxCount = 40, sizePx = 5f,
                 color = 0xFFD4A96A.toInt(),
                 vyMin = -50f, vyMax = -15f, vxRange = 10f
             ),
-            Biome.CAVERNA_UMIDA to AmbientParticleConfig(
+            BiomeWorld.ABISMOS_AQUATICOS to AmbientParticleConfig(
                 maxCount = 30, sizePx = 4f,
                 color = 0xFF88CCFF.toInt(),
                 vyMin = -30f, vyMax = -10f, vxRange = 7f
             ),
-            Biome.JARDIM_DE_FUNGOS to AmbientParticleConfig(
+            BiomeWorld.JARDIM_PROFUNDO to AmbientParticleConfig(
                 maxCount = 50, sizePx = 6f,
                 color = 0xFF7FFF00.toInt(),
                 vyMin = -60f, vyMax = -20f, vxRange = 15f
             ),
-            Biome.CAVERNA_DE_CALCARIO to AmbientParticleConfig(
+            BiomeWorld.RUINAS_ANCESTRAIS to AmbientParticleConfig(
                 maxCount = 25, sizePx = 4f,
                 color = 0xFFE8E8E8.toInt(),
                 vyMin = -20f, vyMax = 20f, vxRange = 8f
             ),
-            Biome.TUNEIS_DE_TERRA to AmbientParticleConfig(
+            BiomeWorld.FLORESTA_DE_ARVORES to AmbientParticleConfig(
                 maxCount = 35, sizePx = 5f,
                 color = 0xFF8B4513.toInt(),
                 vyMin = 25f, vyMax = 60f, vxRange = 6f

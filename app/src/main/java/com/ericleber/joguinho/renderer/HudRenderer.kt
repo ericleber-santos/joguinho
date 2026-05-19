@@ -514,7 +514,6 @@ class HudRenderer {
 
         if (alpha <= 0) return
 
-        val nomeBioma = nomeBioma(gameState.currentBiome)
         val andar = gameState.floorNumber
         val mapa = gameState.mapIndex + 1
 
@@ -539,11 +538,6 @@ class HudRenderer {
 
         textPaint.textAlign = Paint.Align.LEFT
     }
-
-    /**
-     * Retorna o nome legível do bioma em português.
-     */
-    private fun nomeBioma(biome: com.ericleber.joguinho.biome.Biome): String = biome.displayName
 
     /**
      * Exibe o score atual.

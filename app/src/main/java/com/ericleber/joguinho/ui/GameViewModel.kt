@@ -59,9 +59,9 @@ class GameViewModel : ViewModel() {
      * Permite que a GameActivity registre DripSources no DripSystem do Renderer
      * sem criar acoplamento entre ViewModel e Renderer.
      *
-     * Parâmetros: (mazeData, biome, tileSize)
+     * Parâmetros: (mazeData, world, tileSize)
      */
-    var onMapGenerated: ((com.ericleber.joguinho.core.MazeData, com.ericleber.joguinho.biome.Biome, Float) -> Unit)? = null
+    var onMapGenerated: ((com.ericleber.joguinho.core.MazeData, com.ericleber.joguinho.biome.BiomeWorld, Float) -> Unit)? = null
 
     // --- Estado do jogo exposto à UI via StateFlow (Requisito 21.1) ---
     private val _faseJogo = MutableStateFlow(GamePhase.MENU)
@@ -154,13 +154,9 @@ class GameViewModel : ViewModel() {
         gameState.heroPosition = Position(startX + 0.5f, startY + 0.5f)
         gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1) + 0.5f, startY + 0.5f)
         
-        // Notifica GameActivity para registrar DripSources no Renderer
-        // (tileSize = 0f indica que será calculado pelo Renderer dinamicamente)
-        val currentBiome = com.ericleber.joguinho.biome.Biome.entries
-            .firstOrNull { gameState.floorNumber in it.floorRange }
-            ?: com.ericleber.joguinho.biome.Biome.MINA_ABANDONADA
-        onMapGenerated?.invoke(maze, currentBiome, 0f)
-        audioManager?.transicionarParaBioma(currentBiome)
+        val currentBiomeWorld = gameState.currentBiomeWorld
+        onMapGenerated?.invoke(maze, currentBiomeWorld, 0f)
+        audioManager?.transicionarParaBioma(currentBiomeWorld)
         
         // Garante que a fase volte para PLAYING após a geração
         gameState.phase = GamePhase.PLAYING
@@ -276,7 +272,7 @@ class GameViewModel : ViewModel() {
                     
                     // Inicia o GameLoop após a restauração (Requisito 21.4)
                     gameLoop?.start()
-                    audioManager?.transicionarParaBioma(gameState.currentBiome)
+                    audioManager?.transicionarParaBioma(gameState.currentBiomeWorld)
                     
                     Logger.error(TAG, "Estado restaurado e jogo iniciado do snapshot ${resultado.indiceSnapshot}")
                 }
@@ -308,8 +304,8 @@ class GameViewModel : ViewModel() {
         gameState.items = mapaGerado.items // Itens geralmente são estáticos no chão
         
         // Sincroniza bioma forçado se estivermos em modo DEV no save (extensibilidade)
-        if (gameState.devModeForcedBiome != null) {
-            Logger.error(TAG, "Aviso: Restaurando jogo com Bioma Forçado: ${gameState.devModeForcedBiome}")
+        if (gameState.devModeForcedWorld != null) {
+            Logger.error(TAG, "Aviso: Restaurando jogo com Bioma Forçado: ${gameState.devModeForcedWorld}")
         }
     }
 

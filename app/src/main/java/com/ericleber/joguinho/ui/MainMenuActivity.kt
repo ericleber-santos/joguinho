@@ -13,7 +13,7 @@ import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.persistence.AppDatabase
 import com.ericleber.joguinho.persistence.PersistenceManager
@@ -41,7 +41,7 @@ class MainMenuActivity : AppCompatActivity() {
     // Estado da tela
     private var temSaveExistente = false
     private var recordePessoal = 0
-    private var biomasDesbloqueados: List<Biome> = emptyList()
+    private var biomasDesbloqueados: List<BiomeWorld> = emptyList()
     private lateinit var gerenciadorPersistencia: PersistenceManager
 
     // Controle de tela
@@ -92,7 +92,7 @@ class MainMenuActivity : AppCompatActivity() {
                         // Recorde pessoal = maior floor alcançado nas estatísticas ou no estado atual
                         val maiorFloor = estado.personalBests.keys.maxOrNull() ?: estado.floorNumber
                         val novoRecorde = maiorFloor
-                        val novosBiomas = Biome.entries.filter { it.floorRange.first <= maiorFloor }
+                        val novosBiomas = BiomeWorld.entries.filter { it.firstFloor <= maiorFloor }
                         
                         withContext(Dispatchers.Main) {
                             recordePessoal = novoRecorde
@@ -132,7 +132,7 @@ class MainMenuActivity : AppCompatActivity() {
 
     /** Abre um Modal Nativo para iniciar o jogo em um local específico (Modo DEV). */
     private fun abrirModoDev() {
-        val biomasNomes = Biome.entries.map { it.displayName }.toTypedArray()
+        val biomasNomes = BiomeWorld.entries.map { it.displayName }.toTypedArray()
         
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -161,7 +161,7 @@ class MainMenuActivity : AppCompatActivity() {
             .setPositiveButton("Iniciar Jogo") { _, _ ->
                 val floorStr = floorInput.text.toString()
                 val floor = if (floorStr.isNotEmpty()) floorStr.toInt() else 1
-                val biome = Biome.entries[biomeSpinner.selectedItemPosition]
+                val biome = BiomeWorld.entries[biomeSpinner.selectedItemPosition]
                 
                 val intent = Intent(this, GameActivity::class.java).apply {
                     putExtra("novoJogo", true)
@@ -194,7 +194,7 @@ class MainMenuActivity : AppCompatActivity() {
         // --- Estado do menu ---
         private var temSave = false
         private var recorde = 0
-        private var biomas: List<Biome> = emptyList()
+        private var biomas: List<BiomeWorld> = emptyList()
         private var exibirGaleriaAtiva = false
 
         // --- Animação de partículas da galeria ---
@@ -246,7 +246,7 @@ class MainMenuActivity : AppCompatActivity() {
             invalidate()
         }
 
-        fun atualizarRecordeEBiomas(novoRecorde: Int, novosBiomas: List<Biome>) {
+        fun atualizarRecordeEBiomas(novoRecorde: Int, novosBiomas: List<BiomeWorld>) {
             recorde = novoRecorde
             biomas = novosBiomas
             invalidate()
@@ -702,7 +702,7 @@ class MainMenuActivity : AppCompatActivity() {
          * Desenha uma cena estática animada de um bioma usando as cores da paleta.
          * A animação é feita variando elementos com base em [frameGaleria].
          */
-        private fun desenharCenaBioma(canvas: Canvas, bioma: Biome, cx: Float, cy: Float, raio: Float) {
+        private fun desenharCenaBioma(canvas: Canvas, bioma: BiomeWorld, cx: Float, cy: Float, raio: Float) {
             val paleta = BIOME_PALETTES[bioma] ?: return
 
             // Fundo circular do bioma

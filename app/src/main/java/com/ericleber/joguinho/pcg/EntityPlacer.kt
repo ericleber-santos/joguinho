@@ -1,6 +1,6 @@
 package com.ericleber.joguinho.pcg
 
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.core.ItemState
 import com.ericleber.joguinho.core.ItemType
 import com.ericleber.joguinho.core.MazeData
@@ -67,7 +67,7 @@ class EntityPlacer(private val random: Random) {
         floorNumber: Int,
         mapIndex: Int,
         criticalPath: Set<Int>,
-        biome: Biome
+        biomeWorld: BiomeWorld
     ): List<MonsterState> {
         val count = monsterCount(floorNumber, mapIndex)
         val candidates = getFloorCandidates(maze, criticalPath).toMutableList()
@@ -105,13 +105,13 @@ class EntityPlacer(private val random: Random) {
         
         // Ecologia de Monstros baseada no Bioma (Fase 4)
         val patterns = when {
-            biome.name.contains("VULCANICO") || biome.name.contains("LAVA") || biome.name.contains("FOGO") ->
+            biomeWorld.name.contains("NUCLEO") || biomeWorld.name.contains("LAVA") ->
                 arrayOf(MovementPattern.TANK_SLOW, MovementPattern.TANK_SLOW, MovementPattern.RANDOM, MovementPattern.PATROL_HORIZONTAL)
-            biome.name.contains("FLORESTA") || biome.name.contains("JARDIM") || biome.name.contains("RAIZES") ->
+            biomeWorld.name.contains("FLORESTA") || biomeWorld.name.contains("JARDIM") ->
                 arrayOf(MovementPattern.AMBUSH, MovementPattern.AMBUSH, MovementPattern.CHASE, MovementPattern.ZONING_DEFENDER)
-            biome.name.contains("CRISTAIS") || biome.name.contains("TEMPLO") || biome.name.contains("MISTICO") ->
+            biomeWorld.name.contains("REINO") || biomeWorld.name.contains("RUINAS") ->
                 arrayOf(MovementPattern.ZONING_DEFENDER, MovementPattern.ZONING_DEFENDER, MovementPattern.CHASE, MovementPattern.LINEAR)
-            else -> // MINA e outros
+            else -> // Outros
                 arrayOf(MovementPattern.PATROL_HORIZONTAL, MovementPattern.PATROL_VERTICAL, MovementPattern.RANDOM, MovementPattern.TANK_SLOW)
         }
 

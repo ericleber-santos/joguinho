@@ -21,7 +21,7 @@ import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 
 /**
  * Tipos de efeitos sonoros disponíveis no jogo.
@@ -89,7 +89,7 @@ class AudioManager(context: Context) {
     private var mediaPlayerProximo: MediaPlayer? = null
 
     // --- Bioma atual em reprodução ---
-    private var biomaAtual: Biome? = null
+    private var biomaAtual: BiomeWorld? = null
 
     // --- Controles de volume independentes (0.0–1.0) ---
     private var volumeMusica: Float = 1.0f
@@ -477,7 +477,7 @@ class AudioManager(context: Context) {
      *
      * @param novoBioma Bioma de destino da transição
      */
-    fun transicionarParaBioma(novoBioma: Biome) {
+    fun transicionarParaBioma(novoBioma: BiomeWorld) {
         if (novoBioma == biomaAtual) return
 
         jobFade?.cancel()
@@ -519,7 +519,7 @@ class AudioManager(context: Context) {
      * @param bioma Bioma para o qual criar o player
      * @return MediaPlayer configurado ou null se não houver recurso disponível
      */
-    private fun criarMediaPlayerParaBioma(bioma: Biome): MediaPlayer? {
+    private fun criarMediaPlayerParaBioma(bioma: BiomeWorld): MediaPlayer? {
         // IDs de recurso de música por Bioma — serão preenchidos quando os assets forem adicionados
         val recursoMusica: Int? = obterRecursoMusicaBioma(bioma)
         val ctx = contextoRef.get() ?: return null
@@ -549,14 +549,14 @@ class AudioManager(context: Context) {
      * @param bioma Bioma para buscar o recurso
      * @return ID do recurso de música ou null
      */
-    private fun obterRecursoMusicaBioma(bioma: Biome): Int? {
+    private fun obterRecursoMusicaBioma(bioma: BiomeWorld): Int? {
         val ctx = contextoRef.get() ?: return null
         val nomeRes = when (bioma) {
-            Biome.MINA_ABANDONADA -> "bgm_mina"
-            Biome.RIACHOS_SUBTERRANEOS -> "bgm_riacho"
-            Biome.JARDIM_DE_FUNGOS -> "bgm_plantacao"
-            Biome.CONSTRUCOES_ROCHOSAS -> "bgm_rocha"
-            Biome.ERA_DINOSSAUROS -> "bgm_vulcao"
+            BiomeWorld.ENTRANHAS -> "bgm_mina"
+            BiomeWorld.ABISMOS_AQUATICOS -> "bgm_riacho"
+            BiomeWorld.JARDIM_PROFUNDO -> "bgm_plantacao"
+            BiomeWorld.RUINAS_ANCESTRAIS -> "bgm_rocha"
+            BiomeWorld.NUCLEO_DE_FOGO -> "bgm_vulcao"
             else -> "bgm_default"
         }
         val id = ctx.resources.getIdentifier(nomeRes, "raw", ctx.packageName)
@@ -616,7 +616,7 @@ class AudioManager(context: Context) {
      *
      * @param bioma Bioma atual para determinar o tipo de som ambiente
      */
-    private fun agendarSonsAmbientes(bioma: Biome) {
+    private fun agendarSonsAmbientes(bioma: BiomeWorld) {
         jobAmbiente?.cancel()
         jobAmbiente = escopo.launch {
             while (isActive && emReproducao) {
@@ -639,18 +639,18 @@ class AudioManager(context: Context) {
      * @param bioma Bioma para determinar os parâmetros
      * @return Par (frequenciaHz, duracaoMs)
      */
-    private fun obterParametrosSomAmbiente(bioma: Biome): Pair<Float, Int> {
+    private fun obterParametrosSomAmbiente(bioma: BiomeWorld): Pair<Float, Int> {
         val nome = bioma.name
         return when {
-            nome.contains("MINA") || nome.contains("CAVERNA") || nome.contains("TUNEIS") -> 
+            nome.contains("ENTRANHAS") || nome.contains("MINAS") || nome.contains("RUINAS") -> 
                 Pair(80f, 500)        // Gotejamento grave
-            nome.contains("RIACHO") || nome.contains("LAGO") || nome.contains("AQUATICO") || nome.contains("ABISMO") -> 
+            nome.contains("ABISMOS") -> 
                 Pair(440f, 300)       // Água corrente
-            nome.contains("JARDIM") || nome.contains("FLORESTA") || nome.contains("PLANTACAO") || nome.contains("RAIZES") || nome.contains("POMAR") -> 
+            nome.contains("JARDIM") || nome.contains("FLORESTA") -> 
                 Pair(330f, 400)       // Vento suave
-            nome.contains("CONSTRUCAO") || nome.contains("RUINA") || nome.contains("TEMPLO") || nome.contains("SALOES") || nome.contains("TUMULO") -> 
+            nome.contains("REINO") || nome.contains("BASE") -> 
                 Pair(120f, 600)       // Eco de pedra
-            nome.contains("VULCANICO") || nome.contains("LAVA") || nome.contains("FOGO") || nome.contains("DINOSSAURO") || nome.contains("FORJA") -> 
+            nome.contains("NUCLEO") -> 
                 Pair(60f, 800)        // Rugido distante
             else -> Pair(100f, 500)   // Som padrão
         }

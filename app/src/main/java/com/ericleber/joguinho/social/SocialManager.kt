@@ -10,7 +10,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.net.Uri
 import androidx.core.content.FileProvider
-import com.ericleber.joguinho.biome.Biome
+import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import java.io.File
 import java.io.FileOutputStream
@@ -50,10 +50,10 @@ class SocialManager(context: Context) {
         floorNumber: Int,
         totalTimeMs: Long,
         totalMaps: Int,
-        biome: Biome = Biome.MINA_ABANDONADA
+        world: BiomeWorld = BiomeWorld.ENTRANHAS
     ) {
         val ctx = contextRef.get() ?: return
-        val bitmap = generateShareImage(floorNumber, totalTimeMs, totalMaps, biome)
+        val bitmap = generateShareImage(floorNumber, totalTimeMs, totalMaps, world)
         val uri = saveBitmapToCache(ctx, bitmap)
         openShareChooser(ctx, uri)
     }
@@ -66,11 +66,11 @@ class SocialManager(context: Context) {
         floorNumber: Int,
         totalTimeMs: Long,
         totalMaps: Int,
-        biome: Biome = Biome.MINA_ABANDONADA
+        world: BiomeWorld = BiomeWorld.ENTRANHAS
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(IMAGE_SIZE, IMAGE_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val palette = BIOME_PALETTES[biome]
+        val palette = BIOME_PALETTES[world]
         val bgColor = palette?.backgroundColor ?: 0xFF0D0D0D.toInt()
         val accentColor = palette?.accentColor ?: 0xFFD4A017.toInt()
 

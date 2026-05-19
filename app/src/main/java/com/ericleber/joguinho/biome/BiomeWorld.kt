@@ -157,11 +157,14 @@ enum class BiomeWorld(
         isOpenAir       = true
     );
 
+    val firstFloor: Int
+        get() = ordinal * 2 + 1
+
     companion object {
         /** Retorna o BiomeWorld correspondente ao número de andar. Cada andar tem um bioma único, ciclando entre os disponíveis. */
         fun fromFloor(floorNumber: Int): BiomeWorld {
             val worlds = entries
-            return worlds[(floorNumber - 1) % worlds.size]
+            return worlds[((floorNumber - 1) % 22) / 2]
         }
     }
 }

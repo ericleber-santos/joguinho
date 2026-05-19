@@ -1,6 +1,5 @@
 package com.ericleber.joguinho.core
 
-import com.ericleber.joguinho.biome.Biome
 import com.ericleber.joguinho.biome.BiomeWorld
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.persistence.SaveState
@@ -147,13 +146,13 @@ class GameState {
     var spikeAttackTimerMs: Long = 0L // Timer para o ciclo do pulo de ataque
 
     // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---
-    var devModeForcedBiome: com.ericleber.joguinho.biome.Biome? = null
-
-    val currentBiome: com.ericleber.joguinho.biome.Biome
-        get() = devModeForcedBiome ?: com.ericleber.joguinho.biome.Biome.fromFloor(floorNumber)
+    var devModeForcedWorld: BiomeWorld? = null
 
     val currentBiomeWorld: BiomeWorld
-        get() = BiomeWorld.fromFloor(floorNumber)
+        get() = devModeForcedWorld ?: BiomeWorld.fromFloor(floorNumber)
+
+    val currentPhase: Int
+        get() = ((floorNumber - 1) % 2) + 1
 
     // --- Portal Interdimensional ---
     /** Estado visual atual do portal de saída. */

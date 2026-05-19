@@ -130,8 +130,8 @@ class GameActivity : AppCompatActivity() {
         viewModel.onHeroReachedExit = { runOnUiThread { lancarTelaScore() } }
 
         // Fase 10 — Registrar DripSources no DripSystem após gerar cada mapa
-        viewModel.onMapGenerated = { maze, biome, _ ->
-            val palette = com.ericleber.joguinho.biome.BIOME_PALETTES[biome]
+        viewModel.onMapGenerated = { maze, biomeWorld, _ ->
+            val palette = com.ericleber.joguinho.biome.BIOME_PALETTES[biomeWorld]
             if (palette?.hasDrips == true) {
                 for (ty in 0 until maze.height - 1) {
                     for (tx in 0 until maze.width) {
@@ -177,8 +177,8 @@ class GameActivity : AppCompatActivity() {
                 viewModel.gameState.floorNumber = intent.getIntExtra("devFloor", 1)
                 val biomeName = intent.getStringExtra("devBiome")
                 if (biomeName != null) {
-                    viewModel.gameState.devModeForcedBiome = try { 
-                        com.ericleber.joguinho.biome.Biome.valueOf(biomeName) 
+                    viewModel.gameState.devModeForcedWorld = try { 
+                        com.ericleber.joguinho.biome.BiomeWorld.valueOf(biomeName) 
                     } catch (e: Exception) { null }
                 }
             }
