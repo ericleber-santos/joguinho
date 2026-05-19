@@ -70,6 +70,10 @@ class Renderer(
     /** Mapa do último frame — usado para re-init do DripSystem. */
     private var lastMaze: MazeData? = null
 
+    /** Novo fundo procedural. */
+    private var proceduralBackground: ProceduralBackground? = null
+    private var proceduralBackgroundFloor: Int = -1
+
     var cameraX: Float = 0f
     var cameraY: Float = 0f
     var screenWidth: Int = 0
@@ -270,6 +274,26 @@ class Renderer(
         val maxX = ((screenWidth - cameraX) / tileW).toInt().coerceAtMost(mazeData.width - 1)
         val minY = ((-cameraY) / tileH).toInt().coerceAtLeast(0)
         val maxY = ((screenHeight * fracaoAreaJogo - cameraY) / tileH).toInt().coerceAtMost(mazeData.height - 1)
+
+        // =====================================================================
+        // NOVO BACKGROUND PROCEDURAL
+        // =====================================================================
+        if (proceduralBackground == null || proceduralBackgroundFloor != gameState.floorNumber) {
+            proceduralBackgroundFloor = gameState.floorNumber
+            proceduralBackground = ProceduralBackground(gameState.floorNumber)
+        }
+        
+        if (gameState.currentBiomeWorld.lightingMode == com.ericleber.joguinho.biome.LightingMode.SUBTERRANEAN) {
+            proceduralBackground?.render(
+                canvas,
+                cameraX,
+                cameraY,
+                screenWidth,
+                (screenHeight * fracaoAreaJogo).toInt(),
+                System.currentTimeMillis(),
+                palette.wallColor
+            )
+        }
 
         // Passo 1: Chão (Base Estática)
         for (ty in minY..maxY) {

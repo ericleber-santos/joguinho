@@ -146,7 +146,7 @@ class TileRenderer {
         val w = (mask and 64) != 0
 
         if (worldAtual == BiomeWorld.ENTRANHAS) {
-            renderEntranhasWall(canvas, x, y, tw, th, seed, tileX, tileY, s)
+            renderEntranhasWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
             return
         }
 
@@ -160,48 +160,80 @@ class TileRenderer {
             return
         }
 
+        if (worldAtual == BiomeWorld.NUCLEO_DE_FOGO) {
+            renderNucleoWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
+            return
+        }
+
+        if (worldAtual == BiomeWorld.REINO_DA_MAGIA) {
+            renderReinoMagiaWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
+            return
+        }
+
+        if (worldAtual == BiomeWorld.MINAS_RIQUEZAS) {
+            renderMinasWall(canvas, x, y, tw, th, seed, tileX, tileY, n, s, e, w)
+            return
+        }
+
         // 1. Base sólida (mesma cor entre vizinhos = sem linhas de grid)
         paint.color = corBase
         canvas.drawRect(x, y, x + tw, y + th, paint)
 
-        // 2. Textura de pedra com ruído procedural (3 tons)
-        val numPatches = 12 + (seed % 6)
-        for (i in 0 until numPatches) {
-            val r = tileRandom(tileX, tileY, i * 137 + 200)
-            paint.color = if (r > 0.5f) lightTone else darkTone
+        // 2. Textura de pedra com ruído procedural
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
 
-            val patchW = 3 + (tileRandom(tileX, tileY, i * 137 + 300) * 5).toInt()
-            val patchH = 3 + (tileRandom(tileX, tileY, i * 137 + 400) * 5).toInt()
-            val px = x + tileRandom(tileX, tileY, i * 137 + 500) * (tw - patchW)
-            val py = y + tileRandom(tileX, tileY, i * 137 + 600) * (th - patchH)
-            canvas.drawRect(px, py, px + patchW, py + patchH, paint)
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
+                val factor = -0.20f + tileRng.nextFloat() * 0.40f
+                val vr = (Color.red(corBase) * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (Color.green(corBase) * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (Color.blue(corBase) * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize,
+                    y + r * pixelSize,
+                    (x + (c+1) * pixelSize).coerceAtMost(x + tw),
+                    (y + (r+1) * pixelSize).coerceAtMost(y + th),
+                    paint
+                )
+            }
         }
 
-        // 3. Borda inferior dentada (se exposta)
+        // 3. Borda inferior dentada orgânica (dentro do tile)
         if (!s) {
-            paint.color = borderColor
-            val segments = (tw / 3).toInt().coerceAtLeast(6)
-            val segW = tw / segments
-            path.reset()
-            path.moveTo(x, y + th)
-            path.lineTo(x, y + th + 5f)
-            for (i in 1 until segments) {
-                val lx = x + i * segW
-                val out = tileRandom(tileX, tileY, i * 53 + 77) * 5f - 1f
-                path.lineTo(lx, y + th + out)
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(corBase) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(corBase) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(corBase) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
             }
-            path.lineTo(x + tw, y + th + 5f)
-            path.lineTo(x + tw, y + th)
-            path.close()
-            canvas.drawPath(path, paint)
 
-            // Projeções alternadas de 1-3px
-            val projCount = (tw / 6).toInt().coerceAtLeast(3)
-            for (i in 0 until projCount) {
-                val px2 = x + tileRandom(tileX, tileY, i * 100 + 50) * tw
-                val proj = if (tileRandom(tileX, tileY, i * 100 + 51) > 0.5f) 3f else -2f
-                canvas.drawRect(px2, y + th, px2 + 2f, y + th + proj, paint)
-            }
+            paint.color = Color.rgb(
+                (Color.red(corBase) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(corBase) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(corBase) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
         }
 
         // 4. Borda direita dentada (se exposta)
@@ -268,39 +300,65 @@ class TileRenderer {
         // 8. Detalhes de bioma integrados na textura
         when (p.wallDetailType) {
             WallDetailType.MOSS -> {
-                val mossColor = Color.rgb(45, 106, 45)
-                val mossPatches = 6 + (seed % 4)
-                for (i in 0 until mossPatches) {
-                    if (tileRandom(tileX, tileY, i * 73 + 1000) > 0.5f) continue
-                    val mx = x + tileRandom(tileX, tileY, i * 73 + 1100) * tw
-                    val my = y + th * 0.5f + tileRandom(tileX, tileY, i * 73 + 1200) * th * 0.5f
-                    val mw = 2 + (tileRandom(tileX, tileY, i * 73 + 1300) * 3).toInt()
-                    val mh = 2 + (tileRandom(tileX, tileY, i * 73 + 1400) * 3).toInt()
-                    paint.color = mossColor
-                    paint.alpha = 180
-                    canvas.drawRect(mx, my, mx + mw, my + mh, paint)
-                }
-                paint.alpha = 255
+                val mossColors = intArrayOf(
+                    Color.parseColor("#2d6a2d"),
+                    Color.parseColor("#3d8a3d"),
+                    Color.parseColor("#1e4a1e")
+                )
+                val tileRng2 = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 1000L))
+                val pixelSize = 2f
+                val cols = (tw / pixelSize).toInt()
+                val rows = (th / pixelSize).toInt()
 
-                if (!n && tileRandom(tileX, tileY, 444) > 0.6f) {
-                    val numDrops = 2 + (seed % 3)
-                    for (i in 0 until numDrops) {
-                        val dx = x + tileRandom(tileX, tileY, i * 50 + 2000) * tw
-                        val dropH = 3 + (tileRandom(tileX, tileY, i * 50 + 2100) * 4).toInt()
-                        paint.color = Color.rgb(35, 90, 35)
-                        canvas.drawRect(dx, y, dx + 2f, y + dropH, paint)
+                // Musgo cresce da borda inferior para cima (3-5 linhas)
+                val mossHeight = 3 + tileRng2.nextInt(3)
+                for (r in 0 until mossHeight) {
+                    for (c in 0 until cols) {
+                        val prob = 0.85f - r * 0.18f
+                        if (tileRng2.nextFloat() < prob) {
+                            paint.color = mossColors[tileRng2.nextInt(mossColors.size)]
+                            paint.alpha = 255
+                            val py = rows - 1 - r
+                            if (py >= 0) canvas.drawRect(
+                                x + c * pixelSize, y + py * pixelSize,
+                                (x + (c+1) * pixelSize).coerceAtMost(x + tw),
+                                (y + (py+1) * pixelSize).coerceAtMost(y + th), paint
+                            )
+                        }
                     }
                 }
+
+                // Gotas caindo da borda superior (só se exposto ao norte)
+                if (!n) {
+                    paint.color = Color.parseColor("#2d6a2d")
+                    paint.strokeWidth = 1f
+                    paint.style = Paint.Style.STROKE
+                    val numDrips = 2 + tileRng2.nextInt(4)
+                    for (i in 0 until numDrips) {
+                        val dx = x + 2f + tileRng2.nextFloat() * (tw - 4f)
+                        val dripLen = 3f + tileRng2.nextFloat() * 9f
+                        canvas.drawLine(dx, y, dx, y + dripLen, paint)
+                    }
+                    paint.style = Paint.Style.FILL
+                    paint.strokeWidth = 0f
+                }
+                paint.alpha = 255
             }
             WallDetailType.ICE_DRIP -> {
-                paint.color = Color.WHITE
-                paint.alpha = 60
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 1.5f
-                canvas.drawLine(x + tw * 0.2f, y + th * 0.2f, x + tw * 0.8f, y + th * 0.8f, paint)
+                // 1. Reflexo integrado procedural
+                val tileRngIce = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 2000L))
+                val specCount = 3 + tileRngIce.nextInt(3)
+                for (i in 0 until specCount) {
+                    val sx = x + tileRngIce.nextFloat() * tw
+                    val sy = y + tileRngIce.nextFloat() * th
+                    paint.color = Color.argb(70, 255, 255, 255)
+                    canvas.drawRect(sx, sy, sx + 2f, sy + 2f, paint)
+                    canvas.drawRect(sx + 2f, sy + 2f, sx + 4f, sy + 4f, paint)
+                }
                 paint.style = Paint.Style.FILL
                 paint.alpha = 255
 
+                // 2. Estalactites triangulares
                 if (!n) {
                     val numStalactites = 2 + (seed % 3)
                     for (i in 0 until numStalactites) {
@@ -605,7 +663,7 @@ class TileRenderer {
         p: BiomePalette,
         tileX: Int, tileY: Int
     ) {
-        if (worldAtual == BiomeWorld.ENTRANHAS || worldAtual == BiomeWorld.ABISMOS_AQUATICOS || worldAtual == BiomeWorld.JARDIM_PROFUNDO) return
+        if (worldAtual == BiomeWorld.ENTRANHAS || worldAtual == BiomeWorld.ABISMOS_AQUATICOS || worldAtual == BiomeWorld.JARDIM_PROFUNDO || worldAtual == BiomeWorld.NUCLEO_DE_FOGO || worldAtual == BiomeWorld.REINO_DA_MAGIA || worldAtual == BiomeWorld.MINAS_RIQUEZAS) return
 
         val detailType = p.wallDetailType
         if (detailType == WallDetailType.NONE) return
@@ -668,54 +726,34 @@ class TileRenderer {
                 }
             }
             WallDetailType.MOSS -> {
-                val mossColor = p.accentColor
-                
-                // 1. Manchas circulares com alpha variável
-                val numPatches = 3 + (seed % 3)
-                for (i in 0 until numPatches) {
-                    val cx = x + tw * (0.2f + rng.nextFloat() * 0.6f)
-                    val cy = y + th * (0.2f + rng.nextFloat() * 0.6f)
-                    val radius = tw * (0.1f + rng.nextFloat() * 0.15f)
-                    val alphaVar = 100 + (rng.nextFloat() * 80).toInt()
-                    paint.style = Paint.Style.FILL
-                    paint.color = mossColor
-                    paint.alpha = alphaVar
-                    canvas.drawCircle(cx, cy, radius, paint)
-                }
+                val mossColors = intArrayOf(
+                    Color.parseColor("#2d6a2d"),
+                    Color.parseColor("#3d8a3d"),
+                    Color.parseColor("#1e4a1e")
+                )
+                val tileRng2 = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 1000L))
+                val pixelSize = 2f
+                val cols = (tw / pixelSize).toInt()
+                val rows = (th / pixelSize).toInt()
 
-                // 2. Bordas orgânicas na borda inferior da parede
-                paint.color = mossColor
-                paint.alpha = 230
-                paint.style = Paint.Style.FILL
-                path.reset()
-                path.moveTo(x, y + th)
-                
-                val segments = 4
-                val segW = tw / segments
-                for (i in 0 until segments) {
-                    val startX = x + i * segW
-                    val endX = startX + segW
-                    val ctrlX = startX + segW / 2f
-                    val curveHeight = th * (0.08f + rng.nextFloat() * 0.12f)
-                    val ctrlY = y + th - curveHeight
-                    
-                    path.quadTo(ctrlX, ctrlY, endX, y + th)
+                // Musgo cresce da borda inferior para cima (3-5 linhas)
+                val mossHeight = 3 + tileRng2.nextInt(3)
+                for (r in 0 until mossHeight) {
+                    for (c in 0 until cols) {
+                        val prob = 0.85f - r * 0.18f
+                        if (tileRng2.nextFloat() < prob) {
+                            paint.color = mossColors[tileRng2.nextInt(mossColors.size)]
+                            paint.alpha = 255
+                            val py = rows - 1 - r
+                            if (py >= 0) canvas.drawRect(
+                                x + c * pixelSize, y + py * pixelSize,
+                                (x + (c+1) * pixelSize).coerceAtMost(x + tw),
+                                (y + (py+1) * pixelSize).coerceAtMost(y + th), paint
+                            )
+                        }
+                    }
                 }
-                path.lineTo(x + tw, y + th + 4f)
-                path.lineTo(x, y + th + 4f)
-                path.close()
-                canvas.drawPath(path, paint)
-
-                // 3. Gotículas
-                paint.style = Paint.Style.FILL
-                val numDroplets = 2 + (seed % 3)
-                for (i in 0 until numDroplets) {
-                    val dx = x + tw * rng.nextFloat()
-                    val dy = y + th + (rng.nextFloat() * 8f)
-                    val r = 2f + rng.nextFloat() * 2f
-                    paint.alpha = 150 + (rng.nextFloat() * 100).toInt()
-                    canvas.drawCircle(dx, dy, r, paint)
-                }
+                paint.alpha = 255
             }
             WallDetailType.EMBER -> {
                 val time = System.currentTimeMillis()
@@ -774,12 +812,17 @@ class TileRenderer {
                 }
             }
             WallDetailType.ICE_DRIP -> {
-                // 1. Reflexo diagonal
-                paint.color = Color.WHITE
-                paint.alpha = 80
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 1.5f
-                canvas.drawLine(x + tw * 0.2f, y + th * 0.2f, x + tw * 0.8f, y + th * 0.8f, paint)
+                // 1. Reflexo integrado procedural
+                val tileRngIce = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 2000L))
+                val specCount = 3 + tileRngIce.nextInt(3)
+                for (i in 0 until specCount) {
+                    val sx = x + tileRngIce.nextFloat() * tw
+                    val sy = y + tileRngIce.nextFloat() * th
+                    paint.color = Color.argb(70, 255, 255, 255)
+                    canvas.drawRect(sx, sy, sx + 2f, sy + 2f, paint)
+                    canvas.drawRect(sx + 2f, sy + 2f, sx + 4f, sy + 4f, paint)
+                }
+                paint.alpha = 255
 
                 // 2. Estalactites triangulares
                 paint.style = Paint.Style.FILL
@@ -809,6 +852,7 @@ class TileRenderer {
                     path.close()
                     canvas.drawPath(path, paint)
                 }
+                paint.alpha = 255
             }
             WallDetailType.RUNE_GLOW -> {
                 val time = System.currentTimeMillis()
@@ -880,7 +924,8 @@ class TileRenderer {
 
     private fun renderEntranhasWall(
         canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
-        seed: Int, tileX: Int, tileY: Int, s: Boolean
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
     ) {
         val baseR = 58  // 0x3a
         val baseG = 46  // 0x2e
@@ -904,6 +949,9 @@ class TileRenderer {
 
         for (r in 0 until rows) {
             for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
                 val factor = -0.20f + tileRng.nextFloat() * 0.40f
                 val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
                 val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
@@ -958,25 +1006,36 @@ class TileRenderer {
             canvas.drawCircle(px - radius * 0.3f, py - radius * 0.3f, radius * 0.3f, paint)
         }
 
-        // 4. Borda inferior: dentes de 2-4px de altura, espaçados irregularmente a cada 3-6px
+        // 4. Borda inferior dentada orgânica
         if (!s) {
-            paint.color = Color.rgb(20, 16, 12)
-            paint.style = Paint.Style.FILL
-            
+            val baseColor = Color.rgb(baseR, baseG, baseB)
             var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
             while (curX < x + tw) {
-                val toothW = 3f + tileRng.nextFloat() * 3f
-                val toothH = 2f + tileRng.nextFloat() * 2f
-                
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
                 canvas.drawRect(
-                    curX, 
-                    y + th, 
-                    (curX + toothW).coerceAtMost(x + tw), 
-                    y + th + toothH, 
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
                     paint
                 )
-                curX += toothW
+                curX += toothW + toothRng.nextFloat() * 2f
             }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
         }
 
         // 5. Gotas d'água: 1-2 gotas por tile em 20% dos tiles (circle 2px, azul #4a6a8a)
@@ -1060,6 +1119,9 @@ class TileRenderer {
             if (s && r == rows - 1) continue
 
             for (c in 0 until cols) {
+                if (w && c == 0) continue
+                if (e && c == cols - 1) continue
+                
                 val globalCol = colsGlobalOffset + c
                 val globalRow = rowsGlobalOffset + r
                 
@@ -1157,6 +1219,36 @@ class TileRenderer {
                 curX += baseW + spacing
             }
         }
+        // 5. Borda inferior dentada orgânica
+        if (!s) {
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
+            }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
+        }
 
         // Restaurar estado padrão do paint
         paint.reset()
@@ -1193,6 +1285,9 @@ class TileRenderer {
 
         for (r in 0 until rows) {
             for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
                 val factor = -0.12f + tileRng.nextFloat() * 0.24f
                 val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
                 val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
@@ -1341,6 +1436,590 @@ class TileRenderer {
             // Ponto central brilhante de 1px
             paint.color = sporeColor
             canvas.drawRect(sx - 0.5f, sy - 0.5f, sx + 0.5f, sy + 0.5f, paint)
+        }
+        // 6. Borda inferior dentada orgânica
+        if (!s) {
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
+            }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
+        }
+
+        // Restaurar estado padrão do paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderNucleoWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
+    ) {
+        // Paleta: basalto preto
+        val baseR = 26   // 0x1a
+        val baseG = 18   // 0x12
+        val baseB = 16   // 0x10
+        val baseColor = Color.rgb(baseR, baseG, baseB)
+
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+
+        // 1. Textura base: basalto preto com variação sutil
+        paint.color = baseColor
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
+                val factor = -0.10f + tileRng.nextFloat() * 0.20f
+                val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize,
+                    y + r * pixelSize,
+                    (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                    (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                    paint
+                )
+            }
+        }
+
+        // 2. Rachaduras de lava: linhas de 1px em laranja/vermelho em 60% dos tiles
+        if (tileRng.nextFloat() < 0.60f) {
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+            paint.isAntiAlias = true
+
+            val numCracks = 1 + tileRng.nextInt(3) // 1-3 rachaduras
+            for (i in 0 until numCracks) {
+                // Cor no espectro #ff3300 → #ff8800 (NUNCA vermelho puro)
+                val t = tileRng.nextFloat()
+                val crackR = 255
+                val crackG = (51 + t * 85).toInt().coerceIn(51, 136) // 0x33 → 0x88
+                val crackB = 0
+                paint.color = Color.rgb(crackR, crackG, crackB)
+
+                path.reset()
+                val startX = x + tileRng.nextFloat() * tw
+                val startY = y + tileRng.nextFloat() * th * 0.3f
+                path.moveTo(startX, startY)
+
+                val segments = 2 + tileRng.nextInt(3)
+                var curCX = startX
+                var curCY = startY
+                for (seg in 0 until segments) {
+                    val dx = -8f + tileRng.nextFloat() * 16f
+                    val dy = 4f + tileRng.nextFloat() * 8f
+                    curCX = (curCX + dx).coerceIn(x, x + tw)
+                    curCY = (curCY + dy).coerceIn(y, y + th)
+                    path.lineTo(curCX, curCY)
+                }
+                canvas.drawPath(path, paint)
+            }
+            paint.style = Paint.Style.FILL
+            paint.isAntiAlias = false
+            paint.strokeWidth = 0f
+        }
+
+        // 3. Veio de magma: linha diagonal de 2-3px com RadialGradient de brilho
+        if (tileRng.nextFloat() < 0.40f) {
+            paint.isAntiAlias = true
+            paint.strokeWidth = 2f + tileRng.nextFloat()
+            paint.style = Paint.Style.STROKE
+            paint.color = Color.parseColor("#ff6600")
+
+            val vx1 = x + tileRng.nextFloat() * tw * 0.3f
+            val vy1 = y + tileRng.nextFloat() * th * 0.3f
+            val vx2 = x + tw * 0.7f + tileRng.nextFloat() * tw * 0.3f
+            val vy2 = y + th * 0.7f + tileRng.nextFloat() * th * 0.3f
+
+            canvas.drawLine(vx1, vy1, vx2, vy2, paint)
+
+            // Brilho RadialGradient no centro do veio
+            val cx = (vx1 + vx2) / 2f
+            val cy = (vy1 + vy2) / 2f
+            paint.style = Paint.Style.FILL
+            paint.strokeWidth = 0f
+            val glowGradient = RadialGradient(
+                cx, cy, 8f,
+                Color.argb(60, 255, 102, 0),
+                Color.argb(0, 255, 102, 0),
+                Shader.TileMode.CLAMP
+            )
+            paint.shader = glowGradient
+            canvas.drawCircle(cx, cy, 8f, paint)
+            paint.shader = null
+            paint.isAntiAlias = false
+        }
+
+        // 4. Borda inferior dentada orgânica
+        if (!s) {
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
+            }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
+        }
+
+        // 5. Partículas de brasa animadas: 2-4 circles de 1px em amarelo (#ffcc00)
+        val time = System.currentTimeMillis()
+        val numEmbers = 2 + (seed % 3) // 2-4 partículas
+        paint.color = Color.parseColor("#ffcc00")
+
+        for (i in 0 until numEmbers) {
+            val baseEX = x + 4f + tileRandom(tileX, tileY, i * 311 + 700) * (tw - 8f)
+            // Animação: as partículas sobem lentamente via sin(time)
+            val phase = tileX * 0.7f + tileY * 0.3f + i * 1.5f
+            val animOffset = sin((time / 800.0 + phase).toFloat()) * 3f
+            val baseEY = y + 4f + tileRandom(tileX, tileY, i * 311 + 800) * (th - 8f)
+            val ey = baseEY + animOffset
+
+            if (ey in y..(y + th)) {
+                canvas.drawCircle(baseEX, ey, 1f, paint)
+            }
+        }
+
+        // Restaurar estado padrão do paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderReinoMagiaWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
+    ) {
+        // Paleta base: pedra índigo (#1a1030)
+        val baseR = 26   // 0x1a
+        val baseG = 16   // 0x10
+        val baseB = 48   // 0x30
+        val baseColor = Color.rgb(baseR, baseG, baseB)
+
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+
+        // 1. Textura base: pedra índigo com variação tonal (10-15%)
+        paint.color = baseColor
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
+                val factor = -0.15f + tileRng.nextFloat() * 0.30f
+                val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize,
+                    y + r * pixelSize,
+                    (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                    (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                    paint
+                )
+            }
+        }
+
+        // 2. Veios mágicos: conectam regiões do tile (linhas roxas finas)
+        if (tileRng.nextFloat() < 0.50f) {
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+            paint.color = Color.parseColor("#442288")
+            paint.isAntiAlias = true
+
+            val numVeins = 1 + tileRng.nextInt(3)
+            for (i in 0 until numVeins) {
+                path.reset()
+                val sx = x + tileRng.nextFloat() * tw
+                val sy = y + tileRng.nextFloat() * th
+                path.moveTo(sx, sy)
+
+                val segments = 1 + tileRng.nextInt(2)
+                var cx = sx
+                var cy = sy
+                for (seg in 0 until segments) {
+                    cx += -10f + tileRng.nextFloat() * 20f
+                    cy += -10f + tileRng.nextFloat() * 20f
+                    cx = cx.coerceIn(x, x + tw)
+                    cy = cy.coerceIn(y, y + th)
+                    path.lineTo(cx, cy)
+                }
+                canvas.drawPath(path, paint)
+            }
+            paint.style = Paint.Style.FILL
+            paint.isAntiAlias = false
+            paint.strokeWidth = 0f
+        }
+
+        // 3. Cristais incrustados: em 30% dos tiles
+        if (tileRng.nextFloat() < 0.30f) {
+            val crystalColors = intArrayOf(
+                Color.parseColor("#aa66ff"),
+                Color.parseColor("#cc88ff"),
+                Color.parseColor("#8844cc")
+            )
+            val numCrystals = 1 + tileRng.nextInt(3)
+            paint.isAntiAlias = true
+
+            for (i in 0 until numCrystals) {
+                val cx = x + 6f + tileRng.nextFloat() * (tw - 12f)
+                val cy = y + 6f + tileRng.nextFloat() * (th - 12f)
+                val sizeW = 2f + tileRng.nextFloat() * 3f
+                val sizeH = 4f + tileRng.nextFloat() * 4f
+
+                path.reset()
+                path.moveTo(cx, cy - sizeH) // Topo
+                path.lineTo(cx + sizeW, cy) // Direita
+                path.lineTo(cx, cy + sizeH) // Base
+                path.lineTo(cx - sizeW, cy) // Esquerda
+                path.close()
+
+                paint.color = crystalColors[tileRng.nextInt(crystalColors.size)]
+                canvas.drawPath(path, paint)
+
+                // Ponto especular branco no topo
+                paint.color = Color.argb(200, 255, 255, 255)
+                canvas.drawCircle(cx, cy - sizeH * 0.5f, 1f, paint)
+            }
+            paint.isAntiAlias = false
+        }
+
+        // 4. Runa gravada: em 15% dos tiles
+        if (tileRng.nextFloat() < 0.15f) {
+            val cx = x + tw / 2f + (-4f + tileRng.nextFloat() * 8f)
+            val cy = y + th / 2f + (-4f + tileRng.nextFloat() * 8f)
+            val time = System.currentTimeMillis()
+            val phase = tileX * 0.5f + tileY * 0.8f
+            // Pulsação alpha
+            val pulseAlpha = (180 + sin((time / 600.0 + phase).toFloat()) * 75).toInt().coerceIn(0, 255)
+
+            // Brilho RadialGradient
+            paint.isAntiAlias = true
+            val glowGradient = RadialGradient(
+                cx, cy, 12f,
+                Color.argb((pulseAlpha * 0.8f).toInt().coerceIn(0, 255), 136, 68, 204), // #8844cc
+                Color.argb(0, 136, 68, 204),
+                Shader.TileMode.CLAMP
+            )
+            paint.shader = glowGradient
+            canvas.drawCircle(cx, cy, 12f, paint)
+            paint.shader = null
+
+            // Desenho da runa (linhas 1px)
+            paint.color = Color.argb(pulseAlpha, 200, 150, 255) // Roxo claro
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+
+            val runaVar = tileRng.nextInt(4)
+            val size = 4f
+            when (runaVar) {
+                0 -> { // Símbolo Y
+                    canvas.drawLine(cx - size, cy - size, cx, cy, paint)
+                    canvas.drawLine(cx + size, cy - size, cx, cy, paint)
+                    canvas.drawLine(cx, cy, cx, cy + size, paint)
+                }
+                1 -> { // Símbolo Diamante Aberto
+                    canvas.drawLine(cx, cy - size, cx + size, cy, paint)
+                    canvas.drawLine(cx + size, cy, cx, cy + size, paint)
+                    canvas.drawLine(cx, cy + size, cx - size, cy, paint)
+                }
+                2 -> { // Símbolo Zeta/Raio
+                    canvas.drawLine(cx - size, cy - size, cx + size, cy - size, paint)
+                    canvas.drawLine(cx + size, cy - size, cx - size, cy + size, paint)
+                    canvas.drawLine(cx - size, cy + size, cx + size, cy + size, paint)
+                }
+                3 -> { // Símbolo Teta (círculo com traço)
+                    canvas.drawCircle(cx, cy, size, paint)
+                    canvas.drawLine(cx - size, cy, cx + size, cy, paint)
+                }
+            }
+
+            paint.style = Paint.Style.FILL
+            paint.strokeWidth = 0f
+            paint.isAntiAlias = false
+        }
+
+        // 5. Borda inferior dentada orgânica
+        if (!s) {
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
+            }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
+        }
+
+        // Restaurar estado padrão do paint
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun renderMinasWall(
+        canvas: Canvas, x: Float, y: Float, tw: Float, th: Float,
+        seed: Int, tileX: Int, tileY: Int,
+        n: Boolean, s: Boolean, e: Boolean, w: Boolean
+    ) {
+        // Paleta base: pedra marrom-âmbar (#2a1e0a)
+        val baseR = 42   // 0x2a
+        val baseG = 30   // 0x1e
+        val baseB = 10   // 0x0a
+        val baseColor = Color.rgb(baseR, baseG, baseB)
+
+        val tileRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor seed.toLong()))
+
+        val pixelSize = 2f
+        val cols = (tw / pixelSize).toInt().coerceAtLeast(1)
+        val rows = (th / pixelSize).toInt().coerceAtLeast(1)
+
+        paint.reset()
+        paint.isAntiAlias = false
+        paint.isFilterBitmap = false
+        paint.style = Paint.Style.FILL
+
+        // 1. Textura base: marrom-âmbar com variação tonal (10-15%)
+        paint.color = baseColor
+        canvas.drawRect(x, y, x + tw, y + th, paint)
+
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if ((n && r == 0) || (s && r == rows - 1) || (w && c == 0) || (e && c == cols - 1)) {
+                    continue
+                }
+                val factor = -0.15f + tileRng.nextFloat() * 0.30f
+                val vr = (baseR * (1f + factor)).toInt().coerceIn(0, 255)
+                val vg = (baseG * (1f + factor)).toInt().coerceIn(0, 255)
+                val vb = (baseB * (1f + factor)).toInt().coerceIn(0, 255)
+                paint.color = Color.rgb(vr, vg, vb)
+                canvas.drawRect(
+                    x + c * pixelSize,
+                    y + r * pixelSize,
+                    (x + (c + 1) * pixelSize).coerceAtMost(x + tw),
+                    (y + (r + 1) * pixelSize).coerceAtMost(y + th),
+                    paint
+                )
+            }
+        }
+
+        // 2. Rachaduras de mineração: linhas de 1px em diagonal (#1a0e04)
+        if (tileRng.nextFloat() < 0.60f) {
+            paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
+            paint.color = Color.parseColor("#1a0e04") // Muito escuro
+            paint.isAntiAlias = true
+
+            val numCracks = 1 + tileRng.nextInt(3)
+            for (i in 0 until numCracks) {
+                val sx = x + tileRng.nextFloat() * tw
+                val sy = y + tileRng.nextFloat() * th
+                val len = 5f + tileRng.nextFloat() * 15f
+                val angle = tileRng.nextFloat() * Math.PI.toFloat() * 2f
+
+                val ex = sx + cos(angle) * len
+                val ey = sy + sin(angle) * len
+
+                canvas.drawLine(sx, sy, ex, ey, paint)
+            }
+            paint.style = Paint.Style.FILL
+            paint.isAntiAlias = false
+            paint.strokeWidth = 0f
+        }
+
+        // 3. Veios de ouro: linhas diagonais amarelo-âmbar (#d4a020) em 50% dos tiles
+        if (tileRng.nextFloat() < 0.50f) {
+            paint.strokeWidth = 1f + tileRng.nextFloat() // 1-2px
+            paint.style = Paint.Style.STROKE
+            paint.color = Color.parseColor("#d4a020")
+            paint.isAntiAlias = true
+
+            val numVeins = 1 + tileRng.nextInt(2)
+            for (i in 0 until numVeins) {
+                path.reset()
+                val sx = x + tileRng.nextFloat() * tw
+                val sy = y + tileRng.nextFloat() * th
+                path.moveTo(sx, sy)
+
+                val segments = 2 + tileRng.nextInt(3)
+                var cx = sx
+                var cy = sy
+                for (seg in 0 until segments) {
+                    cx += -8f + tileRng.nextFloat() * 16f
+                    cy += -8f + tileRng.nextFloat() * 16f
+                    cx = cx.coerceIn(x, x + tw)
+                    cy = cy.coerceIn(y, y + th)
+                    path.lineTo(cx, cy)
+                }
+                canvas.drawPath(path, paint)
+            }
+            paint.style = Paint.Style.FILL
+            paint.isAntiAlias = false
+            paint.strokeWidth = 0f
+        }
+
+        // 4. Pepitas de ouro: em 25% dos tiles, ouro brilhante (#ffcc44)
+        if (tileRng.nextFloat() < 0.25f) {
+            val numNuggets = 1 + tileRng.nextInt(3)
+            paint.isAntiAlias = true
+
+            for (i in 0 until numNuggets) {
+                val cx = x + 4f + tileRng.nextFloat() * (tw - 8f)
+                val cy = y + 4f + tileRng.nextFloat() * (th - 8f)
+                val size = 1.5f + tileRng.nextFloat() * 1f // Raio de ~1.5 a 2.5 (3-5px total)
+
+                // Brilho especular (RadialGradient)
+                val glowGradient = RadialGradient(
+                    cx, cy, 6f,
+                    Color.argb(70, 255, 204, 68), // #ffcc44
+                    Color.argb(0, 255, 204, 68),
+                    Shader.TileMode.CLAMP
+                )
+                paint.shader = glowGradient
+                canvas.drawCircle(cx, cy, 6f, paint)
+                paint.shader = null
+
+                // Forma da pepita (losango/círculo distorcido)
+                paint.color = Color.parseColor("#ffcc44")
+                if (tileRng.nextBoolean()) {
+                    canvas.drawCircle(cx, cy, size, paint)
+                } else {
+                    path.reset()
+                    path.moveTo(cx, cy - size)
+                    path.lineTo(cx + size, cy)
+                    path.lineTo(cx, cy + size)
+                    path.lineTo(cx - size, cy)
+                    path.close()
+                    canvas.drawPath(path, paint)
+                }
+
+                // Ponto especular branco no topo
+                paint.color = Color.argb(200, 255, 255, 255)
+                canvas.drawCircle(cx - size * 0.3f, cy - size * 0.3f, 0.5f + tileRng.nextFloat() * 0.5f, paint)
+            }
+            paint.isAntiAlias = false
+        }
+
+        // 5. Borda inferior dentada orgânica
+        if (!s) {
+            var curX = x
+            val toothRng = java.util.Random((tileX * 73856093L xor tileY * 19349663L xor 9999L))
+            while (curX < x + tw) {
+                val toothW = 2f + toothRng.nextFloat() * 4f
+                val toothH = 2f + toothRng.nextFloat() * 4f
+                val toothColor = Color.rgb(
+                    (Color.red(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.green(baseColor) * 0.55f).toInt().coerceIn(0,255),
+                    (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0,255)
+                )
+                paint.color = toothColor
+                canvas.drawRect(
+                    curX,
+                    y + th - toothH,
+                    (curX + toothW).coerceAtMost(x + tw),
+                    y + th,
+                    paint
+                )
+                curX += toothW + toothRng.nextFloat() * 2f
+            }
+
+            paint.color = Color.rgb(
+                (Color.red(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.green(baseColor) * 0.35f).toInt().coerceIn(0,255),
+                (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0,255)
+            )
+            canvas.drawRect(x, y + th - 1f, x + tw, y + th, paint)
         }
 
         // Restaurar estado padrão do paint
