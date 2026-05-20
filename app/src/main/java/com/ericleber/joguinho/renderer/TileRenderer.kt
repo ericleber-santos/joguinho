@@ -2024,4 +2024,167 @@ class TileRenderer {
         paint.isFilterBitmap = false
         paint.style = Paint.Style.FILL
     }
+
+    // =========================================================================
+    // ARMADILHAS PROCEDURAIS DE VALA (Ponto 4)
+    // =========================================================================
+
+    fun renderTrapSpikesTile(
+        canvas: Canvas,
+        x: Float, y: Float,
+        tileW: Float, tileH: Float,
+        tileX: Int, tileY: Int
+    ) {
+        // Base metálica escura na base inferior do tile
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.style = Paint.Style.FILL
+        
+        paint.color = Color.rgb(45, 45, 55)
+        canvas.drawRect(x, y + tileH * 0.75f, x + tileW, y + tileH, paint)
+        
+        // Borda superior da base metálica
+        paint.color = Color.rgb(90, 90, 105)
+        canvas.drawRect(x, y + tileH * 0.72f, x + tileW, y + tileH * 0.75f, paint)
+
+        // 4 estacas triangulares cinza metálico com brilho especular branco
+        val numSpikes = 4
+        val spikeW = tileW / numSpikes
+        for (i in 0 until numSpikes) {
+            val spikeX = x + i * spikeW + spikeW / 2f
+            
+            // Desenha o triângulo da estaca
+            path.reset()
+            path.moveTo(x + i * spikeW, y + tileH * 0.72f)
+            path.lineTo(spikeX, y + tileH * 0.1f)
+            path.lineTo(x + (i + 1) * spikeW, y + tileH * 0.72f)
+            path.close()
+            
+            // Gradiente cinza metálico
+            paint.color = Color.rgb(160 - i * 10, 160 - i * 10, 175 - i * 10)
+            canvas.drawPath(path, paint)
+            
+            // Desenha brilho especular do lado esquerdo da ponta até a base
+            path.reset()
+            path.moveTo(spikeX, y + tileH * 0.1f)
+            path.lineTo(spikeX - spikeW * 0.2f, y + tileH * 0.72f)
+            path.lineTo(spikeX, y + tileH * 0.72f)
+            path.close()
+            paint.color = Color.rgb(230, 230, 245)
+            canvas.drawPath(path, paint)
+        }
+    }
+
+    fun renderTrapLavaTile(
+        canvas: Canvas,
+        x: Float, y: Float,
+        tileW: Float, tileH: Float,
+        tileX: Int, tileY: Int
+    ) {
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.style = Paint.Style.FILL
+
+        val time = System.currentTimeMillis() / 1000f
+        // Pulsação suave via sin
+        val pulse = (sin(time * 2f + tileX) * 0.5f + 0.5f) // 0.0 a 1.0
+        
+        // Gradiente vertical de vermelho escuro para laranja/amarelo brilhante
+        val red = (180 + pulse * 75).toInt().coerceIn(0, 255)
+        val green = (40 + pulse * 60).toInt().coerceIn(0, 255)
+        val blue = 10
+        val colorLava = Color.rgb(red, green, blue)
+        
+        val grad = LinearGradient(
+            x, y, x, y + tileH,
+            Color.rgb(255, 120, 20),
+            colorLava,
+            Shader.TileMode.CLAMP
+        )
+        paint.shader = grad
+        canvas.drawRect(x, y, x + tileW, y + tileH, paint)
+        paint.shader = null
+
+        // Pequenas bolhas amarelas procedurais subindo
+        paint.color = Color.rgb(255, 220, 30)
+        val numBubbles = 3
+        for (i in 0 until numBubbles) {
+            val randomVal = tileRandom(tileX, tileY, i * 7)
+            val bx = x + (randomVal * 0.8f + 0.1f) * tileW
+            val speed = 0.5f + randomVal * 0.5f
+            val by = y + tileH - ((time * speed + randomVal) % 1.0f) * tileH
+            
+            val bubbleSize = 2f + 3f * sin(time * 4f + i)
+            if (bubbleSize > 0.5f) {
+                canvas.drawCircle(bx, by, bubbleSize, paint)
+            }
+        }
+    }
+
+    fun renderTrapPiranhaWaterTile(
+        canvas: Canvas,
+        x: Float, y: Float,
+        tileW: Float, tileH: Float,
+        tileX: Int, tileY: Int
+    ) {
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.style = Paint.Style.FILL
+
+        val time = System.currentTimeMillis() / 1000f
+
+        // Preenchimento com água azul-escura
+        paint.color = Color.rgb(10, 25, 75)
+        canvas.drawRect(x, y + tileH * 0.15f, x + tileW, y + tileH, paint)
+
+        // Ondas no topo simuladas por senóides
+        paint.color = Color.rgb(25, 70, 150)
+        path.reset()
+        path.moveTo(x, y + tileH * 0.15f)
+        for (i in 0..10) {
+            val px = x + (i / 10f) * tileW
+            val py = y + tileH * 0.15f + sin(time * 5f + (tileX * 2) + (i / 10f) * Math.PI.toFloat() * 2) * 3f
+            path.lineTo(px, py)
+        }
+        path.lineTo(x + tileW, y + tileH)
+        path.lineTo(x, y + tileH)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        // Bolhas subindo
+        paint.color = Color.argb(160, 200, 220, 255)
+        val numBubbles = 2
+        for (i in 0 until numBubbles) {
+            val randomVal = tileRandom(tileX, tileY, i * 11)
+            val bx = x + (randomVal * 0.8f + 0.1f) * tileW
+            val speed = 0.4f + randomVal * 0.4f
+            val by = y + tileH - ((time * speed + randomVal) % 1.0f) * tileH
+            canvas.drawCircle(bx, by, 1.5f + randomVal * 1.5f, paint)
+        }
+
+        // Piranha vermelha saltitante
+        val jumpCycle = (time * 1.5f + tileX * 0.7f) % 2.0f // ciclo de 2 segundos
+        if (jumpCycle < 0.8f) { // pula de vez em quando
+            val progress = jumpCycle / 0.8f // 0.0 a 1.0
+            // Arco de pulo (parábola)
+            val px = x + tileW * 0.5f
+            val py = y + tileH * 0.7f - 16f * progress * (1f - progress) - tileH * 0.2f
+            
+            // Corpo da piranha (oval vermelha inclinada)
+            paint.color = Color.rgb(190, 20, 20)
+            canvas.drawOval(RectF(px - 6f, py - 4f, px + 6f, py + 4f), paint)
+            
+            // Rabo (triângulo)
+            path.reset()
+            path.moveTo(px - 5f, py)
+            path.lineTo(px - 9f, py - 3f)
+            path.lineTo(px - 9f, py + 3f)
+            path.close()
+            canvas.drawPath(path, paint)
+
+            // Olho amarelo brilhante
+            paint.color = Color.rgb(255, 230, 0)
+            canvas.drawCircle(px + 3f, py - 1f, 1f, paint)
+        }
+    }
 }

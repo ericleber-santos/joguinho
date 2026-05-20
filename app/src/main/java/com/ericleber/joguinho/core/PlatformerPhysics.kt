@@ -61,8 +61,8 @@ object PlatformerPhysics {
                     return true
                 }
                 
-                // Verifica parede no mapa
-                if (maze.tiles[ty * maze.width + tx] == 1) {
+                // Verifica parede ou armadilha sólida no mapa (Ponto 4)
+                if (maze.tiles[ty * maze.width + tx] != 0) {
                     return true
                 }
 
@@ -130,6 +130,28 @@ object PlatformerPhysics {
             vx -= sinal * atrito * deltaTimeSec * fatorAtrito
             if (Math.signum(vx) != sinal) {
                 vx = 0f
+            }
+        }
+
+        // --- Detecção de Wall Slide & Wall Jump (Ponto 4) ---
+        val heroPos = gameState.heroPosition
+        val encostaEsquerda = !gameState.heroIsGrounded && checkColisaoMapa(heroPos.x - 0.06f, heroPos.y, HERO_LARGURA, HERO_ALTURA, gameState)
+        val encostaDireita = !gameState.heroIsGrounded && checkColisaoMapa(heroPos.x + 0.06f, heroPos.y, HERO_LARGURA, HERO_ALTURA, gameState)
+        val isClimbing = encostaEsquerda || encostaDireita
+        val wallDir = if (encostaEsquerda) -1 else if (encostaDireita) 1 else 0
+
+        if (isClimbing) {
+            // Wall Slide: desliza lentamente ao cair
+            if (vy > 0f) {
+                vy = vy.coerceAtMost(1.2f)
+            }
+            // Wall Jump: pula na diagonal oposta
+            if (gameState.heroJumpBufferTimerMs > 0L) {
+                vy = -FORCA_PULO * 0.92f
+                vx = -wallDir * VEL_MAX_X * 0.9f
+                gameState.heroIsGrounded = false
+                gameState.heroCoyoteTimerMs = 0L
+                gameState.heroJumpBufferTimerMs = 0L
             }
         }
 
@@ -271,7 +293,7 @@ object PlatformerPhysics {
         } else {
             if (vy > 0f) {
                 // Aterrissou
-                val ty = Math.floor((proxY + SPIKE_ALTURA / 2f).toDouble()).toFloat() - SPIKE_LARGURA / 2f - 0.001f
+                val ty = Math.floor((proxY + SPIKE_ALTURA / 2f).toDouble()).toFloat() - SPIKE_ALTURA / 2f - 0.001f
                 // Fallback de segurança para ajuste
                 val finalY = if (!checkColisaoMapa(pos.x, ty, SPIKE_LARGURA, SPIKE_ALTURA, gameState)) ty else proxY.toInt().toFloat() + 0.5f
                 pos = Position(pos.x, finalY)
@@ -279,7 +301,7 @@ object PlatformerPhysics {
                 gameState.spikeIsGrounded = true
             } else if (vy < 0f) {
                 // Teto
-                val ty = Math.floor((proxY - SPIKE_ALTURA / 2f).toDouble()).toFloat() + 1f + SPIKE_LARGURA / 2f + 0.001f
+                val ty = Math.floor((proxY - SPIKE_ALTURA / 2f).toDouble()).toFloat() + 1f + SPIKE_ALTURA / 2f + 0.001f
                 if (!checkColisaoMapa(pos.x, ty, SPIKE_LARGURA, SPIKE_ALTURA, gameState)) {
                     pos = Position(pos.x, ty)
                 }

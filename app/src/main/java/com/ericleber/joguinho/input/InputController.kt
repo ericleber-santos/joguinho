@@ -197,9 +197,8 @@ class InputController(
             inputVx = movementVector.x
         }
 
-        // Pulo ativado pelo Botão A ou atalho ergonômico no joystick (arrastar muito para cima)
-        val joystickJump = movementVector != null && movementVector.y < -0.6f
-        val jumpPressed = isButtonAPressed || joystickJump
+        // Pulo ativado unicamente pelo Botão A verde da direita (Ponto 2 e 3)
+        val jumpPressed = isButtonAPressed
 
         gameState.inputDirecaoX = inputVx
         gameState.inputPuloPressionado = jumpPressed

@@ -335,7 +335,16 @@ class Renderer(
                 if (mazeData.tiles[idx] == 1) continue
                 val sx = tx * tileW + cameraX
                 val sy = ty * tileH + cameraY
+                
+                // Desenha chão básico de pedra por padrão
                 tileRenderer.renderFloorTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
+                
+                // Se for armadilha de vala, desenha o visual dinâmico correspondente (Ponto 4)
+                when (mazeData.tiles[idx]) {
+                    2 -> tileRenderer.renderTrapSpikesTile(canvas, sx, sy, tileW, tileH, tx, ty)
+                    3 -> tileRenderer.renderTrapLavaTile(canvas, sx, sy, tileW, tileH, tx, ty)
+                    4 -> tileRenderer.renderTrapPiranhaWaterTile(canvas, sx, sy, tileW, tileH, tx, ty)
+                }
             }
         }
 

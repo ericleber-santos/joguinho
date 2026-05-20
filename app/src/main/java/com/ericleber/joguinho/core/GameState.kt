@@ -85,6 +85,7 @@ class GameState {
     var heroSlowdownRemainingMs: Long = 0L
     var heroLives: Int = 3
     var heroLastSlowdownTimeMs: Long = 0L
+    var heroInvincibilityTimerMs: Long = 0L // Cooldown de dano em armadilhas de vala
     var mapSlowdownCount: Int = 0 // Contador de lentidões no mapa atual
     var equippedWeapon: WeaponType = WeaponType.WATER_GUN
     

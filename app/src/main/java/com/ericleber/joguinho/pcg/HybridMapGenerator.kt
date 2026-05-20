@@ -18,6 +18,9 @@ class HybridMapGenerator(private val random: Random) {
     companion object {
         const val TILE_FLOOR = 0
         const val TILE_WALL = 1
+        const val TILE_TRAP_SPIKES = 2
+        const val TILE_TRAP_LAVA = 3
+        const val TILE_TRAP_PIRANHA_WATER = 4
     }
 
     fun generate(
@@ -90,12 +93,21 @@ class HybridMapGenerator(private val random: Random) {
                 else -> random.nextInt(3, 5) // Máximo 4 tiles para ser transitável com inércia
             }
 
-            // Limpa o chão nas colunas do abismo
+            // Escolhe aleatoriamente o tipo de armadilha para este abismo
+            val trapType = when (random.nextInt(4)) {
+                0 -> TILE_WALL // não ter nada (apenas chão de pedra normal na base)
+                1 -> TILE_TRAP_SPIKES
+                2 -> TILE_TRAP_LAVA
+                else -> TILE_TRAP_PIRANHA_WATER
+            }
+
+            // Limpa o chão nas colunas do abismo e aplica a armadilha na base
             for (px in nextPitX until nextPitX + pitWidth) {
                 if (px < width - 6) {
-                    for (y in tetoHeight until height) {
+                    for (y in tetoHeight until height - 1) {
                         tiles[y * width + px] = TILE_FLOOR
                     }
+                    tiles[(height - 1) * width + px] = trapType
                     floorY[px] = -1 // Sinaliza abismo profundo
                 }
             }

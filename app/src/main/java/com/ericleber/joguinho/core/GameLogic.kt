@@ -116,6 +116,11 @@ class GameLogic(private val gameState: GameState) {
 
         val deltaMs = (deltaTimeSec * 1000).toLong()
 
+        // Atualiza timer de invencibilidade contra armadilhas (Ponto 4)
+        if (gameState.heroInvincibilityTimerMs > 0L) {
+            gameState.heroInvincibilityTimerMs = (gameState.heroInvincibilityTimerMs - deltaMs).coerceAtLeast(0L)
+        }
+
         // Atualiza timers de Slowdown
         if (gameState.heroIsSlowedDown) {
             gameState.heroSlowdownRemainingMs -= deltaMs
@@ -183,6 +188,9 @@ class GameLogic(private val gameState: GameState) {
         if (foiGrounded && !gameState.heroIsGrounded && gameState.heroVelocityY < 0f) {
             onSoundEffectRequested?.invoke(TipoEfeito.PASSO_PEDRA)
         }
+
+        // Verifica colisão com armadilhas procedurais de vala (Ponto 4)
+        verificarColisaoArmadilhas(maze)
 
         atualizarBossFight(deltaMs, maze)
         atualizarMovimentoMonsters(deltaTimeSec, maze)
@@ -668,8 +676,68 @@ class GameLogic(private val gameState: GameState) {
     }
 
     // -------------------------------------------------------------------------
-    // Ativação de Traps (Requisito 5.2)
+    // Ativação de Traps e Armadilhas de Vala (Ponto 4)
     // -------------------------------------------------------------------------
+    private fun verificarColisaoArmadilhas(maze: MazeData) {
+        if (gameState.heroInvincibilityTimerMs > 0L || gameState.isRespawning || gameState.isExiting) return
+
+        val x = gameState.heroPosition.x
+        val y = gameState.heroPosition.y
+        val largura = PlatformerPhysics.HERO_LARGURA
+        val altura = PlatformerPhysics.HERO_ALTURA
+
+        // Limites da caixa AABB do herói
+        val xMin = x - largura / 2f
+        val xMax = x + largura / 2f
+        val yMin = y - altura / 2f
+        val yMax = y + altura / 2f
+
+        val tileLeft = Math.floor(xMin.toDouble()).toInt()
+        val tileRight = Math.floor(xMax.toDouble()).toInt()
+        val tileTop = Math.floor(yMin.toDouble()).toInt()
+        val tileBottom = Math.floor(yMax.toDouble()).toInt()
+
+        var colidiuComArmadilha = false
+        for (ty in tileTop..tileBottom) {
+            for (tx in tileLeft..tileRight) {
+                if (tx >= 0 && ty >= 0 && tx < maze.width && ty < maze.height) {
+                    val tile = maze.tiles[ty * maze.width + tx]
+                    // 2: Estacas, 3: Lava, 4: Água com Piranha
+                    if (tile == 2 || tile == 3 || tile == 4) {
+                        colidiuComArmadilha = true
+                        break
+                    }
+                }
+            }
+            if (colidiuComArmadilha) break
+        }
+
+        if (colidiuComArmadilha) {
+            // Lógica de Dano
+            if (gameState.heroLives > 0) {
+                gameState.heroLives--
+                onSoundEffectRequested?.invoke(TipoEfeito.LENTIDAO_INICIO)
+            }
+
+            if (gameState.heroLives <= 0) {
+                gameState.heroLives = 0
+                onSoundEffectRequested?.invoke(TipoEfeito.HERO_DEATH)
+                gameState.isRespawning = true
+                gameState.respawnTimerMs = 0L
+            } else {
+                // Aplica 1s de invencibilidade
+                gameState.heroInvincibilityTimerMs = 1000L
+                // Aplica slowdown de 2s
+                gameState.heroIsSlowedDown = true
+                gameState.heroSlowdownRemainingMs = 2000L
+            }
+
+            gameState.currentMapClean = false
+            gameState.mapSlowdownCount++
+            gameState.emitEvent(GameEvent.HeroReceivedSlowdown)
+            gameState.resetComboStreak()
+        }
+    }
 
 
     // -------------------------------------------------------------------------
@@ -987,8 +1055,8 @@ class GameLogic(private val gameState: GameState) {
         gameState.heroIsSlowedDown = false
         gameState.heroSlowdownRemainingMs = 0
 
-        // Penalidade: Herói ganha 1 vida para poder continuar tentando
-        gameState.heroLives = 1
+        // Penalidade: Herói ganha 3 vidas para poder continuar tentando
+        gameState.heroLives = 3
     }
 
     private fun atualizarVfx(deltaMs: Long) {
