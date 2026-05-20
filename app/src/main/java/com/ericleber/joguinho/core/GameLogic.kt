@@ -181,6 +181,7 @@ class GameLogic(private val gameState: GameState) {
             deltaTimeSec = deltaTimeSec,
             gameState = gameState,
             direcaoX = gameState.inputDirecaoX,
+            direcaoY = gameState.inputDirecaoY,
             puloPressionado = gameState.inputPuloPressionado
         )
 
@@ -690,7 +691,7 @@ class GameLogic(private val gameState: GameState) {
         val xMin = x - largura / 2f
         val xMax = x + largura / 2f
         val yMin = y - altura / 2f
-        val yMax = y + altura / 2f
+        val yMax = y + altura / 2f + 0.1f // Estende 0.1f para cruzar o bloco que sustenta os pés do Hero
 
         val tileLeft = Math.floor(xMin.toDouble()).toInt()
         val tileRight = Math.floor(xMax.toDouble()).toInt()

@@ -193,14 +193,17 @@ class InputController(
 
         // 1. Extrair Entrada Horizontal e de Salto para a Física do Platformer (T-021)
         var inputVx = 0f
+        var inputVy = 0f
         if (movementVector != null) {
             inputVx = movementVector.x
+            inputVy = movementVector.y
         }
 
         // Pulo ativado unicamente pelo Botão A verde da direita (Ponto 2 e 3)
         val jumpPressed = isButtonAPressed
 
         gameState.inputDirecaoX = inputVx
+        gameState.inputDirecaoY = inputVy
         gameState.inputPuloPressionado = jumpPressed
         gameState.isShooting = isButtonBPressed
 

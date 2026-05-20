@@ -78,6 +78,7 @@ class GameState {
 
     // --- Input de Controle do Frame (T-021) ---
     var inputDirecaoX: Float = 0f
+    var inputDirecaoY: Float = 0f
     var inputPuloPressionado: Boolean = false
 
     // --- Estado do Hero ---

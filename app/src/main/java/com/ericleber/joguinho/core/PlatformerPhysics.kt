@@ -83,7 +83,7 @@ object PlatformerPhysics {
     /**
      * Atualiza a simulação física do Hero usando integração de Euler e resolução AABB em dois passos.
      */
-    fun atualizarHero(deltaTimeSec: Float, gameState: GameState, direcaoX: Float, puloPressionado: Boolean) {
+    fun atualizarHero(deltaTimeSec: Float, gameState: GameState, direcaoX: Float, direcaoY: Float, puloPressionado: Boolean) {
         val maze = gameState.mazeData ?: return
         val deltaMs = (deltaTimeSec * 1000).toLong()
 
@@ -141,9 +141,18 @@ object PlatformerPhysics {
         val wallDir = if (encostaEsquerda) -1 else if (encostaDireita) 1 else 0
 
         if (isClimbing) {
-            // Wall Slide: desliza lentamente ao cair
-            if (vy > 0f) {
-                vy = vy.coerceAtMost(1.2f)
+            // Wall Climb: sobe a parede se segurar pra cima
+            if (direcaoY < -0.3f) {
+                vy = -4.5f
+                gameState.heroIsGrounded = false
+            } else if (direcaoY > 0.3f) {
+                // Desce rápido
+                if (vy > 0f) vy = vy.coerceAtMost(VELOCIDADE_TERMINAL)
+            } else {
+                // Wall Slide: desliza lentamente ao cair
+                if (vy > 0f) {
+                    vy = vy.coerceAtMost(1.2f)
+                }
             }
             // Wall Jump: pula na diagonal oposta
             if (gameState.heroJumpBufferTimerMs > 0L) {
