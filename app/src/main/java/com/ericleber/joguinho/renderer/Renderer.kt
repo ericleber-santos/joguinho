@@ -76,6 +76,7 @@ class Renderer(
 
     var cameraX: Float = 0f
     var cameraY: Float = 0f
+    private var cameraResetPending = true
     var screenWidth: Int = 0
     var screenHeight: Int = 0
     var density: Float = 1f
@@ -146,10 +147,10 @@ class Renderer(
     private var heroWorldX: Float = 0f
     private var heroWorldY: Float = 0f
 
-    fun recalcularTile(mapWidth: Int, mapHeight: Int) {
+    fun recalcularTile(mapWidth: Int, mapHeight: Int, gameState: GameState) {
         if (screenWidth <= 0 || screenHeight <= 0) return
         
-        // Ajusta o tamaço mínimo baseado na densidade da tela
+        // Ajusta o tamanho mínimo baseado na densidade da tela
         tileSizeMinimo = 40f * density 
         
         val alturaA = screenHeight * fracaoAreaJogo
@@ -176,13 +177,32 @@ class Renderer(
         val larguraMapa = mapWidth * tileSize
         val alturaMapa  = mapHeight * tileSize
 
-        // Câmera segue o herói com interpolação suave (opcional, aqui mantemos direto)
         val heroSx = heroWorldX * tileSize
         val heroSy = heroWorldY * tileSize
         
-        // Centraliza o herói na tela, mas respeita os limites do mapa
-        cameraX = (screenWidth / 2f - heroSx).coerceIn(screenWidth - larguraMapa, 0f)
-        cameraY = (alturaA / 2f - heroSy).coerceIn(alturaA - alturaMapa, 0f)
+        // Look-ahead horizontal: 3.5 tiles na direção da velocidade física do herói
+        val targetOffset = if (Math.abs(gameState.heroVelocityX) > 0.1f) {
+            Math.signum(gameState.heroVelocityX) * 3.5f * tileSize
+        } else {
+            0f
+        }
+
+        val targetHeroSx = heroSx + targetOffset
+
+        // Calcula a posição ideal (alvo) da câmera, prendendo nos limites físicos reais do mapa em pixels
+        val targetCameraX = (screenWidth / 2f - targetHeroSx).coerceIn(screenWidth - larguraMapa, 0f)
+        val targetCameraY = (alturaA / 2f - heroSy).coerceIn(alturaA - alturaMapa, 0f)
+
+        // Se for o primeiro frame ou troca de mapa, teleporta a câmera instantaneamente
+        if (cameraResetPending) {
+            cameraX = targetCameraX
+            cameraY = targetCameraY
+            cameraResetPending = false
+        } else {
+            // Caso contrário, interpola suavemente com Lerp cinematográfico (0.08f)
+            cameraX += (targetCameraX - cameraX) * 0.08f
+            cameraY += (targetCameraY - cameraY) * 0.08f
+        }
         
         // Se o mapa for menor que a tela, centraliza o mapa
         if (larguraMapa < screenWidth) {
@@ -220,7 +240,12 @@ class Renderer(
 
         // Recalcula tile e câmera
         val mazeAtual = gameState.mazeData
-        if (mazeAtual != null) recalcularTile(mazeAtual.width, mazeAtual.height)
+        if (mazeAtual != null) {
+            if (mazeAtual != lastMaze) {
+                cameraResetPending = true
+            }
+            recalcularTile(mazeAtual.width, mazeAtual.height, gameState)
+        }
 
         val tileW = tileWDinamico
         val tileH = tileHDinamico
@@ -839,6 +864,7 @@ class Renderer(
         dripSystem.reset()
         ambientParticles.clear()
         lastWorld = null
+        cameraResetPending = true
     }
 
     /**

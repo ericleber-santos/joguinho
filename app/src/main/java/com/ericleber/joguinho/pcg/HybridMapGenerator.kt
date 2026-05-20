@@ -5,11 +5,13 @@ import com.ericleber.joguinho.core.MazeData
 import kotlin.random.Random
 
 /**
- * Gerador Híbrido de Mapas (Perlin Noise + Pseudo-WFC).
+ * Gerador de Terrenos Horizontal Side-Scrolling Procedural.
  * 
- * Passo 1: Usa Perlin Noise (fBm) para gerar a topologia base (cavernas orgânicas).
- * Passo 2: Insere "ruínas" lógicas (padrões WFC-like) em áreas abertas.
- * Passo 3: Limpeza celular para remover paredes isoladas.
+ * Substitui o antigo layout top-down por fatias horizontais lineares contínuas
+ * (esquerda para direita), projetando plataformas sólidas de apoio, abismos transitáveis,
+ * tetos protetores e conectividade início-fim 100% garantida por construção.
+ *
+ * Requisito: T-022
  */
 class HybridMapGenerator(private val random: Random) {
 
@@ -25,42 +27,139 @@ class HybridMapGenerator(private val random: Random) {
         seed: Long,
         wallDensityTarget: Float = 0.5f
     ): MazeData {
-        val tiles = IntArray(width * height) { TILE_WALL }
-        val perlin = PerlinNoise(seed)
+        // Inicializa o mapa como espaço vazio (ar)
+        val tiles = IntArray(width * height) { TILE_FLOOR }
 
-        // Passo 1: Geração Base com Perlin Noise (fBm)
-        // O noise scale determina a "frequência" das cavernas.
-        // Reduzido de 0.08 para 0.05 para criar passagens no mínimo 3x maiores.
-        val noiseScale = 0.05
-        // Threshold reduzido para expandir as áreas de chão.
-        val threshold = -0.1 + (wallDensityTarget - 0.5) * 0.2 
-        
-        for (y in 1 until height - 1) {
-            for (x in 1 until width - 1) {
-                // fBm com 3 octaves para suavidade
-                val noiseVal = perlin.fbm(x * noiseScale, y * noiseScale, octaves = 3)
-                if (noiseVal > threshold) {
-                    tiles[y * width + x] = TILE_FLOOR
-                } else {
-                    tiles[y * width + x] = TILE_WALL
+        // 1. Criar Tetos Sólidos na parte superior (linhas Y de 0 a 2)
+        val tetoHeight = 3
+        for (y in 0 until tetoHeight) {
+            for (x in 0 until width) {
+                tiles[y * width + x] = TILE_WALL
+            }
+        }
+
+        // 2. Criar Piso Sólido Base e Relevo Dinâmico
+        // A baseline representa a linha Y a partir da qual tudo para baixo (até Y = height - 1) é sólido.
+        val baseFloorY = height - 5
+        val minFloorY = height - 12
+        val maxFloorY = height - 3
+
+        val floorY = IntArray(width) { baseFloorY }
+        var currentY = baseFloorY
+
+        // Variação suave da linha de chão coluna por coluna
+        for (x in 0 until width) {
+            if (x < 5) {
+                // Plataforma estável no início para spawn seguro
+                floorY[x] = baseFloorY
+            } else if (x >= width - 5) {
+                // Plataforma estável no fim para saída segura
+                floorY[x] = baseFloorY
+            } else {
+                // A cada 4 colunas, decide se altera suavemente a altura da plataforma
+                if (x % 4 == 0) {
+                    val change = random.nextInt(-2, 3) // Variação máxima de 2 blocos para ser escalável
+                    currentY = (currentY + change).coerceIn(minFloorY, maxFloorY)
+                }
+                floorY[x] = currentY
+            }
+        }
+
+        // Preenche com blocos de parede sólidos do floorY correspondente até a base inferior (height - 1)
+        for (x in 0 until width) {
+            val startY = floorY[x]
+            for (y in startY until height) {
+                tiles[y * width + x] = TILE_WALL
+            }
+        }
+
+        // 3. Fechar laterais extremas por segurança
+        for (y in 0 until height) {
+            tiles[y * width + 0] = TILE_WALL
+            tiles[y * width + (width - 1)] = TILE_WALL
+        }
+
+        // 4. Esculpir Abismos (Pits) na base do terreno
+        // Abismos são vãos na baseline do chão.
+        // Espaçamento mínimo e largura controlados por floorNumber.
+        var nextPitX = 9 + random.nextInt(4)
+        while (nextPitX < width - 9) {
+            val pitWidth = when {
+                floorNumber < 15 -> 2
+                floorNumber < 40 -> random.nextInt(2, 4)
+                else -> random.nextInt(3, 5) // Máximo 4 tiles para ser transitável com inércia
+            }
+
+            // Limpa o chão nas colunas do abismo
+            for (px in nextPitX until nextPitX + pitWidth) {
+                if (px < width - 6) {
+                    for (y in tetoHeight until height) {
+                        tiles[y * width + px] = TILE_FLOOR
+                    }
+                    floorY[px] = -1 // Sinaliza abismo profundo
+                }
+            }
+
+            // Avança para o próximo abismo
+            nextPitX += pitWidth + 9 + random.nextInt(6)
+        }
+
+        // 5. Inserir Plataformas Suspensas (Floating Platforms)
+        // Adiciona plataformas no ar sobre abismos ou relevos baixos.
+        var platX = 6
+        while (platX < width - 7) {
+            val platLen = random.nextInt(3, 7)
+            
+            // Calcula a altura média do chão correspondente abaixo
+            var avgBaseY = 0
+            var validBaseCount = 0
+            for (px in platX until (platX + platLen).coerceAtMost(width - 6)) {
+                if (floorY[px] != -1) {
+                    avgBaseY += floorY[px]
+                    validBaseCount++
+                }
+            }
+            val refY = if (validBaseCount > 0) avgBaseY / validBaseCount else baseFloorY
+            
+            // Altura da plataforma: 4 a 5 blocos acima do chão, distante o suficiente do teto
+            val platY = (refY - random.nextInt(4, 6)).coerceIn(tetoHeight + 3, height - 4)
+
+            // Escreve a plataforma
+            for (px in platX until (platX + platLen).coerceAtMost(width - 6)) {
+                tiles[platY * width + px] = TILE_WALL
+            }
+
+            platX += platLen + random.nextInt(5, 9)
+        }
+
+        // 6. Inserir pequenos pilares verticais (obstáculos/degraus)
+        for (x in 7 until width - 7 step 8) {
+            if (floorY[x] != -1 && random.nextFloat() < 0.3f) {
+                val pY = floorY[x]
+                val pHeight = random.nextInt(1, 3)
+                for (dy in 1..pHeight) {
+                    tiles[(pY - dy) * width + x] = TILE_WALL
                 }
             }
         }
 
-        // Passo 2: Limpeza Celular (Remove paredes ou chãos isolados de 1 bloco)
-        cleanUpCellular(tiles, width, height)
+        // 7. DefinirstartIndex e exitIndex de forma 100% estável e segura
+        val startX = 3
+        val startY = floorY[startX] - 1
+        val startIndex = startY * width + startX
 
-        // Passo 3: Pseudo-WFC (Inserir Ruínas)
-        insertRuins(tiles, width, height, seed)
+        val exitX = width - 4
+        val exitY = floorY[exitX] - 1
+        val exitIndex = exitY * width + exitX
 
-        // Definir Ponto de Início e Saída baseados em distâncias
-        val (startIndex, exitIndex, exitDir) = findStartAndExit(tiles, width, height)
+        // Assegurar ar livre no início e na saída para o player spawnar livremente
+        for (dy in 0..2) {
+            tiles[startIndex - dy * width] = TILE_FLOOR
+            tiles[exitIndex - dy * width] = TILE_FLOOR
+        }
 
-        // Passo 4: Limpeza final (Flood Fill para bolsões isolados)
+        // Limpeza final de bolsões inacessíveis a partir do startIndex
         removeIsolatedPockets(tiles, width, height, startIndex)
-        // REMOVIDO: fillDeadEnds estreita demais as passagens ao fechar cantos.
-        // fillDeadEnds(tiles, width, height, startIndex, exitIndex)
-
 
         return MazeData(
             width = width,
@@ -70,140 +169,8 @@ class HybridMapGenerator(private val random: Random) {
             exitIndex = exitIndex,
             floorNumber = floorNumber,
             seed = seed,
-            exitWallDirection = exitDir
+            exitWallDirection = Direction.EAST // Direção do portal apontada para a direita (Leste)
         )
-    }
-
-    private fun cleanUpCellular(tiles: IntArray, width: Int, height: Int) {
-        val newTiles = tiles.clone()
-        for (y in 1 until height - 1) {
-            for (x in 1 until width - 1) {
-                var wallNeighbors = 0
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        if (dx == 0 && dy == 0) continue
-                        if (tiles[(y + dy) * width + (x + dx)] == TILE_WALL) {
-                            wallNeighbors++
-                        }
-                    }
-                }
-                
-                // Se for chão e quase cercado, vira parede
-                if (tiles[y * width + x] == TILE_FLOOR && wallNeighbors >= 6) {
-                    newTiles[y * width + x] = TILE_WALL
-                }
-                // Se for parede solitária, vira chão
-                else if (tiles[y * width + x] == TILE_WALL && wallNeighbors <= 1) {
-                    newTiles[y * width + x] = TILE_FLOOR
-                }
-            }
-        }
-        System.arraycopy(newTiles, 0, tiles, 0, tiles.size)
-    }
-
-    private fun insertRuins(tiles: IntArray, width: Int, height: Int, seed: Long) {
-        val numRuins = 2 + random.nextInt(3)
-        for (i in 0 until numRuins) {
-            // Tenta encontrar um local adequado (clareira)
-            for (attempts in 0..10) {
-                val rw = 5 + random.nextInt(4)
-                val rh = 5 + random.nextInt(4)
-                val rx = random.nextInt(2, width - rw - 2)
-                val ry = random.nextInt(2, height - rh - 2)
-
-                // Verifica se a área é majoritariamente chão
-                var floorCount = 0
-                for (y in ry until ry + rh) {
-                    for (x in rx until rx + rw) {
-                        if (tiles[y * width + x] == TILE_FLOOR) floorCount++
-                    }
-                }
-
-                if (floorCount > (rw * rh) * 0.7) {
-                    // Padrão Ruína: Paredes nas bordas com buracos
-                    for (y in ry until ry + rh) {
-                        for (x in rx until rx + rw) {
-                            val isBorder = (x == rx || x == rx + rw - 1 || y == ry || y == ry + rh - 1)
-                            if (isBorder) {
-                                // 70% de chance de parede na borda
-                                if (random.nextDouble() > 0.3) {
-                                    tiles[y * width + x] = TILE_WALL
-                                }
-                            } else {
-                                // Limpa o interior
-                                tiles[y * width + x] = TILE_FLOOR
-                            }
-                        }
-                    }
-                    // Adiciona um pilar central ocasional
-                    if (random.nextBoolean()) {
-                        tiles[(ry + rh / 2) * width + (rx + rw / 2)] = TILE_WALL
-                    }
-                    break // Sucesso, vai para a próxima ruína
-                }
-            }
-        }
-    }
-
-    private fun findStartAndExit(tiles: IntArray, width: Int, height: Int): Triple<Int, Int, Direction> {
-        val floorIndices = mutableListOf<Int>()
-        for (i in tiles.indices) {
-            if (tiles[i] == TILE_FLOOR) floorIndices.add(i)
-        }
-
-        if (floorIndices.isEmpty()) {
-            // Fallback extremo
-            tiles[width + 1] = TILE_FLOOR
-            tiles[tiles.size - width - 2] = TILE_FLOOR
-            return Triple(width + 1, tiles.size - width - 2, Direction.NORTH)
-        }
-
-        // Ponto de início aleatório
-        val startIndex = floorIndices[random.nextInt(floorIndices.size)]
-        val startX = startIndex % width
-        val startY = startIndex / width
-
-        // Encontra o ponto mais distante alcançável (na prática, apenas o mais distante linearmente já que o PathValidator checará conectividade depois)
-        var maxDist = -1
-        var exitIndex = startIndex
-
-        for (idx in floorIndices) {
-            val tx = idx % width
-            val ty = idx / width
-            val dist = Math.abs(tx - startX) + Math.abs(ty - startY)
-            if (dist > maxDist) {
-                // Checa se tem alguma parede vizinha para ser uma saída válida
-                var hasWallNeighbor = false
-                for (dir in listOf(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST)) {
-                    val nx = when(dir) { Direction.WEST -> tx - 1; Direction.EAST -> tx + 1; else -> tx }
-                    val ny = when(dir) { Direction.NORTH -> ty - 1; Direction.SOUTH -> ty + 1; else -> ty }
-                    if (nx in 0 until width && ny in 0 until height && tiles[ny * width + nx] == TILE_WALL) {
-                        hasWallNeighbor = true
-                        break
-                    }
-                }
-                if (hasWallNeighbor) {
-                    maxDist = dist
-                    exitIndex = idx
-                }
-            }
-        }
-        
-        // Define a direção da parede de saída
-        val ex = exitIndex % width
-        val ey = exitIndex / width
-        var exitDir = Direction.NORTH
-        val dirs = listOf(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST).shuffled(random)
-        for (dir in dirs) {
-            val nx = when(dir) { Direction.WEST -> ex - 1; Direction.EAST -> ex + 1; else -> ex }
-            val ny = when(dir) { Direction.NORTH -> ey - 1; Direction.SOUTH -> ey + 1; else -> ey }
-            if (nx in 0 until width && ny in 0 until height && tiles[ny * width + nx] == TILE_WALL) {
-                exitDir = dir
-                break
-            }
-        }
-
-        return Triple(startIndex, exitIndex, exitDir)
     }
 
     private fun removeIsolatedPockets(tiles: IntArray, width: Int, height: Int, startIndex: Int) {
@@ -238,30 +205,6 @@ class HybridMapGenerator(private val random: Random) {
         for (i in tiles.indices) {
             if (tiles[i] == TILE_FLOOR && !reachable[i]) {
                 tiles[i] = TILE_WALL
-            }
-        }
-    }
-
-    private fun fillDeadEnds(tiles: IntArray, width: Int, height: Int, startIndex: Int, exitIndex: Int) {
-        var changed = true
-        while (changed) {
-            changed = false
-            for (y in 1 until height - 1) {
-                for (x in 1 until width - 1) {
-                    val idx = y * width + x
-                    if (tiles[idx] == TILE_FLOOR && idx != startIndex && idx != exitIndex) {
-                        var wallCount = 0
-                        if (tiles[(y - 1) * width + x] == TILE_WALL) wallCount++
-                        if (tiles[(y + 1) * width + x] == TILE_WALL) wallCount++
-                        if (tiles[y * width + (x - 1)] == TILE_WALL) wallCount++
-                        if (tiles[y * width + (x + 1)] == TILE_WALL) wallCount++
-
-                        if (wallCount >= 3) {
-                            tiles[idx] = TILE_WALL
-                            changed = true
-                        }
-                    }
-                }
             }
         }
     }

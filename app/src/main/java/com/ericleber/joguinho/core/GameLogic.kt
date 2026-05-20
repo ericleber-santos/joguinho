@@ -170,6 +170,20 @@ class GameLogic(private val gameState: GameState) {
             return
         }
 
+        // --- Processar Física Lateral 2D do Herói (T-021) ---
+        val foiGrounded = gameState.heroIsGrounded
+        PlatformerPhysics.atualizarHero(
+            deltaTimeSec = deltaTimeSec,
+            gameState = gameState,
+            direcaoX = gameState.inputDirecaoX,
+            puloPressionado = gameState.inputPuloPressionado
+        )
+
+        // Feedback sonoro de pulo ao decolar do chão
+        if (foiGrounded && !gameState.heroIsGrounded && gameState.heroVelocityY < 0f) {
+            onSoundEffectRequested?.invoke(TipoEfeito.PASSO_PEDRA)
+        }
+
         atualizarBossFight(deltaMs, maze)
         atualizarMovimentoMonsters(deltaTimeSec, maze)
         atualizarSistemaAmbush(deltaTimeSec, maze) // Fase 10
@@ -777,33 +791,25 @@ class GameLogic(private val gameState: GameState) {
             }
         }
 
-        if (distancia <= SPIKE_MAX_DISTANCE) {
-            return
+        // Rastreamento de direção para o Spike seguir o Herói
+        val dxHeroSpike = heroPos.x - spikePos.x
+        val spikeInputDirecaoX = when {
+            abs(dxHeroSpike) > 1.0f -> if (dxHeroSpike > 0f) 1f else -1f
+            else -> 0f
         }
 
-        // Velocidade reduzida em Slowdown
-        val velocidade = if (gameState.spikeIsSlowedDown) SPIKE_SPEED_TILES_PER_SEC * 0.4f
-                         else SPIKE_SPEED_TILES_PER_SEC
+        // Spike pula se o Herói pulou ou se está pulando e o herói está mais alto
+        val spikeInputPulo = gameState.inputPuloPressionado && (heroPos.y < spikePos.y - 0.5f)
 
-        // Movimento fluído em direção ao Herói com colisão simples
-        val vx = (dx / distancia) * velocidade * deltaTimeSec
-        val vy = (dy / distancia) * velocidade * deltaTimeSec
-
-        val nextX = spikePos.x + vx
-        val nextY = spikePos.y + vy
-        
-        var finalX = spikePos.x
-        var finalY = spikePos.y
-
-        if (nextX >= 0 && nextX < maze.width && maze.tiles[spikePos.iy * maze.width + nextX.toInt()] == BSPMazeGenerator.TILE_FLOOR) {
-            finalX = nextX
+        // Se não estiver atacando (lunge), atualiza física de plataforma do Spike
+        if (gameState.spikeAttackTimerMs <= 0L) {
+            PlatformerPhysics.atualizarSpike(
+                deltaTimeSec = deltaTimeSec,
+                gameState = gameState,
+                direcaoX = spikeInputDirecaoX,
+                puloPressionado = spikeInputPulo
+            )
         }
-        if (nextY >= 0 && nextY < maze.height && maze.tiles[nextY.toInt() * maze.width + spikePos.ix] == BSPMazeGenerator.TILE_FLOOR) {
-            finalY = nextY
-        }
-
-        gameState.spikePosition = Position(finalX, finalY)
-
 
         gameState.spikeCompanionState = when {
             gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"

@@ -64,6 +64,22 @@ class GameState {
     var heroStoppedDurationSec: Float = 0f
     var spikePosition: Position = Position(0, 0)
 
+    // --- Física de Platformer (T-021) ---
+    var heroVelocityX: Float = 0f
+    var heroVelocityY: Float = 0f
+    var heroIsGrounded: Boolean = false
+    var heroCoyoteTimerMs: Long = 0L
+    var heroJumpBufferTimerMs: Long = 0L
+    var heroJumpPressed: Boolean = false
+
+    var spikeVelocityX: Float = 0f
+    var spikeVelocityY: Float = 0f
+    var spikeIsGrounded: Boolean = false
+
+    // --- Input de Controle do Frame (T-021) ---
+    var inputDirecaoX: Float = 0f
+    var inputPuloPressionado: Boolean = false
+
     // --- Estado do Hero ---
     var heroIsSlowedDown: Boolean = false
     var heroSlowdownRemainingMs: Long = 0L

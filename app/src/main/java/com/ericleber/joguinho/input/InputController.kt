@@ -3,6 +3,8 @@ package com.ericleber.joguinho.input
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PointF
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -14,20 +16,17 @@ import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.Position
 import java.lang.ref.WeakReference
 import kotlin.math.atan2
+import kotlin.math.hypot
 
 /**
- * Orquestrador de input: gerencia FloatingJoystick e DPadController,
- * aplica movimento ao Hero e dispara feedback háptico em colisão com parede.
+ * Orquestrador de input adaptado para Platformer Arcade Side-Scrolling 2D (T-023).
  *
  * Responsabilidades:
- * - Capturar MotionEvents e roteá-los ao controle ativo (joystick ou D-pad)
- * - Calcular nova posição do Hero com base na direção e velocidade
- * - Detectar colisão com paredes e aplicar vibração de 20ms (Requisito 4.6)
- * - Garantir latência máxima de 16ms do input ao movimento (Requisito 4.2)
- * - Rastrear tempo parado do Hero para o SpikeAI
- * - Suportar troca entre joystick flutuante e D-pad (Requisito 12.3)
- *
- * Requisitos: 4.2, 4.3, 4.4, 4.6, 4.7, 12.5
+ * - Capturar MotionEvents e roteá-los de forma ergonômica com suporte real a multi-touch
+ * - Metade Esquerda: Joystick/D-pad invisível suave flutuante que controla a velocidade em X
+ * - Metade Direita: Dois botões virtuais fixos dedicados (Botão A para Pulo, Botão B para Tiro)
+ * - Garantir latência de toque máxima de 16ms
+ * - Estética visual Premium de Neon Glassmorphism translúcido desenhado diretamente no Canvas
  */
 class InputController(
     context: Context,
@@ -35,39 +34,29 @@ class InputController(
 ) {
 
     companion object {
-        /** Velocidade base do Hero em tiles/segundo — 3.5 tiles/s para movimento contemplativo. */
         private const val BASE_SPEED_TILES_PER_SEC = 3.5f
-
-        /** Multiplicador de corrida (Requisito 4.4 — 80% mais rápido). */
-        private const val RUN_MULTIPLIER = 1.8f
-
-        /** Multiplicador de Slowdown (Requisito 4.8 — 40% da velocidade normal). */
-        private const val SLOWDOWN_MULTIPLIER = 0.4f
-
-        /** Duração da vibração em colisão com parede em ms (Requisito 4.6). */
-        private const val WALL_HAPTIC_MS = 20L
-
-        /** Limite da metade esquerda da tela para o joystick (em pixels). */
-        private var screenHalfWidth = 0f
     }
 
-    // WeakReference para evitar vazamento de memória (Requisito 20.2)
     private val contextRef = WeakReference(context.applicationContext)
 
-    // Controles (Twin-Stick)
+    // Joystick flutuante da metade esquerda (D-pad suave)
     val moveJoystick = FloatingJoystick()
-    val shootJoystick = FloatingJoystick()
-    val dpad = DPadController()
 
-    // Modo de controle ativo
-    var useDPad: Boolean = false
+    // Limite da metade esquerda da tela para o joystick (em pixels)
+    private var screenHalfWidth = 0f
 
-    // Botão de corrida
-    private var runButtonPressed: Boolean = false
-    private var runButtonPointerId: Int = -1
+    // Botões físicos virtuais no canto inferior direito
+    private var buttonA_X = 0f
+    private var buttonA_Y = 0f
+    private var buttonA_Radius = 0f
+    private var isButtonAPressed = false
+    private var buttonAPointerId = -1
 
-    // Botão de tiro
-    private var shootButtonPointerId: Int = -1
+    private var buttonB_X = 0f
+    private var buttonB_Y = 0f
+    private var buttonB_Radius = 0f
+    private var isButtonBPressed = false
+    private var buttonBPointerId = -1
 
     // Rastreamento de movimento para SpikeAI
     var heroMoved: Boolean = false
@@ -75,38 +64,47 @@ class InputController(
     var heroStoppedDurationSec: Float = 0f
         private set
 
-    // Vibrador (lazy para não crashar em dispositivos sem vibração)
-    private val vibrator: Vibrator? by lazy {
-        val ctx = contextRef.get() ?: return@lazy null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vm?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
+    // Paints para renderização premium dos botões
+    private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val buttonBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
+    private val buttonTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
     // -------------------------------------------------------------------------
-    // Configuração
+    // Configuração de Layout e Ergonomia
     // -------------------------------------------------------------------------
 
     /**
-     * Deve ser chamado quando o tamanho da view é conhecido.
-     * Configura o layout do D-pad e o limite do joystick.
+     * Chamado quando o tamanho da view é conhecido.
+     * Configura o layout dos botões A/B e o limite esquerdo/direito.
      */
     fun onSizeChanged(width: Float, height: Float) {
         screenHalfWidth = width / 2f
-        dpad.layout(width, height)
+        
+        val ctx = contextRef.get()
+        val density = ctx?.resources?.displayMetrics?.density ?: 2f
+
+        buttonA_Radius = 44f * density
+        buttonB_Radius = 38f * density
+
+        // Botão A (PULO) fica bem no canto inferior direito (confortável para o polegar)
+        buttonA_X = width - 80f * density
+        buttonA_Y = height - 80f * density
+
+        // Botão B (TIRO) fica ligeiramente acima e à esquerda de A
+        buttonB_X = width - 175f * density
+        buttonB_Y = height - 125f * density
+
+        buttonBorderPaint.strokeWidth = 3f * density
     }
 
     // -------------------------------------------------------------------------
-    // Processamento de MotionEvent
-    //
-    // Chamado pela GameSurfaceView.onTouchEvent() na UI thread.
-    // O resultado é lido pelo GameLoop na game thread — a leitura é segura
-    // porque os campos de direção são escritos atomicamente (primitivos).
-    // Latência máxima: 1 frame = 16ms (Requisito 4.2).
+    // Processamento de MotionEvent com Suporte Robusto a Multi-Touch
     // -------------------------------------------------------------------------
 
     fun onTouchEvent(event: MotionEvent): Boolean {
@@ -121,7 +119,7 @@ class InputController(
                 handleTouchDown(x, y, pointerId)
             }
             MotionEvent.ACTION_MOVE -> {
-                // ACTION_MOVE pode conter múltiplos ponteiros
+                // ACTION_MOVE pode conter múltiplos ponteiros de toques simultâneos
                 for (i in 0 until event.pointerCount) {
                     val id = event.getPointerId(i)
                     handleTouchMove(event.getX(i), event.getY(i), id)
@@ -136,242 +134,183 @@ class InputController(
     }
 
     private fun handleTouchDown(x: Float, y: Float, id: Int) {
-        if (useDPad) {
-            dpad.onTouchDown(x, y, id)
+        if (x <= screenHalfWidth) {
+            // Metade esquerda: ativa o D-pad/Joystick flutuante suave
+            moveJoystick.onTouchDown(x, y, id)
         } else {
-            if (x <= screenHalfWidth) {
-                // Metade esquerda: joystick de movimento
-                moveJoystick.onTouchDown(x, y, id)
-            } else {
-                // Metade direita: joystick de tiro
-                shootJoystick.onTouchDown(x, y, id)
+            // Metade direita: verifica colisão circular com as hitboxes físicas dos botões
+            val distA = hypot(x - buttonA_X, y - buttonA_Y)
+            val distB = hypot(x - buttonB_X, y - buttonB_Y)
+
+            if (distA <= buttonA_Radius) {
+                isButtonAPressed = true
+                buttonAPointerId = id
+            } else if (distB <= buttonB_Radius) {
+                isButtonBPressed = true
+                buttonBPointerId = id
             }
         }
     }
 
     private fun handleTouchMove(x: Float, y: Float, id: Int) {
-        if (useDPad) {
-            dpad.onTouchMove(x, y, id)
-        } else {
+        if (x <= screenHalfWidth) {
+            // Movimento na esquerda: repassa para o joystick correspondente
             moveJoystick.onTouchMove(x, y, id)
-            shootJoystick.onTouchMove(x, y, id)
+        } else {
+            // Se o dedo que moveu era o ativado em um dos botões, re-valida colisão
+            if (id == buttonAPointerId) {
+                val dist = hypot(x - buttonA_X, y - buttonA_Y)
+                // Se saiu do raio de toque por muito, cancela
+                isButtonAPressed = dist <= buttonA_Radius * 1.5f
+            } else if (id == buttonBPointerId) {
+                val dist = hypot(x - buttonB_X, y - buttonB_Y)
+                isButtonBPressed = dist <= buttonB_Radius * 1.5f
+            }
         }
     }
 
     private fun handleTouchUp(x: Float, y: Float, id: Int) {
-        if (useDPad) {
-            dpad.onTouchUp(id)
-        } else {
-            moveJoystick.onTouchUp(id)
-            shootJoystick.onTouchUp(id)
+        // Libera joystick se o dedo levantado for o dono dele
+        moveJoystick.onTouchUp(id)
+
+        // Libera os botões físicos correspondentes
+        if (id == buttonAPointerId) {
+            isButtonAPressed = false
+            buttonAPointerId = -1
+        }
+        if (id == buttonBPointerId) {
+            isButtonBPressed = false
+            buttonBPointerId = -1
         }
     }
 
     // -------------------------------------------------------------------------
-    // Atualização de movimento (chamada pelo GameLoop a cada frame)
+    // Atualização de movimento de frame (Chamada pelo GameLoop a 60 FPS)
     // -------------------------------------------------------------------------
 
-    private var currentVelocityX: Float = 0f
-    private var currentVelocityY: Float = 0f
-
     fun update(deltaTimeSec: Float, mazeData: MazeData?, hapticEnabled: Boolean = true) {
-        val direction = getActiveDirection()
-        val movementVector = if (useDPad) {
-            direction?.let { dir ->
-                val (vx, vy) = directionToVector(dir)
-                // Normaliza diagonais para D-Pad
-                if (vx != 0f && vy != 0f) {
-                    val invSqrt2 = 0.7071f
-                    android.graphics.PointF(vx * invSqrt2, vy * invSqrt2)
+        val movementVector = moveJoystick.getMovementVector()
+
+        // 1. Extrair Entrada Horizontal e de Salto para a Física do Platformer (T-021)
+        var inputVx = 0f
+        if (movementVector != null) {
+            inputVx = movementVector.x
+        }
+
+        // Pulo ativado pelo Botão A ou atalho ergonômico no joystick (arrastar muito para cima)
+        val joystickJump = movementVector != null && movementVector.y < -0.6f
+        val jumpPressed = isButtonAPressed || joystickJump
+
+        gameState.inputDirecaoX = inputVx
+        gameState.inputPuloPressionado = jumpPressed
+        gameState.isShooting = isButtonBPressed
+
+        if (mazeData != null) {
+            // Sincroniza a direção visual para as animações de sprites (WEST/EAST)
+            if (inputVx < -0.1f) {
+                gameState.heroDirection = Direction.WEST
+            } else if (inputVx > 0.1f) {
+                gameState.heroDirection = Direction.EAST
+            }
+
+            // Define o ângulo de tiro de acordo com o lado que o herói está olhando
+            if (isButtonBPressed) {
+                gameState.shootingAngle = if (gameState.heroDirection == Direction.WEST) {
+                    Math.PI.toFloat()
                 } else {
-                    android.graphics.PointF(vx, vy)
+                    0f
                 }
             }
-        } else {
-            moveJoystick.getMovementVector()
-        }
 
-        // Atualiza estado de tiro via Joystick direito
-        if (!useDPad) {
-            gameState.isShooting = shootJoystick.isActive && shootJoystick.magnitude > 0.3f
-            if (shootJoystick.isActive && shootJoystick.magnitude > 0.1f) {
-                gameState.shootingAngle = atan2(shootJoystick.directionY, shootJoystick.directionX)
+            // Atualiza status de animação de caminhada para o Renderer e SpikeAI
+            val heroMovendoHorizontalmente = Math.abs(gameState.heroVelocityX) > 0.1f
+            heroMoved = heroMovendoHorizontalmente
+            if (!heroMoved) {
+                heroStoppedDurationSec += deltaTimeSec
+            } else {
+                heroStoppedDurationSec = 0f
             }
-        }
-
-        val world = com.ericleber.joguinho.biome.BiomeWorld.fromFloor(gameState.floorNumber)
-        val isIce = world == com.ericleber.joguinho.biome.BiomeWorld.ABISMOS_AQUATICOS
-        val isForest = world == com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES
-
-        var targetVx = 0f
-        var targetVy = 0f
-        
-        if (movementVector != null) {
-             targetVx = movementVector.x
-             targetVy = movementVector.y
-        }
-
-        // Calcula velocidade efetiva
-        val baseSpeed = BASE_SPEED_TILES_PER_SEC
-        var speedMultiplier = when {
-            gameState.heroIsSlowedDown -> SLOWDOWN_MULTIPLIER
-            runButtonPressed -> RUN_MULTIPLIER
-            else -> 1f
-        }
-        
-        if (gameState.heroHasSpeedBuff) speedMultiplier *= 1.5f
-        if (isForest) speedMultiplier *= 0.65f // Lentidão da floresta (Hazard)
-        
-        val effectiveSpeed = baseSpeed * speedMultiplier
-        targetVx *= effectiveSpeed
-        targetVy *= effectiveSpeed
-
-        if (isIce) {
-            // Inércia do gelo (Hazard)
-            val acceleration = if (movementVector != null && (movementVector.x != 0f || movementVector.y != 0f)) 3f else 1.5f
-            currentVelocityX += (targetVx - currentVelocityX) * acceleration * deltaTimeSec
-            currentVelocityY += (targetVy - currentVelocityY) * acceleration * deltaTimeSec
-        } else {
-            currentVelocityX = targetVx
-            currentVelocityY = targetVy
-        }
-
-        if (kotlin.math.abs(currentVelocityX) < 0.05f && kotlin.math.abs(currentVelocityY) < 0.05f && targetVx == 0f && targetVy == 0f) {
-            // Hero parado
-            currentVelocityX = 0f
-            currentVelocityY = 0f
-            heroMoved = false
-            heroStoppedDurationSec += deltaTimeSec
             gameState.heroStoppedDurationSec = heroStoppedDurationSec
             return
         }
 
-        heroMoved = true
-        heroStoppedDurationSec = 0f
-        gameState.heroStoppedDurationSec = 0f
-
+        // Fallback de segurança para modo sem mapa
         val currentPos = gameState.heroPosition
-
-        // Vetor de movimento por frame usando a velocidade atual (com ou sem inércia)
-        val dx = currentVelocityX * deltaTimeSec
-        val dy = currentVelocityY * deltaTimeSec
-
-        if (mazeData == null) {
-            gameState.heroPosition = Position(currentPos.x + dx, currentPos.y + dy)
-            if (direction != null) gameState.heroDirection = direction
-            return
-        }
-
-        // Tenta mover nos dois eixos (Diagonal)
-        val nextX = currentPos.x + dx
-        val nextY = currentPos.y + dy
-
-        if (!checkCollision(nextX, nextY, mazeData)) {
-            gameState.heroPosition = Position(nextX, nextY)
-        } else {
-            // Se houver colisão diagonal, tenta mover em cada eixo separadamente (Sliding)
-            val canMoveX = !checkCollision(nextX, currentPos.y, mazeData)
-            val canMoveY = !checkCollision(currentPos.x, nextY, mazeData)
-
-            when {
-                canMoveX -> gameState.heroPosition = Position(nextX, currentPos.y)
-                canMoveY -> gameState.heroPosition = Position(currentPos.x, nextY)
-                else -> {
-                    // Totalmente bloqueado
-                    if (hapticEnabled) vibrate(WALL_HAPTIC_MS)
-                }
-            }
-        }
-
-        if (direction != null) gameState.heroDirection = direction
-    }
-
-    /**
-     * Verifica colisão de um círculo (hitbox do herói) contra os tiles do labirinto.
-     * @param radius Raio da hitbox (em frações de tile). 0.35f permite passar em corredores apertados.
-     */
-    private fun checkCollision(x: Float, y: Float, maze: MazeData, radius: Float = 0.32f): Boolean {
-        val left = (x - radius).toInt()
-        val right = (x + radius).toInt()
-        val top = (y - radius).toInt()
-        val bottom = (y + radius).toInt()
-
-        for (ty in top..bottom) {
-            for (tx in left..right) {
-                if (isWallAt(tx, ty, maze)) return true
-            }
-        }
-        return false
-    }
-
-    private fun isWallAt(tx: Int, ty: Int, maze: MazeData): Boolean {
-        if (tx < 0 || ty < 0 || tx >= maze.width || ty >= maze.height) return true
-        if (maze.tiles[ty * maze.width + tx] == 1) return true
-        
-        // Colisão com elementos sólidos (Pilares e Caixas)
-        return gameState.survivalElements.any {
-            it.active && it.position.ix == tx && it.position.iy == ty &&
-            (it.type == com.ericleber.joguinho.core.SurvivalElementType.STONE_PILLAR ||
-             it.type == com.ericleber.joguinho.core.SurvivalElementType.PUSHABLE_BOX)
-        }
+        val dx = inputVx * BASE_SPEED_TILES_PER_SEC * deltaTimeSec
+        gameState.heroPosition = Position(currentPos.x + dx, currentPos.y)
     }
 
     // -------------------------------------------------------------------------
-    // Helpers
+    // Renderização dos Controles (Neon Glassmorphism Visual)
     // -------------------------------------------------------------------------
 
-    private fun getActiveDirection(): Direction? =
-        if (useDPad) dpad.getActiveDirection() else moveJoystick.getMappedDirection()
-
-    /**
-     * Converte uma Direction para vetor (dx, dy) no espaço do grid.
-     * Y positivo = sul (para baixo no grid).
-     */
-    private fun directionToVector(dir: Direction): Pair<Float, Float> = when (dir) {
-        Direction.NORTH       ->  Pair( 0f, -1f)
-        Direction.NORTH_EAST  ->  Pair( 1f, -1f)
-        Direction.EAST        ->  Pair( 1f,  0f)
-        Direction.SOUTH_EAST  ->  Pair( 1f,  1f)
-        Direction.SOUTH       ->  Pair( 0f,  1f)
-        Direction.SOUTH_WEST  ->  Pair(-1f,  1f)
-        Direction.WEST        ->  Pair(-1f,  0f)
-        Direction.NORTH_WEST  ->  Pair(-1f, -1f)
-    }
-
-
-    /**
-     * Dispara vibração com duração especificada.
-     * Respeita a API disponível no dispositivo.
-     * Requisito 12.5
-     */
-    private fun vibrate(durationMs: Long) {
-        val v = vibrator ?: return
-        if (!v.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            v.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            v.vibrate(durationMs)
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Renderização (delegada aos controles)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Desenha o controle ativo no canvas.
-     * Deve ser chamado pelo Renderer a cada frame.
-     */
     fun draw(canvas: Canvas) {
-        if (useDPad) {
-            dpad.draw(canvas)
-        } else {
-            // Joystick de Movimento: Âmbar/Tocha
-            moveJoystick.draw(canvas, accentColor = Color.rgb(220, 180, 100), drawWaterIcon = false)
-            
-            // Joystick de Tiro: Azul/Água
-            shootJoystick.draw(canvas, accentColor = Color.rgb(80, 150, 255), drawWaterIcon = true)
-        }
+        // 1. Joystick de Movimento (D-pad suave translúcido na esquerda)
+        moveJoystick.draw(canvas, accentColor = Color.rgb(200, 200, 200), drawWaterIcon = false)
+
+        // 2. Botão A (PULO - Esmeralda Translúcido)
+        drawVirtualButton(
+            canvas,
+            buttonA_X,
+            buttonA_Y,
+            buttonA_Radius,
+            "A",
+            Color.rgb(46, 204, 113),
+            isButtonAPressed
+        )
+
+        // 3. Botão B (TIRO - Rubi Translúcido)
+        drawVirtualButton(
+            canvas,
+            buttonB_X,
+            buttonB_Y,
+            buttonB_Radius,
+            "B",
+            Color.rgb(231, 76, 60),
+            isButtonBPressed
+        )
+    }
+
+    private fun drawVirtualButton(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        label: String,
+        baseColor: Int,
+        isPressed: Boolean
+    ) {
+        if (radius <= 0f) return
+
+        val alphaBase = if (isPressed) 150 else 60
+        val alphaBorder = if (isPressed) 220 else 100
+
+        // Preenchimento circular translúcido
+        buttonPaint.color = Color.argb(
+            alphaBase,
+            Color.red(baseColor),
+            Color.green(baseColor),
+            Color.blue(baseColor)
+        )
+        buttonPaint.style = Paint.Style.FILL
+        canvas.drawCircle(cx, cy, radius, buttonPaint)
+
+        // Borda circular neon
+        buttonBorderPaint.color = Color.argb(
+            alphaBorder,
+            Color.red(baseColor),
+            Color.green(baseColor),
+            Color.blue(baseColor)
+        )
+        canvas.drawCircle(cx, cy, radius, buttonBorderPaint)
+
+        // Texto centralizado
+        buttonTextPaint.textSize = radius * 0.9f
+        buttonTextPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
+        
+        val fm = buttonTextPaint.fontMetrics
+        val textY = cy - (fm.ascent + fm.descent) / 2f
+        canvas.drawText(label, cx, textY, buttonTextPaint)
+        buttonTextPaint.clearShadowLayer()
     }
 }

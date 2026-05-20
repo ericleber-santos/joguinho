@@ -227,11 +227,15 @@ class EntityPlacer(private val random: Random) {
         val startY = maze.startIndex / maze.width
 
         return maze.tiles.indices.filter { index ->
+            // Deve ser ar livre (TILE_FLOOR)
             maze.tiles[index] == BSPMazeGenerator.TILE_FLOOR &&
                 index !in excluded &&
                 index != maze.startIndex &&
                 index != maze.exitIndex &&
-                manhattanDistance(index, maze.startIndex, maze.width) >= 2
+                manhattanDistance(index, maze.startIndex, maze.width) >= 2 &&
+                // Garante que existe bloco de plataforma sólido (TILE_WALL = 1) logo abaixo
+                index + maze.width < maze.tiles.size &&
+                maze.tiles[index + maze.width] == 1
         }
     }
 

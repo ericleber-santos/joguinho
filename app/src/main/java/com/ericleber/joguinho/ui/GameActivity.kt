@@ -107,7 +107,6 @@ class GameActivity : AppCompatActivity() {
 
         // Instanciar InputController e conectar ao GameLoop
         controladorInput = InputController(this, viewModel.gameState)
-        controladorInput.useDPad = prefs.getBoolean("usarDPad", false)
 
         gameLoop.onUpdate = { deltaTimeSec ->
             controladorInput.update(

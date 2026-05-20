@@ -59,8 +59,8 @@ class HudRenderer {
             renderExpanded(canvas, gameState, w, h)
         }
         
-        // Bússola presente em ambos os modos
-        renderCompass(canvas, gameState, w.toFloat(), h.toFloat())
+        // Barra de progresso linear de saída adaptada para Platformer Side-Scrolling
+        renderProgressBar(canvas, gameState, w, h, screenWidthDp)
     }
 
     /**
@@ -704,64 +704,114 @@ class HudRenderer {
     }
  
     /**
-     * Renderiza uma seta de bússola indicando a direção da saída.
-     * Fica no canto superior direito, abaixo do Score.
+     * Renderiza a barra de progresso linear horizontal do herói em direção à saída do mapa.
+     * Substitui a bússola Twin-Stick 360° para se adequar ao pivot Platformer Side-Scrolling.
      */
-    fun renderCompass(canvas: Canvas, gameState: GameState, w: Float, h: Float) {
+    fun renderProgressBar(canvas: Canvas, gameState: GameState, w: Int, h: Int, screenWidthDp: Float) {
         val maze = gameState.mazeData ?: return
-        val exitIdx = maze.exitIndex
-        val exitX = (exitIdx % maze.width).toFloat() + 0.5f
-        val exitY = (exitIdx / maze.width).toFloat() + 0.5f
         
-        val heroX = gameState.heroPosition.x
-        val heroY = gameState.heroPosition.y
+        // Densidade de tela calculada para manter consistência de tamanho físico (dp -> px)
+        val density = w / screenWidthDp
         
-        // Vetor direção mundo (isométrico simplificado para bússola 2D)
-        val dx = exitX - heroX
-        val dy = exitY - heroY
+        // Configurações dimensionais baseadas em dp multiplicados pela densidade
+        val barW = 240f * density
+        val barH = 6f * density
+        val centerX = w / 2f
+        val barY = 35f * density // Topo central da tela, posicionado ergonomicamente
         
-        // Ângulo para a saída
-        val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
+        val startXBar = centerX - barW / 2f
+        val endXBar = centerX + barW / 2f
         
-        // Posição no HUD (Canto superior direito)
-        val compassSize = 50f
-        val compassX = w - 80f
-        val compassY = h * 0.15f + 60f
+        // Fórmulas físicas de mapeamento horizontal (da coluna 3 à coluna width - 4)
+        val startX = 3.0f
+        val exitX = (maze.width - 4).toFloat()
         
-        // Fundo do compasso
-        bgPaint.color = Color.argb(100, 0, 0, 0)
-        canvas.drawCircle(compassX, compassY, compassSize, bgPaint)
+        // Progresso linear normalizado entre 0.0f e 1.0f
+        val progress = if (exitX > startX) {
+            ((gameState.heroPosition.x - startX) / (exitX - startX)).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
         
-        // Borda
-        bgPaint.color = Color.argb(150, 255, 255, 255)
+        // 1. Desenhar fundo da barra (Glassmorphism translúcido sutil)
+        bgPaint.color = Color.argb(100, 30, 30, 30)
+        val bgRect = RectF(startXBar, barY - barH / 2f, endXBar, barY + barH / 2f)
+        canvas.drawRoundRect(bgRect, barH / 2f, barH / 2f, bgPaint)
+        
+        // Borda sutil de vidro fosco para o fundo da barra
+        bgPaint.color = Color.argb(40, 255, 255, 255)
         bgPaint.style = Paint.Style.STROKE
-        bgPaint.strokeWidth = 2f
-        canvas.drawCircle(compassX, compassY, compassSize, bgPaint)
+        bgPaint.strokeWidth = 1f * density
+        canvas.drawRoundRect(bgRect, barH / 2f, barH / 2f, bgPaint)
         bgPaint.style = Paint.Style.FILL
         
-        // Seta (Ponteiro)
-        canvas.save()
-        canvas.rotate(Math.toDegrees(angleRad.toDouble()).toFloat(), compassX, compassY)
+        // 2. Desenhar preenchimento com gradiente baseado nas cores do Bioma atual
+        val primaryColor = gameState.currentBiomeWorld.portalColors.primary
+        val accentColor = gameState.currentBiomeWorld.portalColors.accent
         
-        val arrowPath = android.graphics.Path()
-        arrowPath.moveTo(compassX + compassSize * 0.7f, compassY)
-        arrowPath.lineTo(compassX - compassSize * 0.3f, compassY - compassSize * 0.3f)
-        arrowPath.lineTo(compassX - compassSize * 0.15f, compassY)
-        arrowPath.lineTo(compassX - compassSize * 0.3f, compassY + compassSize * 0.3f)
-        arrowPath.close()
+        if (progress > 0f) {
+            val progressW = barW * progress
+            val grad = android.graphics.LinearGradient(
+                startXBar, barY, startXBar + progressW, barY,
+                primaryColor, accentColor,
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            paint.shader = grad
+            paint.style = Paint.Style.FILL
+            val progressRect = RectF(startXBar, barY - barH / 2f, startXBar + progressW, barY + barH / 2f)
+            canvas.drawRoundRect(progressRect, barH / 2f, barH / 2f, paint)
+            paint.shader = null // Limpar o shader para não vazar em outros desenhos
+        }
         
-        // Cor da seta (Dourada para ser bem visível)
-        paint.color = Color.rgb(255, 215, 0)
+        // 3. Desenhar o Herói (Bolinha azul/ciano brilhante neon)
+        val heroRadius = 6f * density
+        val heroX = startXBar + barW * progress
+        
+        // Efeito de brilho externo (glow) no herói
+        paint.color = Color.argb(80, 52, 152, 219)
+        canvas.drawCircle(heroX, barY, heroRadius * 1.6f, paint)
+        
+        // Corpo principal do herói
+        paint.color = Color.rgb(52, 152, 219) // Azul brilhante
+        canvas.drawCircle(heroX, barY, heroRadius, paint)
+        
+        // Núcleo branco para parecer uma fonte de luz
+        paint.color = Color.WHITE
+        canvas.drawCircle(heroX, barY, heroRadius * 0.4f, paint)
+        
+        // 4. Desenhar o Portal de Saída na extremidade direita (Dourado pulsante)
+        val portalBaseRadius = 8f * density
+        // Animação de pulso usando o relógio do sistema
+        val pulse = 1f + 0.15f * kotlin.math.sin(System.currentTimeMillis() * 0.005).toFloat()
+        val portalRadius = portalBaseRadius * pulse
+        
+        // Brilho dourado pulsante externo
+        paint.color = Color.argb(60, 241, 196, 15)
+        canvas.drawCircle(endXBar, barY, portalRadius * 1.5f, paint)
+        
+        // Anel do portal
+        paint.color = Color.rgb(241, 196, 15) // Ouro
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * density
+        canvas.drawCircle(endXBar, barY, portalRadius, paint)
+        
+        // Núcleo do portal
+        paint.color = Color.argb(120, 243, 156, 18) // Laranja translúcido
         paint.style = Paint.Style.FILL
-        canvas.drawPath(arrowPath, paint)
+        canvas.drawCircle(endXBar, barY, portalRadius * 0.6f, paint)
         
-        canvas.restore()
-        
-        // Texto "SAÍDA" abaixo
-        textPaint.textSize = 14f
-        textPaint.color = Color.rgb(220, 220, 220)
+        // Pequena label discreta de distância abaixo da barra
+        textPaint.textSize = 10f * density
+        textPaint.color = Color.argb(180, 220, 220, 220)
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText("SAÍDA", compassX, compassY + compassSize + 15f, textPaint)
+        textPaint.setShadowLayer(3f, 0f, 1.5f, Color.BLACK)
+        
+        val totalDistance = (exitX - startX).coerceAtLeast(1f)
+        val currentDistance = (gameState.heroPosition.x - startX).coerceIn(0f, totalDistance)
+        val distanceText = "PROGRESSO: ${(progress * 100).toInt()}% (${currentDistance.toInt()}/${totalDistance.toInt()}m)"
+        canvas.drawText(distanceText, centerX, barY + barH + 12f * density, textPaint)
+        
+        textPaint.clearShadowLayer()
         textPaint.textAlign = Paint.Align.LEFT
     }
 
