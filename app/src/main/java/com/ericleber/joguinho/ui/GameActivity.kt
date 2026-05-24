@@ -83,6 +83,7 @@ class GameActivity : AppCompatActivity() {
             particleSystem = ParticleSystem(),
             hudRenderer = HudRenderer()
         )
+        renderer.loadParallaxTextures(this)
         superficieJogo.renderer = renderer
 
         // Inicializar ViewModel antes de criar o GameLoop (precisa do gameState)

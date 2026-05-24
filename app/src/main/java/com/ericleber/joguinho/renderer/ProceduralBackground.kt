@@ -1,6 +1,9 @@
 package com.ericleber.joguinho.renderer
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -9,96 +12,66 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import kotlin.math.cos
 import kotlin.math.sin
 
 class ProceduralBackground(private val floor: Int) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+    // Texturas PNG para parallax (carregadas de assets)
+    private var texLayer0: Bitmap? = null // camada frontal (camada1.png, parallax 0.50x)
+    private var texLayer1: Bitmap? = null // camada média (camada2.png, parallax 0.25x)
+    private var texLayer2: Bitmap? = null // camada mais distante (camada3.png, parallax 0.05x)
+    private var texturesLoaded = false
+
+    fun hasTextures(): Boolean = texturesLoaded
+
+    fun loadParallaxTextures(context: Context) {
+        try {
+            texLayer0 = BitmapFactory.decodeStream(
+                context.assets.open("textures/entranhas-camada1.png")
+            )
+            texLayer1 = BitmapFactory.decodeStream(
+                context.assets.open("textures/entranhas-camada2.png")
+            )
+            texLayer2 = BitmapFactory.decodeStream(
+                context.assets.open("textures/entranhas-camada3.png")
+            )
+            texturesLoaded = texLayer0 != null && texLayer1 != null && texLayer2 != null
+        } catch (e: Exception) {
+            texturesLoaded = false
+        }
     }
+
+    private fun renderTextureLayer(
+        canvas: Canvas, bitmap: Bitmap,
+        cameraX: Float, cameraY: Float,
+        screenW: Int, screenH: Int,
+        parallaxFactor: Float,
+        alpha: Int = 255
+    ) {
+        val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        paint.shader = shader
+        paint.alpha = alpha.coerceIn(0, 255)
+        paint.style = Paint.Style.FILL
+        val m = Matrix()
+        m.postTranslate(cameraX * parallaxFactor, cameraY * parallaxFactor)
+        shader.setLocalMatrix(m)
+        canvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), paint)
+        paint.shader = null
+        paint.alpha = 255
+    }
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
-    private val matrix = Matrix()
 
-    private var bgTextureBitmap: Bitmap? = null
-    private var lastW = 0
-    private var lastH = 0
-    private var lastColor = 0
-    private var lastLightingMode: com.ericleber.joguinho.biome.LightingMode? = null
+    private val FACTOR_FAR  = 0.05f
+    private val FACTOR_MID  = 0.25f
+    private val FACTOR_NEAR = 0.50f
 
-    // Cache de gradientes da névoa (SUBTERRANEAN)
-    private val cachedFogGradients = arrayOfNulls<RadialGradient>(8)
-    private val cachedFogRadii = FloatArray(8)
-    private val fogBaseX = FloatArray(8)
-    private val fogBaseY = FloatArray(8)
+    private val WRAP_FAR  = 4f
+    private val WRAP_MID  = 3f
+    private val WRAP_NEAR = 2.5f
 
-    // Cache de estalactites (SUBTERRANEAN)
-    private var estalactiteBaseX = FloatArray(0)
-    private var estalactiteBaseW = FloatArray(0)
-    private var estalactiteHeight = FloatArray(0)
-    private var numStalactites = 0
-
-    // Cache de pilares (MOONLIGHT)
-    private var pillarBaseX = FloatArray(0)
-    private var pillarBaseW = FloatArray(0)
-    private var pillarHeight = FloatArray(0)
-    private var numPillars = 0
-
-    // Cache de estrelas (MOONLIGHT)
-    private val starX = FloatArray(30)
-    private val starY = FloatArray(30)
-    private val starSize = FloatArray(30)
-
-    // Cache de formas geométricas (VOID_DARK)
-    private var shapeBaseX = FloatArray(6)
-    private var shapeBaseY = FloatArray(6)
-    private val shapesVertices = Array(6) { FloatArray(10) }
-
-    // Cache de olhos (VOID_DARK)
-    private val eyeX = FloatArray(6)
-    private val eyeY = FloatArray(6)
-    private val eyeSize = FloatArray(6)
-    private val eyeGap = FloatArray(6)
-
-    // Cache de árvores (DAYLIGHT)
-    private var treeBaseX = FloatArray(0)
-    private var treeWidth = FloatArray(0)
-    private var treeHeight = FloatArray(0)
-    private var treeCopaW = FloatArray(0)
-    private var treeCopaH = FloatArray(0)
-    private var numTrees = 0
-
-    // Cache de partículas (DAYLIGHT)
-    private val particleX = FloatArray(12)
-    private val particleY = FloatArray(12)
-
-    // Cache de colunas (LAVA_GLOW)
-    private var columnBaseX = FloatArray(0)
-    private var columnBaseW = FloatArray(0)
-    private var columnHeight = FloatArray(0)
-    private var numColumns = 0
-    private val cachedColumnGradients = arrayOfNulls<LinearGradient>(7)
-
-    // Cache de faíscas (LAVA_GLOW)
-    private val sparkX = FloatArray(15)
-    private val sparkSpeed = FloatArray(15)
-    private val sparkPhase = FloatArray(15)
-    private val sparkSize = FloatArray(15)
-
-    // Cache de cogumelos (BIOLUMINESCENT)
-    private var shroomBaseX = FloatArray(0)
-    private var shroomBaseY = FloatArray(0)
-    private var shroomHasteW = FloatArray(0)
-    private var shroomHasteH = FloatArray(0)
-    private var shroomCapW = FloatArray(0)
-    private var shroomCapH = FloatArray(0)
-    private var shroomHaloRadius = FloatArray(0)
-    private var numShrooms = 0
-    private val cachedShroomHaloGradients = arrayOfNulls<RadialGradient>(6)
-
-    // Cache de esporos (BIOLUMINESCENT)
-    private val esporoX = FloatArray(20)
-    private val esporoY = FloatArray(20)
-    private val esporoSize = FloatArray(20)
-    private val esporoAlpha = IntArray(20)
+    private fun rng(seed: Long) = java.util.Random(seed xor (floor.toLong() * 2654435761L))
 
     fun render(
         canvas: Canvas,
@@ -111,819 +84,402 @@ class ProceduralBackground(private val floor: Int) {
         accentColor: Int,
         lightingMode: com.ericleber.joguinho.biome.LightingMode
     ) {
-        // Inicializa ou recria os caches se o tamanho da tela, a cor ou o modo de luz mudarem
-        checkInitCaches(screenW, screenH, baseColor, lightingMode)
-
         when (lightingMode) {
-            com.ericleber.joguinho.biome.LightingMode.MOONLIGHT -> {
-                renderMoonlightLayer(canvas, cameraX, cameraY, screenW, screenH, time)
-            }
-            com.ericleber.joguinho.biome.LightingMode.VOID_DARK -> {
-                renderVoidDarkLayer(canvas, cameraX, cameraY, screenW, screenH, time, accentColor)
-            }
-            com.ericleber.joguinho.biome.LightingMode.DAYLIGHT -> {
-                renderDaylightLayer(canvas, cameraX, cameraY, screenW, screenH, time)
-            }
-            com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW -> {
-                renderLavaGlowLayer(canvas, cameraX, cameraY, screenW, screenH, time)
-            }
-            com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT -> {
-                renderBioluminescentLayer(canvas, cameraX, cameraY, screenW, screenH, time)
-            }
-            else -> {
-                renderCaveLayer(canvas, cameraX, cameraY, screenW, screenH, time, baseColor)
-            }
+            com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT ->
+                renderBio(canvas, cameraX, cameraY, screenW, screenH, time)
+            com.ericleber.joguinho.biome.LightingMode.SUBTERRANEAN ->
+                renderCave(canvas, cameraX, cameraY, screenW, screenH, time, baseColor)
+            com.ericleber.joguinho.biome.LightingMode.MOONLIGHT ->
+                renderMoon(canvas, cameraX, cameraY, screenW, screenH, time)
+            com.ericleber.joguinho.biome.LightingMode.VOID_DARK ->
+                renderVoid(canvas, cameraX, cameraY, screenW, screenH, time, accentColor)
+            com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW ->
+                renderLava(canvas, cameraX, cameraY, screenW, screenH, time)
+            com.ericleber.joguinho.biome.LightingMode.DAYLIGHT ->
+                renderDay(canvas, cameraX, cameraY, screenW, screenH, time)
         }
     }
 
-    private fun checkInitCaches(screenW: Int, screenH: Int, baseColor: Int, lightingMode: com.ericleber.joguinho.biome.LightingMode) {
-        if (bgTextureBitmap == null || lastW != screenW || lastH != screenH || lastColor != baseColor || lastLightingMode != lightingMode) {
-            lastW = screenW
-            lastH = screenH
-            lastColor = baseColor
-            lastLightingMode = lightingMode
+    // =========================================================================
+    // BIOLUMINESCENT — Jardim Profundo
+    // =========================================================================
+    private fun renderBio(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long) {
+        val wf = w.toFloat(); val hf = h.toFloat()
 
-            // 1. Limpa bitmap antigo se houver
-            bgTextureBitmap?.recycle()
-
-            val baseColorToUse = when (lightingMode) {
-                com.ericleber.joguinho.biome.LightingMode.VOID_DARK -> Color.parseColor("#050508")
-                com.ericleber.joguinho.biome.LightingMode.MOONLIGHT -> Color.parseColor("#0e0e18")
-                com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW -> Color.parseColor("#1a1210")
-                com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT -> Color.parseColor("#0a120a")
-                else -> baseColor
-            }
-
-            val r = Color.red(baseColorToUse)
-            val g = Color.green(baseColorToUse)
-            val b = Color.blue(baseColorToUse)
-
-            // 2. Cria bitmap offscreen
-            val bitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
-            val tempCanvas = Canvas(bitmap)
-
-            if (lightingMode == com.ericleber.joguinho.biome.LightingMode.DAYLIGHT) {
-                // DAYLIGHT: Gradiente vertical de céu
-                val skyShader = LinearGradient(
-                    0f, 0f, 0f, screenH.toFloat(),
-                    intArrayOf(Color.parseColor("#4488cc"), Color.parseColor("#88bbee"), Color.TRANSPARENT),
-                    floatArrayOf(0f, 0.5f, 1f),
-                    Shader.TileMode.CLAMP
-                )
-                val tempPaint = Paint().apply {
-                    isAntiAlias = true
-                    style = Paint.Style.FILL
-                    shader = skyShader
-                    alpha = 90
-                }
-                tempCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), tempPaint)
-            } else {
-                val bgR = if (lightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT) 14 
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.VOID_DARK) 5
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) 10
-                          else (r * 0.55f).toInt().coerceIn(0, 255)
-                val bgG = if (lightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT) 14 
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.VOID_DARK) 5
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) 18
-                          else (g * 0.55f).toInt().coerceIn(0, 255)
-                val bgB = if (lightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT) 24 
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.VOID_DARK) 8
-                          else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) 10
-                          else (b * 0.55f).toInt().coerceIn(0, 255)
-                val bgColor = Color.rgb(bgR, bgG, bgB)
-
-                val tempPaint = Paint().apply {
-                    isAntiAlias = false
-                    style = Paint.Style.FILL
-                }
-
-                // Preenche fundo
-                tempPaint.color = bgColor
-                tempCanvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), tempPaint)
-
-                // Noise de pedra
-                if (lightingMode != com.ericleber.joguinho.biome.LightingMode.VOID_DARK) {
-                    val pixelSize = 4f
-                    val cols = (screenW / pixelSize).toInt() + 1
-                    val rows = (screenH / pixelSize).toInt() + 1
-
-                    for (row in 0..rows) {
-                        for (col in 0..cols) {
-                            val seed = (col * 73856093L xor row * 19349663L xor floor.toLong())
-                            val rng = java.util.Random(seed)
-                            val factor = -0.25f + rng.nextFloat() * 0.50f
-                            if (factor > 0.05f || factor < -0.05f) {
-                                val vr = (bgR * (1f + factor)).toInt().coerceIn(0, 255)
-                                val vg = (bgG * (1f + factor)).toInt().coerceIn(0, 255)
-                                val vb = (bgB * (1f + factor)).toInt().coerceIn(0, 255)
-                                tempPaint.color = Color.rgb(vr, vg, vb)
-                                val px = col * pixelSize
-                                val py = row * pixelSize
-                                tempCanvas.drawRect(px, py, px + pixelSize, py + pixelSize, tempPaint)
-                            }
-                        }
-                    }
-                }
-            }
-            bgTextureBitmap = bitmap
-
-            // 3. Inicializa Gradients e Geometria baseado no modo
-            if (lightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT) {
-                // MOONLIGHT: Pilares
-                val interval = 80f
-                numPillars = ((screenW * 3) / interval).toInt()
-                pillarBaseX = FloatArray(numPillars)
-                pillarBaseW = FloatArray(numPillars)
-                pillarHeight = FloatArray(numPillars)
-
-                for (i in 0 until numPillars) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    pillarBaseX[i] = i * interval + (rng.nextFloat() * 40f - 20f)
-                    pillarBaseW[i] = 8f + rng.nextFloat() * 8f // 8-16px
-                    pillarHeight[i] = screenH * (0.3f + rng.nextFloat() * 0.3f) // 30-60% da tela
-                }
-
-                // MOONLIGHT: Estrelas
-                for (i in 0 until 30) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    starX[i] = rng.nextFloat() * screenW
-                    starY[i] = rng.nextFloat() * screenH
-                    starSize[i] = 1f + rng.nextFloat() * 1f
-                }
-            } else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.VOID_DARK) {
-                // VOID_DARK: Formas Geométricas Irregulares
-                val wrapW = screenW * 2f
-                for (i in 0 until 6) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-
-                    shapeBaseX[i] = rng.nextFloat() * wrapW
-                    shapeBaseY[i] = rng.nextFloat() * screenH
-
-                    for (v in 0 until 5) {
-                        val angle = (v * 2 * Math.PI / 5)
-                        val radius = 10f + rng.nextFloat() * 15f // diâmetro 20-50px
-                        val vx = kotlin.math.cos(angle) * radius
-                        val vy = kotlin.math.sin(angle) * radius
-                        shapesVertices[i][v * 2] = vx.toFloat()
-                        shapesVertices[i][v * 2 + 1] = vy.toFloat()
-                    }
-                }
-
-                // VOID_DARK: Olhos
-                for (i in 0 until 6) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-
-                    eyeX[i] = rng.nextFloat() * screenW
-                    eyeY[i] = rng.nextFloat() * screenH
-                    eyeSize[i] = 1f + rng.nextFloat() * 1f // raio 1-2px (diâmetro 2-4px)
-                    eyeGap[i] = 4f + rng.nextFloat() * 4f // distância 4-8px
-                }
-            } else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.DAYLIGHT) {
-                // DAYLIGHT: Árvores
-                val interval = 120f
-                numTrees = ((screenW * 2.5f) / interval).toInt().coerceAtLeast(6).coerceAtMost(8)
-                treeBaseX = FloatArray(numTrees)
-                treeWidth = FloatArray(numTrees)
-                treeHeight = FloatArray(numTrees)
-                treeCopaW = FloatArray(numTrees)
-                treeCopaH = FloatArray(numTrees)
-
-                val wrapW = screenW * 2.5f
-                for (i in 0 until numTrees) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    treeBaseX[i] = rng.nextFloat() * wrapW
-                    treeWidth[i] = 4f + rng.nextFloat() * 4f // 4-8px
-                    treeHeight[i] = screenH * (0.15f + rng.nextFloat() * 0.10f) // 15-25%
-                    treeCopaW[i] = 24f + rng.nextFloat() * 16f // 24-40px
-                    treeCopaH[i] = 30f + rng.nextFloat() * 20f // 30-50px
-                }
-
-                // DAYLIGHT: Partículas
-                for (i in 0 until 12) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    particleX[i] = rng.nextFloat() * screenW
-                    particleY[i] = rng.nextFloat() * screenH
-                }
-            } else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW) {
-                // LAVA_GLOW: Colunas
-                val interval = 120f
-                val wrapW = screenW * 2.5f
-                val rngCol = java.util.Random(73856093L xor floor.toLong())
-                numColumns = 5 + rngCol.nextInt(3) // 5 a 7
-                columnBaseX = FloatArray(numColumns)
-                columnBaseW = FloatArray(numColumns)
-                columnHeight = FloatArray(numColumns)
-
-                for (i in 0 until numColumns) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    columnBaseX[i] = rng.nextFloat() * wrapW
-                    columnBaseW[i] = 20f + rng.nextFloat() * 20f // 20-40px
-                    val h = screenH * (0.3f + rng.nextFloat() * 0.2f) // 30-50%
-                    columnHeight[i] = h
-
-                    // LinearGradient da base da coluna (últimos 30%)
-                    val gradH = h * 0.3f
-                    val gradTop = screenH - gradH
-                    val gradBottom = screenH.toFloat()
-
-                    cachedColumnGradients[i] = LinearGradient(
-                        0f, gradTop, 0f, gradBottom,
-                        Color.TRANSPARENT,
-                        Color.parseColor("#ff4400"),
-                        Shader.TileMode.CLAMP
-                    )
-                }
-
-                // LAVA_GLOW: Faíscas
-                for (i in 0 until 15) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    sparkX[i] = rng.nextFloat() * screenW
-                    sparkSpeed[i] = 150f + rng.nextFloat() * 150f
-                    sparkPhase[i] = rng.nextFloat() * screenH
-                    sparkSize[i] = 1f + rng.nextFloat() * 1f // 1-2px
-                }
-            } else if (lightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) {
-                // BIOLUMINESCENT: Cogumelos
-                val interval = 150f
-                val wrapW = screenW * 2.5f
-                val rngShroom = java.util.Random(73856093L xor floor.toLong())
-                numShrooms = 4 + rngShroom.nextInt(3) // 4 a 6
-                shroomBaseX = FloatArray(numShrooms)
-                shroomBaseY = FloatArray(numShrooms)
-                shroomHasteW = FloatArray(numShrooms)
-                shroomHasteH = FloatArray(numShrooms)
-                shroomCapW = FloatArray(numShrooms)
-                shroomCapH = FloatArray(numShrooms)
-                shroomHaloRadius = FloatArray(numShrooms)
-
-                for (i in 0 until numShrooms) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    shroomBaseX[i] = rng.nextFloat() * wrapW
-                    shroomBaseY[i] = screenH.toFloat()
-                    shroomHasteW[i] = 6f + rng.nextFloat() * 6f // 6-12px
-                    shroomHasteH[i] = screenH * (0.25f + rng.nextFloat() * 0.15f) // 25-40% da tela
-                    shroomCapW[i] = 30f + rng.nextFloat() * 20f // 30-50px
-                    shroomCapH[i] = 16f + rng.nextFloat() * 10f // 16-26px
-
-                    val radius = 30f + rng.nextFloat() * 20f // 30-50px
-                    shroomHaloRadius[i] = radius
-
-                    cachedShroomHaloGradients[i] = RadialGradient(
-                        0f, 0f, radius,
-                        Color.argb(25, 170, 255, 68), // #aaff44 com alpha 25
-                        Color.TRANSPARENT,
-                        Shader.TileMode.CLAMP
-                    )
-                }
-
-                // BIOLUMINESCENT: Espores
-                for (i in 0 until 20) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    esporoX[i] = rng.nextFloat() * screenW
-                    esporoY[i] = rng.nextFloat() * screenH
-                    esporoSize[i] = 1f + rng.nextFloat() * 0.5f // raio 1-1.5px (diâmetro 2-3px)
-                    esporoAlpha[i] = 60 + rng.nextInt(31) // 60 a 90
-                }
-            } else {
-                // SUBTERRANEAN: Gradients da Névoa
-                val fogR = (r * 0.80f).toInt().coerceIn(0, 255)
-                val fogG = (g * 0.80f).toInt().coerceIn(0, 255)
-                val fogB = (b * 0.80f).toInt().coerceIn(0, 255)
-                val fogWrap = screenW * 2f
-
-                for (i in 0 until 8) {
-                    val seed = i * 19349663L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    val radius = 40f + rng.nextFloat() * 40f
-                    val alpha = 25 + rng.nextInt(16)
-
-                    cachedFogRadii[i] = radius
-                    fogBaseX[i] = rng.nextFloat() * fogWrap
-                    fogBaseY[i] = rng.nextFloat() * screenH
-
-                    cachedFogGradients[i] = RadialGradient(
-                        0f, 0f, radius,
-                        Color.argb(alpha, fogR, fogG, fogB),
-                        Color.argb(0, fogR, fogG, fogB),
-                        Shader.TileMode.CLAMP
-                    )
-                }
-
-                // SUBTERRANEAN: Estalactites
-                val interval = 40f
-                numStalactites = ((screenW * 3) / interval).toInt()
-                estalactiteBaseX = FloatArray(numStalactites)
-                estalactiteBaseW = FloatArray(numStalactites)
-                estalactiteHeight = FloatArray(numStalactites)
-
-                for (i in 0 until numStalactites) {
-                    val seed = i * 73856093L xor floor.toLong()
-                    val rng = java.util.Random(seed)
-                    estalactiteBaseX[i] = i * interval + (rng.nextFloat() * 20f - 10f)
-                    estalactiteBaseW[i] = 8f + rng.nextFloat() * 12f
-                    estalactiteHeight[i] = 20f + rng.nextFloat() * 40f
-                }
-            }
-        }
-    }
-
-    private fun renderCaveLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long,
-        baseColor: Int
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Desenha textura de fundo estática offscreen cacheada (Camada 0)
+        // CAMADA 3 — fundo + névoa distante (fator 0.05)
+        paint.shader = LinearGradient(0f, 0f, 0f, hf,
+            intArrayOf(Color.parseColor("#060f06"), Color.parseColor("#0a1a0a"), Color.parseColor("#0d200d")),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, wf, hf, paint)
         paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
-        // 2. Camada 1 (parallax 0.25x) — Estalactites no teto
-        val r = Color.red(baseColor)
-        val g = Color.green(baseColor)
-        val b = Color.blue(baseColor)
-        val stalactiteR = (r * 0.70f).toInt().coerceIn(0, 255)
-        val stalactiteG = (g * 0.70f).toInt().coerceIn(0, 255)
-        val stalactiteB = (b * 0.70f).toInt().coerceIn(0, 255)
-
-        paint.color = Color.rgb(stalactiteR, stalactiteG, stalactiteB)
-        paint.alpha = 180
-        paint.isAntiAlias = true
-
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 3f
-
-        for (i in 0 until numStalactites) {
-            val baseX = estalactiteBaseX[i]
-
-            // Wrap horizontal infinito
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW.toFloat() // Centraliza a janela de wrap
-
-            if (posX > -50f && posX < screenW + 50f) {
-                val baseW = estalactiteBaseW[i]
-                val height = estalactiteHeight[i]
-
-                path.reset()
-                path.moveTo(posX - baseW / 2f, 0f)
-                path.lineTo(posX + baseW / 2f, 0f)
-                path.lineTo(posX, height)
-                path.close()
-                canvas.drawPath(path, paint)
-            }
+        val areaFar = wf * WRAP_FAR
+        for (i in 0 until 6) {
+            val r = rng(i * 100L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            val posY = r.nextFloat() * hf + sin(time / 5000.0 + i).toFloat() * 15f
+            val radius = 80f + r.nextFloat() * 60f
+            val alpha = (sin(time / 3000.0 + i * 1.3) * 12 + 18).toInt()
+            paint.shader = RadialGradient(posX, posY, radius,
+                intArrayOf(Color.argb(alpha, 40, 180, 60), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+            canvas.drawCircle(posX, posY, radius, paint)
+            paint.shader = null
         }
 
-        // 3. Camada 2 (parallax 0.45x) — Névoa de caverna
-        val p45X = cameraX * 0.45f
-        val fogWrap = screenW * 2f
-
-        paint.isAntiAlias = false
-        paint.style = Paint.Style.FILL
-
+        // CAMADA 2 — cogumelos + algas (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        for (i in 0 until 10) {
+            val r = rng(i * 200L + 1L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -120f || posX > wf + 120f) continue
+            val hasteH = hf * (0.20f + r.nextFloat() * 0.20f)
+            val hasteW = 8f + r.nextFloat() * 8f
+            val capW = 40f + r.nextFloat() * 40f
+            val capH = 20f + r.nextFloat() * 15f
+            val pulse = (sin(time / 2000.0 + i * 0.7) * 0.4 + 0.6).toFloat()
+            paint.shader = RadialGradient(posX, hf - hasteH, capW * 0.8f,
+                intArrayOf(Color.argb((30 * pulse).toInt(), 100, 255, 80), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+            canvas.drawCircle(posX, hf - hasteH, capW * 0.8f, paint)
+            paint.shader = null
+            paint.color = Color.parseColor("#0f1a0f"); paint.alpha = 180
+            canvas.drawRect(posX - hasteW/2f, hf - hasteH, posX + hasteW/2f, hf, paint)
+            canvas.drawOval(posX - capW/2f, hf - hasteH - capH/2f, posX + capW/2f, hf - hasteH + capH/2f, paint)
+            paint.alpha = 255
+        }
         for (i in 0 until 8) {
-            val baseX = fogBaseX[i]
-            val baseY = fogBaseY[i]
-
-            var posX = (baseX - p45X) % fogWrap
-            if (posX < 0) posX += fogWrap
-            posX -= screenW * 0.5f
-
-            val radius = cachedFogRadii[i]
-            val floatAnim = sin(time / 4000.0 + i * 0.8).toFloat() * 10f
-            val py = baseY + floatAnim
-
-            if (posX > -100f && posX < screenW + 100f) {
-                val gradient = cachedFogGradients[i]
-                if (gradient != null) {
-                    matrix.reset()
-                    matrix.postTranslate(posX, py)
-                    gradient.setLocalMatrix(matrix)
-
-                    paint.shader = gradient
-                    canvas.drawCircle(posX, py, radius, paint)
-                }
-            }
+            val r = rng(i * 300L + 2L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -60f || posX > wf + 60f) continue
+            val algaH = hf * (0.12f + r.nextFloat() * 0.12f)
+            val sway = sin(time / 1800.0 + i * 0.9).toFloat() * 14f
+            paint.color = Color.argb(160, 20, 130, 60)
+            paint.strokeWidth = 5f; paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND
+            path.reset()
+            path.moveTo(posX, hf)
+            path.cubicTo(posX + sway, hf - algaH * 0.33f, posX - sway, hf - algaH * 0.66f, posX + sway * 0.5f, hf - algaH)
+            canvas.drawPath(path, paint)
+            paint.style = Paint.Style.FILL; paint.strokeWidth = 0f
         }
 
-        // Cleanup paint state
-        paint.shader = null
-        paint.alpha = 255
+        // CAMADA 1 — esporos flutuantes (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 25) {
+            val r = rng(i * 400L + 3L)
+            val baseX = r.nextFloat() * areaNear
+            val baseY = r.nextFloat() * hf
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val px = (posX + sin(time / 4000.0 + i * 0.5).toFloat() * 18f + wf) % wf
+            val py = (baseY + cos(time / 3200.0 + i * 0.8).toFloat() * 10f + hf) % hf
+            val glow = (sin(time / 1200.0 + i * 2.1) * 0.35 + 0.65).toFloat()
+            paint.shader = RadialGradient(px, py, 5f,
+                intArrayOf(Color.argb((90 * glow).toInt(), 120, 255, 80), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+            canvas.drawCircle(px, py, 3f, paint)
+            paint.shader = null
+        }
     }
 
-    private fun renderMoonlightLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Camada 0: Pedra cinza-índigo escura offscreen cacheada
-        paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        // 2. Camada 1: Pilares de ruína
-        paint.color = Color.parseColor("#1a1828")
-        paint.alpha = 70
-        paint.isAntiAlias = true
-
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 3f
-
-        for (i in 0 until numPillars) {
-            val baseX = pillarBaseX[i]
-
-            // Wrap horizontal
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW.toFloat()
-
-            if (posX > -50f && posX < screenW + 50f) {
-                val w = pillarBaseW[i]
-                val h = pillarHeight[i]
-
-                // Desenha retângulo subindo do chão (screenH)
-                canvas.drawRect(
-                    posX - w / 2f,
-                    screenH - h,
-                    posX + w / 2f,
-                    screenH.toFloat(),
-                    paint
-                )
-            }
+    // =========================================================================
+    // SUBTERRANEAN — Entranhas, Abismos Aquáticos, Minas, Ruínas
+    // =========================================================================
+    private fun renderCave(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long, baseColor: Int) {
+        if (texturesLoaded) {
+            // Camada 3 (fundo azul distante): mais distante, fator 0.05x, alpha 255
+            texLayer2?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_FAR, 255) }
+            // Camada 2 (estalactites): camada média, fator 0.25x, alpha 255
+            texLayer1?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_MID, 255) }
+            // Camada 1 (caverna frontal): camada mais próxima, fator 0.50x, alpha 255
+            texLayer0?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_NEAR, 255) }
+            return
         }
 
-        // 3. Camada 2: Estrelas fixas (não se movem com a câmera)
-        paint.color = Color.WHITE
-        paint.isAntiAlias = false
+        val wf = w.toFloat(); val hf = h.toFloat()
+        val br = (Color.red(baseColor) * 0.35f).toInt().coerceIn(0, 60)
+        val bg = (Color.green(baseColor) * 0.35f).toInt().coerceIn(0, 60)
+        val bb = (Color.blue(baseColor) * 0.35f).toInt().coerceIn(0, 80)
+        val stalR = (Color.red(baseColor) * 0.55f).toInt().coerceIn(0, 255)
+        val stalG = (Color.green(baseColor) * 0.55f).toInt().coerceIn(0, 255)
+        val stalB = (Color.blue(baseColor) * 0.55f).toInt().coerceIn(0, 255)
 
-        for (i in 0 until 30) {
-            val alpha = (sin(time / 1100.0 + i * 2.3).toFloat() * 40f + 60f).toInt().coerceIn(0, 255)
-            paint.alpha = alpha
+        // CAMADA 3 — fundo escuro + estalactites distantes (fator 0.05)
+        paint.color = Color.rgb(br, bg, bb)
+        canvas.drawRect(0f, 0f, wf, hf, paint)
 
-            val sx = starX[i]
-            val sy = starY[i]
-            val size = starSize[i]
-
-            canvas.drawRect(sx, sy, sx + size, sy + size, paint)
-        }
-
-        // Cleanup
-        paint.alpha = 255
-    }
-
-    private fun renderVoidDarkLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long,
-        accentColor: Int
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Camada 0: Preto quase puro (#050508) sólido
-        paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        // 2. Camada 1: 4-6 formas geométricas irregulares silhueta muito escura (#0a0a12, alpha 40)
-        paint.color = Color.parseColor("#0a0a12")
-        paint.alpha = 40
-        paint.isAntiAlias = true
-
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 2f
-
-        for (i in 0 until 6) {
-            val baseX = shapeBaseX[i]
-            val baseY = shapeBaseY[i]
-
-            // Wrap horizontal
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW * 0.5f
-
-            if (posX > -100f && posX < screenW + 100f) {
-                path.reset()
-                val x0 = posX + shapesVertices[i][0]
-                val y0 = baseY + shapesVertices[i][1]
-                path.moveTo(x0, y0)
-                for (v in 1 until 5) {
-                    val xv = posX + shapesVertices[i][v * 2]
-                    val yv = baseY + shapesVertices[i][v * 2 + 1]
-                    path.lineTo(xv, yv)
-                }
-                path.close()
-                canvas.drawPath(path, paint)
-            }
-        }
-
-        // 3. Camada 2: 6 pares de olhos (cor accent, alpha pulsando, piscam lentamente)
-        paint.color = accentColor
-        paint.isAntiAlias = true
-
-        for (i in 0 until 6) {
-            val pulse = sin(time / 4000.0 + i * 2.1).toFloat()
-            val alpha = ((pulse + 1f) * 0.5f * 255f).toInt().coerceIn(0, 255)
-
-            if (alpha >= 10) {
-                paint.alpha = alpha
-                val sx = eyeX[i]
-                val sy = eyeY[i]
-                val r = eyeSize[i]
-                val gap = eyeGap[i]
-
-                // Olho esquerdo
-                canvas.drawCircle(sx - gap / 2f, sy, r, paint)
-                // Olho direito
-                canvas.drawCircle(sx + gap / 2f, sy, r, paint)
-            }
-        }
-
-        // Cleanup
-        paint.alpha = 255
-    }
-
-    private fun renderDaylightLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Camada 0: Gradiente vertical de céu cacheado (desenhado com alpha 90)
-        paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        // 2. Camada 1: 6-8 árvores em silhueta (#051804, alpha 80)
-        paint.color = Color.parseColor("#051804")
-        paint.alpha = 80
-        paint.isAntiAlias = true
-
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 2.5f
-
-        for (i in 0 until numTrees) {
-            val baseX = treeBaseX[i]
-
-            // Wrap horizontal
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW * 0.5f
-
-            if (posX > -100f && posX < screenW + 100f) {
-                val trunkW = treeWidth[i]
-                val treeH = treeHeight[i]
-                val copaW = treeCopaW[i]
-                val copaH = treeCopaH[i]
-
-                // Tronco retangular
-                canvas.drawRect(
-                    posX - trunkW / 2f,
-                    screenH - treeH,
-                    posX + trunkW / 2f,
-                    screenH.toFloat(),
-                    paint
-                )
-
-                // Copa oval
-                val copaLeft = posX - copaW / 2f
-                val copaTop = screenH - treeH - copaH / 2f
-                val copaRight = posX + copaW / 2f
-                val copaBottom = screenH - treeH + copaH / 2f
-                canvas.drawOval(copaLeft, copaTop, copaRight, copaBottom, paint)
-            }
-        }
-
-        // 3. Camada 2: 12 partículas de luz flutuando (#ffffcc, alpha 50)
-        paint.color = Color.parseColor("#ffffcc")
-        paint.alpha = 50
-        paint.isAntiAlias = true
-
-        for (i in 0 until 12) {
-            val drift = sin(time / 5000.0 + i * 0.6).toFloat() * 18f
-            val px = particleX[i] + drift
-            val py = particleY[i]
-
-            canvas.drawCircle(px, py, 1f, paint) // círculo de 2px
-        }
-
-        // Cleanup
-        paint.alpha = 255
-    }
-
-    private fun renderLavaGlowLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Camada 0: Basalto escuro com noise cacheado offscreen
-        paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        // 2. Camada 1: 5-7 colunas de basalto subindo do chão
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 2.5f
-
-        for (i in 0 until numColumns) {
-            val baseX = columnBaseX[i]
-
-            // Wrap horizontal
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW * 0.5f
-
-            if (posX > -100f && posX < screenW + 100f) {
-                val w = columnBaseW[i]
-                val h = columnHeight[i]
-
-                // Corpo da coluna (#120a08, alpha 80)
-                paint.shader = null
-                paint.color = Color.parseColor("#120a08")
-                paint.alpha = 80
-                paint.style = Paint.Style.FILL
-                canvas.drawRect(
-                    posX - w / 2f,
-                    screenH - h,
-                    posX + w / 2f,
-                    screenH.toFloat(),
-                    paint
-                )
-
-                // Brilho na base (LinearGradient transparente -> #ff4400, alpha 60 nos últimos 30% da altura da coluna)
-                val gradient = cachedColumnGradients[i]
-                if (gradient != null) {
-                    matrix.reset()
-                    matrix.postTranslate(posX, 0f) // Apenas translada horizontalmente
-                    gradient.setLocalMatrix(matrix)
-
-                    paint.shader = gradient
-                    paint.alpha = 60
-                    canvas.drawRect(
-                        posX - w / 2f,
-                        screenH - h * 0.3f,
-                        posX + w / 2f,
-                        screenH.toFloat(),
-                        paint
-                    )
-                }
-            }
-        }
-
-        // 3. Camada 2: 15 faíscas ascendentes animadas
-        paint.shader = null
-        paint.color = Color.parseColor("#ffcc00")
-
-        for (i in 0 until 15) {
-            val speed = sparkSpeed[i]
-            val phase = sparkPhase[i]
-            val progress = (time / 2000f * speed + phase) % screenH
-            val posY = screenH - progress
-            val posX = sparkX[i]
-            val size = sparkSize[i]
-
-            // Alpha diminui conforme sobe
-            val alphaRatio = 1f - (progress / screenH)
-            val alpha = (alphaRatio * 255f).toInt().coerceIn(0, 255)
-
-            paint.alpha = alpha
-            canvas.drawRect(posX, posY, posX + size, posY + size, paint)
-        }
-
-        // Cleanup
-        paint.alpha = 255
-    }
-
-    private fun renderBioluminescentLayer(
-        canvas: Canvas,
-        cameraX: Float,
-        cameraY: Float,
-        screenW: Int,
-        screenH: Int,
-        time: Long
-    ) {
-        val bitmap = bgTextureBitmap ?: return
-
-        // 1. Camada 0: Pedra escura esverdeada offscreen cacheada com noise
-        paint.shader = null
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-
-        // 2. Camada 1: 4-6 cogumelos gigantes em silhueta (#0f1a0f, alpha 70) + Halo
-        val p25X = cameraX * 0.25f
-        val wrapW = screenW * 2.5f
-
-        for (i in 0 until numShrooms) {
-            val baseX = shroomBaseX[i]
-            val baseY = shroomBaseY[i]
-
-            // Wrap horizontal
-            var posX = (baseX - p25X) % wrapW
-            if (posX < 0) posX += wrapW
-            posX -= screenW * 0.5f
-
-            if (posX > -100f && posX < screenW + 100f) {
-                val hasteW = shroomHasteW[i]
-                val hasteH = shroomHasteH[i]
-                val capW = shroomCapW[i]
-                val capH = shroomCapH[i]
-                val haloRadius = shroomHaloRadius[i]
-
-                val capCenterX = posX
-                val capCenterY = baseY - hasteH
-
-                // Desenha Halo bioluminescente (#aaff44 alpha 25, raio 30-50px)
-                val haloGradient = cachedShroomHaloGradients[i]
-                if (haloGradient != null) {
-                    matrix.reset()
-                    matrix.postTranslate(capCenterX, capCenterY)
-                    haloGradient.setLocalMatrix(matrix)
-
-                    paint.shader = haloGradient
-                    paint.alpha = 25
-                    canvas.drawCircle(capCenterX, capCenterY, haloRadius, paint)
-                }
-
-                // Desenha Cogumelo em silhueta (#0f1a0f, alpha 70)
-                paint.shader = null
-                paint.color = Color.parseColor("#0f1a0f")
-                paint.alpha = 70
-
-                // Haste = retângulo fino
-                canvas.drawRect(
-                    posX - hasteW / 2f,
-                    baseY - hasteH,
-                    posX + hasteW / 2f,
-                    baseY,
-                    paint
-                )
-
-                // Corpo/Copa = oval largo
-                val capLeft = capCenterX - capW / 2f
-                val capTop = capCenterY - capH / 2f
-                val capRight = capCenterX + capW / 2f
-                val capBottom = capCenterY + capH / 2f
-                canvas.drawOval(capLeft, capTop, capRight, capBottom, paint)
-            }
-        }
-
-        // 3. Camada 2: 20 esporos flutuantes (#aaff44, alpha 60-90, drift senoidal horizontal e wrap total)
-        paint.shader = null
-        paint.color = Color.parseColor("#aaff44")
-        paint.isAntiAlias = true
-
-        val p45X = cameraX * 0.45f
-        val p45Y = cameraY * 0.45f
-
+        val areaFar = wf * WRAP_FAR
+        paint.color = Color.argb(80, stalR, stalG, stalB)
         for (i in 0 until 20) {
-            val drift = sin(time / 5000.0 + i * 0.4).toFloat() * 15f
-            var px = (esporoX[i] + drift - p45X) % screenW
-            if (px < 0) px += screenW
-            var py = (esporoY[i] - p45Y) % screenH
-            if (py < 0) py += screenH
-
-            paint.alpha = esporoAlpha[i]
-            canvas.drawCircle(px, py, esporoSize[i], paint)
+            val r = rng(i * 50L + 10L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -30f || posX > wf + 30f) continue
+            val bw = 10f + r.nextFloat() * 14f; val bh = 25f + r.nextFloat() * 50f
+            path.reset(); path.moveTo(posX - bw/2f, 0f); path.lineTo(posX + bw/2f, 0f); path.lineTo(posX, bh); path.close()
+            canvas.drawPath(path, paint)
         }
 
-        // Cleanup
-        paint.alpha = 255
+        // CAMADA 2 — estalactites médias + estalagmites (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        paint.color = Color.argb(150, stalR, stalG, stalB)
+        for (i in 0 until 15) {
+            val r = rng(i * 150L + 20L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -40f || posX > wf + 40f) continue
+            val bw = 8f + r.nextFloat() * 10f; val bh = 20f + r.nextFloat() * 35f
+            path.reset(); path.moveTo(posX - bw/2f, 0f); path.lineTo(posX + bw/2f, 0f); path.lineTo(posX, bh); path.close()
+            canvas.drawPath(path, paint)
+            val gh = 15f + r.nextFloat() * 25f
+            path.reset(); path.moveTo(posX - bw/2f, hf); path.lineTo(posX + bw/2f, hf); path.lineTo(posX, hf - gh); path.close()
+            canvas.drawPath(path, paint)
+        }
+
+        // CAMADA 1 — partículas de poeira (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 20) {
+            val r = rng(i * 200L + 30L)
+            val baseX = r.nextFloat() * areaNear; val baseY = r.nextFloat() * hf
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val px = (posX + sin(time / 5000.0 + i * 0.6).toFloat() * 12f + wf) % wf
+            val py = (baseY + cos(time / 4000.0 + i * 0.9).toFloat() * 8f + hf) % hf
+            val alpha = (sin(time / 2000.0 + i * 1.5) * 20 + 35).toInt()
+            paint.color = Color.argb(alpha, stalR + 20, stalG + 20, stalB + 20)
+            canvas.drawCircle(px, py, 2f + r.nextFloat() * 2f, paint)
+        }
+    }
+
+    // =========================================================================
+    // MOONLIGHT — Reino da Magia, Base Lunar
+    // =========================================================================
+    private fun renderMoon(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long) {
+        val wf = w.toFloat(); val hf = h.toFloat()
+
+        // CAMADA 3 — céu noturno + estrelas fixas + ruínas distantes (fator 0.05)
+        paint.shader = LinearGradient(0f, 0f, 0f, hf,
+            intArrayOf(Color.parseColor("#05050f"), Color.parseColor("#0a0a1a"), Color.parseColor("#0e0e22")),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, wf, hf, paint); paint.shader = null
+
+        for (i in 0 until 50) {
+            val r = rng(i * 77L)
+            val sx = r.nextFloat() * wf; val sy = r.nextFloat() * hf * 0.8f
+            val twinkle = (sin(time / 1100.0 + i * 2.3) * 0.4 + 0.6).toFloat()
+            paint.color = Color.argb((80 * twinkle).toInt(), 200, 210, 255)
+            val sz = 1f + r.nextFloat() * 1.5f
+            canvas.drawRect(sx, sy, sx + sz, sy + sz, paint)
+        }
+
+        val areaFar = wf * WRAP_FAR
+        for (i in 0 until 8) {
+            val r = rng(i * 120L + 5L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -80f || posX > wf + 80f) continue
+            val colH = hf * (0.15f + r.nextFloat() * 0.20f); val colW = 12f + r.nextFloat() * 10f
+            paint.color = Color.argb(50, 20, 20, 40)
+            canvas.drawRect(posX - colW/2f, hf - colH, posX + colW/2f, hf, paint)
+            canvas.drawRect(posX - colW, hf - colH, posX + colW, hf - colH + colW * 0.4f, paint)
+        }
+
+        // CAMADA 2 — pilares e arcos médios (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        for (i in 0 until 10) {
+            val r = rng(i * 180L + 6L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -80f || posX > wf + 80f) continue
+            val colH = hf * (0.25f + r.nextFloat() * 0.25f); val colW = 10f + r.nextFloat() * 8f
+            paint.color = Color.argb(80, 18, 18, 35)
+            canvas.drawRect(posX - colW/2f, hf - colH, posX + colW/2f, hf, paint)
+        }
+
+        // CAMADA 1 — partículas mágicas (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 20) {
+            val r = rng(i * 250L + 7L)
+            val baseX = r.nextFloat() * areaNear; val baseY = r.nextFloat() * hf
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val px = (posX + sin(time / 6000.0 + i * 0.5).toFloat() * 20f + wf) % wf
+            val py = (baseY + cos(time / 4500.0 + i * 0.8).toFloat() * 12f + hf) % hf
+            val glow = (sin(time / 1800.0 + i * 1.3) * 0.35 + 0.65).toFloat()
+            paint.shader = RadialGradient(px, py, 5f,
+                intArrayOf(Color.argb((80 * glow).toInt(), 140, 100, 255), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+            canvas.drawCircle(px, py, 3f, paint); paint.shader = null
+        }
+    }
+
+    // =========================================================================
+    // VOID_DARK — Abismo do Vazio
+    // =========================================================================
+    private fun renderVoid(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long, accentColor: Int) {
+        val wf = w.toFloat(); val hf = h.toFloat()
+
+        // CAMADA 3 — preto absoluto + formas distantes (fator 0.05)
+        paint.color = Color.parseColor("#050508")
+        canvas.drawRect(0f, 0f, wf, hf, paint)
+
+        val areaFar = wf * WRAP_FAR
+        for (i in 0 until 6) {
+            val r = rng(i * 130L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -60f || posX > wf + 60f) continue
+            val baseY = r.nextFloat() * hf; val sz = 20f + r.nextFloat() * 30f
+            paint.color = Color.argb(20, 10, 10, 20)
+            path.reset()
+            for (v in 0 until 5) {
+                val angle = v * (Math.PI * 2 / 5)
+                val rad = sz * (0.7f + r.nextFloat() * 0.3f)
+                val vx = posX + cos(angle).toFloat() * rad; val vy = baseY + sin(angle).toFloat() * rad
+                if (v == 0) path.moveTo(vx, vy) else path.lineTo(vx, vy)
+            }
+            path.close(); canvas.drawPath(path, paint)
+        }
+
+        // CAMADA 2 — silhuetas de abismo (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        for (i in 0 until 5) {
+            val r = rng(i * 190L + 1L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -100f || posX > wf + 100f) continue
+            paint.color = Color.argb(35, 5, 5, 12)
+            canvas.drawCircle(posX, r.nextFloat() * hf, 40f + r.nextFloat() * 40f, paint)
+        }
+
+        // CAMADA 1 — olhos pulsando (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 8) {
+            val r = rng(i * 270L + 2L)
+            val baseX = r.nextFloat() * areaNear
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val ey = r.nextFloat() * hf; val gap = 5f + r.nextFloat() * 5f; val eyeR = 1.5f + r.nextFloat() * 1f
+            val pulse = sin(time / 4000.0 + i * 2.1).toFloat()
+            val alpha = ((pulse + 1f) * 0.5f * 200f).toInt().coerceIn(0, 200)
+            if (alpha < 10) continue
+            paint.color = Color.argb(alpha, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+            canvas.drawCircle(posX - gap/2f, ey, eyeR, paint)
+            canvas.drawCircle(posX + gap/2f, ey, eyeR, paint)
+        }
+    }
+
+    // =========================================================================
+    // LAVA_GLOW — Núcleo de Fogo
+    // =========================================================================
+    private fun renderLava(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long) {
+        val wf = w.toFloat(); val hf = h.toFloat()
+
+        // CAMADA 3 — basalto + brilho de lava no chão (fator 0.05)
+        paint.shader = LinearGradient(0f, 0f, 0f, hf,
+            intArrayOf(Color.parseColor("#0f0804"), Color.parseColor("#1a1008"), Color.parseColor("#2a1505")),
+            floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, wf, hf, paint); paint.shader = null
+        paint.shader = LinearGradient(0f, hf * 0.7f, 0f, hf,
+            intArrayOf(Color.TRANSPARENT, Color.argb(60, 255, 80, 0)), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, hf * 0.7f, wf, hf, paint); paint.shader = null
+
+        val areaFar = wf * WRAP_FAR
+        for (i in 0 until 10) {
+            val r = rng(i * 110L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -50f || posX > wf + 50f) continue
+            val colW = 15f + r.nextFloat() * 20f; val colH = hf * (0.20f + r.nextFloat() * 0.25f)
+            paint.color = Color.argb(130, 10, 6, 4)
+            canvas.drawRect(posX - colW/2f, hf - colH, posX + colW/2f, hf, paint)
+        }
+
+        // CAMADA 2 — colunas médias com brilho na base (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        for (i in 0 until 8) {
+            val r = rng(i * 160L + 1L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -50f || posX > wf + 50f) continue
+            val colW = 20f + r.nextFloat() * 20f; val colH = hf * (0.30f + r.nextFloat() * 0.20f)
+            paint.color = Color.argb(170, 12, 7, 4)
+            canvas.drawRect(posX - colW/2f, hf - colH, posX + colW/2f, hf, paint)
+            val gradH = colH * 0.35f
+            paint.shader = LinearGradient(0f, hf - gradH, 0f, hf,
+                intArrayOf(Color.TRANSPARENT, Color.argb(80, 255, 60, 0)), null, Shader.TileMode.CLAMP)
+            canvas.drawRect(posX - colW/2f, hf - gradH, posX + colW/2f, hf, paint); paint.shader = null
+        }
+
+        // CAMADA 1 — faíscas ascendentes (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 20) {
+            val r = rng(i * 220L + 2L)
+            val baseX = r.nextFloat() * areaNear
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val speed = 80f + r.nextFloat() * 120f
+            val progress = (time / 1000f * speed / hf + r.nextFloat()) % 1f
+            val py = hf - (progress * hf); if (py < 0f || py > hf) continue
+            val alpha = (progress * 255f).toInt().coerceIn(0, 255)
+            paint.color = Color.argb(alpha, 255, 160 + (r.nextFloat() * 60f).toInt(), 0)
+            val sz = 1.5f + r.nextFloat() * 1.5f
+            canvas.drawRect(posX, py, posX + sz, py + sz, paint)
+        }
+    }
+
+    // =========================================================================
+    // DAYLIGHT — Floresta de Árvores, Superfície Aberta
+    // =========================================================================
+    private fun renderDay(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long) {
+        val wf = w.toFloat(); val hf = h.toFloat()
+
+        // CAMADA 3 — gradiente de céu + nuvens + colinas distantes (fator 0.05)
+        paint.shader = LinearGradient(0f, 0f, 0f, hf,
+            intArrayOf(Color.parseColor("#3377bb"), Color.parseColor("#66aadd"), Color.parseColor("#aaccee")),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, wf, hf, paint); paint.shader = null
+
+        val areaFar = wf * WRAP_FAR
+        for (i in 0 until 6) {
+            val r = rng(i * 90L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -150f || posX > wf + 150f) continue
+            val cy = hf * (0.05f + r.nextFloat() * 0.25f)
+            val cw = 80f + r.nextFloat() * 80f; val ch = 20f + r.nextFloat() * 15f
+            paint.color = Color.argb(100, 255, 255, 255)
+            canvas.drawOval(posX - cw/2f, cy - ch/2f, posX + cw/2f, cy + ch/2f, paint)
+            canvas.drawOval(posX - cw/3f, cy - ch, posX + cw/3f, cy, paint)
+        }
+        for (i in 0 until 5) {
+            val r = rng(i * 140L + 1L)
+            val baseX = r.nextFloat() * areaFar
+            val posX = ((baseX - camX * FACTOR_FAR) % areaFar + areaFar) % areaFar - wf * 0.5f
+            if (posX < -150f || posX > wf + 150f) continue
+            paint.color = Color.argb(70, 20, 60, 20)
+            canvas.drawOval(posX - 120f, hf * 0.5f, posX + 120f, hf * 0.75f, paint)
+        }
+
+        // CAMADA 2 — árvores médias em silhueta (fator 0.25)
+        val areaMid = wf * WRAP_MID
+        for (i in 0 until 12) {
+            val r = rng(i * 170L + 2L)
+            val baseX = r.nextFloat() * areaMid
+            val posX = ((baseX - camX * FACTOR_MID) % areaMid + areaMid) % areaMid - wf * 0.5f
+            if (posX < -80f || posX > wf + 80f) continue
+            val trunkH = hf * (0.12f + r.nextFloat() * 0.10f); val trunkW = 5f + r.nextFloat() * 5f
+            val copaW = 30f + r.nextFloat() * 30f; val copaH = 35f + r.nextFloat() * 25f
+            paint.color = Color.argb(130, 10, 30, 10)
+            canvas.drawRect(posX - trunkW/2f, hf - trunkH, posX + trunkW/2f, hf, paint)
+            canvas.drawOval(posX - copaW/2f, hf - trunkH - copaH/2f, posX + copaW/2f, hf - trunkH + copaH/4f, paint)
+        }
+
+        // CAMADA 1 — folhas e partículas de luz (fator 0.50)
+        val areaNear = wf * WRAP_NEAR
+        for (i in 0 until 18) {
+            val r = rng(i * 230L + 3L)
+            val baseX = r.nextFloat() * areaNear; val baseY = hf * (0.1f + r.nextFloat() * 0.8f)
+            val posX = ((baseX - camX * FACTOR_NEAR) % areaNear + areaNear) % areaNear
+            val px = (posX + sin(time / 5000.0 + i * 0.6).toFloat() * 20f + wf) % wf
+            val py = (baseY + sin(time / 3500.0 + i * 1.1).toFloat() * 8f + hf) % hf
+            val alpha = (sin(time / 2500.0 + i * 1.7) * 30 + 50).toInt()
+            paint.color = Color.argb(alpha, 200, 255, 150)
+            canvas.drawCircle(px, py, 2f + r.nextFloat() * 2f, paint)
+        }
     }
 }

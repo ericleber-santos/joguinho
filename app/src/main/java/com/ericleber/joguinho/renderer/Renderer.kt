@@ -36,6 +36,7 @@ class Renderer(
 
     private val lightingSystem = LightingSystem()
     private val portalRenderer = PortalRenderer()
+    private var appContext: android.content.Context? = null
 
     // -----------------------------------------------------------------------
     // Fase 10 — Sistemas de imersão visual
@@ -305,8 +306,10 @@ class Renderer(
         if (proceduralBackground == null || proceduralBackgroundFloor != gameState.floorNumber) {
             proceduralBackgroundFloor = gameState.floorNumber
             proceduralBackground = ProceduralBackground(gameState.floorNumber)
+            ensureBackgroundTextures()
         }
         
+        val bgHasTextures = proceduralBackground?.hasTextures() == true
         val currentLightingMode = gameState.currentBiomeWorld.lightingMode
         if (currentLightingMode == com.ericleber.joguinho.biome.LightingMode.SUBTERRANEAN ||
             currentLightingMode == com.ericleber.joguinho.biome.LightingMode.MOONLIGHT ||
@@ -314,17 +317,14 @@ class Renderer(
             currentLightingMode == com.ericleber.joguinho.biome.LightingMode.DAYLIGHT ||
             currentLightingMode == com.ericleber.joguinho.biome.LightingMode.LAVA_GLOW ||
             currentLightingMode == com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT) {
-            proceduralBackground?.render(
-                canvas,
-                cameraX,
-                cameraY,
-                screenWidth,
-                (screenHeight * fracaoAreaJogo).toInt(),
-                System.currentTimeMillis(),
-                palette.wallColor,
-                palette.accentColor,
-                currentLightingMode
-            )
+            if (!bgHasTextures) {
+                proceduralBackground?.render(
+                    canvas, cameraX, cameraY,
+                    screenWidth, (screenHeight * fracaoAreaJogo).toInt(),
+                    System.currentTimeMillis(), palette.wallColor,
+                    palette.accentColor, currentLightingMode
+                )
+            }
         }
 
         // Passo 1: Chão (Base Estática)
@@ -375,6 +375,16 @@ class Renderer(
                 }
                 canvas.drawBitmap(decorBitmap, sx, sy, null)
             }
+        }
+
+        // Background parallax em textura: desenha APÓS o chão como overlay visível
+        if (bgHasTextures) {
+            proceduralBackground?.render(
+                canvas, cameraX, cameraY,
+                screenWidth, (screenHeight * fracaoAreaJogo).toInt(),
+                System.currentTimeMillis(), palette.wallColor,
+                palette.accentColor, currentLightingMode
+            )
         }
 
         // =====================================================================
@@ -861,6 +871,25 @@ class Renderer(
         screenWidth = width
         screenHeight = height
         this.density = density
+    }
+
+    /**
+     * Carrega as texturas PNG de parallax do bioma Entranhas da Terra.
+     * Deve ser chamado uma vez após a criação do Renderer.
+     */
+    fun loadParallaxTextures(context: android.content.Context) {
+        appContext = context
+        if (proceduralBackground == null) {
+            proceduralBackground = ProceduralBackground(0)
+        }
+        proceduralBackground?.loadParallaxTextures(context)
+    }
+
+    private fun ensureBackgroundTextures() {
+        val ctx = appContext ?: return
+        if (proceduralBackground != null && !proceduralBackground!!.hasTextures()) {
+            proceduralBackground?.loadParallaxTextures(ctx)
+        }
     }
 
     /**
