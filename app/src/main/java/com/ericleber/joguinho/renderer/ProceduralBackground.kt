@@ -16,6 +16,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class ProceduralBackground(private val floor: Int) {
+    private val biomeWorld = com.ericleber.joguinho.biome.BiomeWorld.fromFloor(floor.coerceAtLeast(1))
+
     // Texturas PNG para parallax (carregadas de assets)
     private var texLayer0: Bitmap? = null // camada frontal (camada1.png, parallax 0.50x)
     private var texLayer1: Bitmap? = null // camada média (camada2.png, parallax 0.25x)
@@ -26,14 +28,28 @@ class ProceduralBackground(private val floor: Int) {
 
     fun loadParallaxTextures(context: Context) {
         try {
+            val prefix = when (biomeWorld) {
+                com.ericleber.joguinho.biome.BiomeWorld.ENTRANHAS -> "entranhas"
+                com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES -> "floresta"
+                com.ericleber.joguinho.biome.BiomeWorld.ABISMOS_AQUATICOS -> "aquatico"
+                com.ericleber.joguinho.biome.BiomeWorld.JARDIM_PROFUNDO -> "jardim"
+                com.ericleber.joguinho.biome.BiomeWorld.MINAS_RIQUEZAS -> "minas"
+                com.ericleber.joguinho.biome.BiomeWorld.RUINAS_ANCESTRAIS -> "ruinas"
+                com.ericleber.joguinho.biome.BiomeWorld.REINO_DA_MAGIA -> "magia"
+                com.ericleber.joguinho.biome.BiomeWorld.SUPERFICIE_ABERTA -> "superficie"
+                com.ericleber.joguinho.biome.BiomeWorld.ABISMO_DO_VAZIO -> "vazio"
+                com.ericleber.joguinho.biome.BiomeWorld.NUCLEO_DE_FOGO -> "fogo"
+                com.ericleber.joguinho.biome.BiomeWorld.BASE_LUNAR -> "lunar"
+            }
+
             texLayer0 = BitmapFactory.decodeStream(
-                context.assets.open("textures/entranhas-camada1.png")
+                context.assets.open("textures/$prefix-camada1.png")
             )
             texLayer1 = BitmapFactory.decodeStream(
-                context.assets.open("textures/entranhas-camada2.png")
+                context.assets.open("textures/$prefix-camada2.png")
             )
             texLayer2 = BitmapFactory.decodeStream(
-                context.assets.open("textures/entranhas-camada3.png")
+                context.assets.open("textures/$prefix-camada3.png")
             )
             texturesLoaded = texLayer0 != null && texLayer1 != null && texLayer2 != null
         } catch (e: Exception) {
@@ -48,12 +64,19 @@ class ProceduralBackground(private val floor: Int) {
         parallaxFactor: Float,
         alpha: Int = 255
     ) {
-        val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.CLAMP)
         paint.shader = shader
         paint.alpha = alpha.coerceIn(0, 255)
         paint.style = Paint.Style.FILL
+        
+        // Escala a imagem verticalmente para cobrir a altura total da tela e mantém o aspect ratio na horizontal
+        val scale = screenH.toFloat() / bitmap.height.toFloat()
+        
         val m = Matrix()
-        m.postTranslate(cameraX * parallaxFactor, cameraY * parallaxFactor)
+        m.postScale(scale, scale)
+        // Move apenas horizontalmente para parallax, o eixo vertical fica travado (Y=0) para as colunas não esticarem
+        m.postTranslate(cameraX * parallaxFactor, 0f)
+        
         shader.setLocalMatrix(m)
         canvas.drawRect(0f, 0f, screenW.toFloat(), screenH.toFloat(), paint)
         paint.shader = null
@@ -84,6 +107,14 @@ class ProceduralBackground(private val floor: Int) {
         accentColor: Int,
         lightingMode: com.ericleber.joguinho.biome.LightingMode
     ) {
+        if (texturesLoaded) {
+            // Se as texturas do bioma foram carregadas, desenha-as diretamente em camadas (parallax 2.5D)
+            texLayer2?.let { renderTextureLayer(canvas, it, cameraX, cameraY, screenW, screenH, FACTOR_FAR, 255) }
+            texLayer1?.let { renderTextureLayer(canvas, it, cameraX, cameraY, screenW, screenH, FACTOR_MID, 255) }
+            texLayer0?.let { renderTextureLayer(canvas, it, cameraX, cameraY, screenW, screenH, FACTOR_NEAR, 255) }
+            return
+        }
+
         when (lightingMode) {
             com.ericleber.joguinho.biome.LightingMode.BIOLUMINESCENT ->
                 renderBio(canvas, cameraX, cameraY, screenW, screenH, time)
@@ -185,16 +216,6 @@ class ProceduralBackground(private val floor: Int) {
     // SUBTERRANEAN — Entranhas, Abismos Aquáticos, Minas, Ruínas
     // =========================================================================
     private fun renderCave(canvas: Canvas, camX: Float, camY: Float, w: Int, h: Int, time: Long, baseColor: Int) {
-        if (texturesLoaded) {
-            // Camada 3 (fundo azul distante): mais distante, fator 0.05x, alpha 255
-            texLayer2?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_FAR, 255) }
-            // Camada 2 (estalactites): camada média, fator 0.25x, alpha 255
-            texLayer1?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_MID, 255) }
-            // Camada 1 (caverna frontal): camada mais próxima, fator 0.50x, alpha 255
-            texLayer0?.let { renderTextureLayer(canvas, it, camX, camY, w, h, FACTOR_NEAR, 255) }
-            return
-        }
-
         val wf = w.toFloat(); val hf = h.toFloat()
         val br = (Color.red(baseColor) * 0.35f).toInt().coerceIn(0, 60)
         val bg = (Color.green(baseColor) * 0.35f).toInt().coerceIn(0, 60)
