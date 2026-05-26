@@ -26,6 +26,44 @@ class ProceduralBackground(private val floor: Int) {
 
     fun hasTextures(): Boolean = texturesLoaded
 
+    private fun makeChromaKeyTransparent(src: Bitmap, chromaColor: Int): Bitmap {
+        val width = src.width
+        val height = src.height
+        val pixels = IntArray(width * height)
+        src.getPixels(pixels, 0, width, 0, 0, width, height)
+        
+        // Verifica se a cor alvo é verde ou roxo
+        val isGreenChroma = Color.green(chromaColor) > Color.red(chromaColor)
+        
+        var modified = false
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val r = Color.red(color)
+            val g = Color.green(color)
+            val b = Color.blue(color)
+            
+            val isChroma = if (isGreenChroma) {
+                // Dominância verde: o canal verde deve ser marcadamente maior que vermelho e azul, com intensidade mínima
+                g > r + 30 && g > b + 30 && g > 45
+            } else {
+                // Dominância roxa (magenta): canais vermelho e azul marcadamente maiores que verde
+                r > g + 30 && b > g + 30 && r > 45 && b > 45
+            }
+            
+            if (isChroma) {
+                pixels[i] = Color.TRANSPARENT
+                modified = true
+            }
+        }
+        
+        if (!modified) return src
+        
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        result.setPixels(pixels, 0, width, 0, 0, width, height)
+        src.recycle()
+        return result
+    }
+
     fun loadParallaxTextures(context: Context) {
         try {
             val prefix = when (biomeWorld) {
@@ -42,16 +80,33 @@ class ProceduralBackground(private val floor: Int) {
                 com.ericleber.joguinho.biome.BiomeWorld.BASE_LUNAR -> "lunar"
             }
 
-            texLayer0 = BitmapFactory.decodeStream(
+            val rawLayer0 = BitmapFactory.decodeStream(
                 context.assets.open("textures/$prefix-camada1.png")
             )
-            texLayer1 = BitmapFactory.decodeStream(
+            val rawLayer1 = BitmapFactory.decodeStream(
                 context.assets.open("textures/$prefix-camada2.png")
             )
-            texLayer2 = BitmapFactory.decodeStream(
+            val rawLayer2 = BitmapFactory.decodeStream(
                 context.assets.open("textures/$prefix-camada3.png")
             )
-            texturesLoaded = texLayer0 != null && texLayer1 != null && texLayer2 != null
+
+            if (rawLayer0 != null && rawLayer1 != null && rawLayer2 != null) {
+                val chromaColor = when (biomeWorld) {
+                    com.ericleber.joguinho.biome.BiomeWorld.FLORESTA_DE_ARVORES,
+                    com.ericleber.joguinho.biome.BiomeWorld.ABISMOS_AQUATICOS,
+                    com.ericleber.joguinho.biome.BiomeWorld.JARDIM_PROFUNDO,
+                    com.ericleber.joguinho.biome.BiomeWorld.SUPERFICIE_ABERTA -> Color.rgb(255, 0, 255) // Roxo (#FF00FF)
+                    else -> Color.rgb(0, 255, 0) // Verde (#00FF00)
+                }
+
+                // Processa as camadas de frente e meio para remover o Chroma-Key, mantendo o fundo opaco normal
+                texLayer0 = makeChromaKeyTransparent(rawLayer0, chromaColor)
+                texLayer1 = makeChromaKeyTransparent(rawLayer1, chromaColor)
+                texLayer2 = rawLayer2
+                texturesLoaded = true
+            } else {
+                texturesLoaded = false
+            }
         } catch (e: Exception) {
             texturesLoaded = false
         }
