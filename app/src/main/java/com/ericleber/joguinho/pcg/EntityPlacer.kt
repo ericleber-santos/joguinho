@@ -74,8 +74,8 @@ class EntityPlacer(private val random: Random) {
         
         val monsters = mutableListOf<MonsterState>()
         
-        // Se for o segundo mapa de um andar par, adiciona um Boss próximo à escada
-        if (floorNumber % 2 == 0 && mapIndex == 1) {
+        // Se for o último mapa de uma fase (mapIndex == 6), adiciona um Boss próximo à escada
+        if (mapIndex == 6) {
             val exitX = maze.exitIndex % maze.width
             val exitY = maze.exitIndex / maze.width
             
@@ -86,14 +86,14 @@ class EntityPlacer(private val random: Random) {
             }.shuffled(random).firstOrNull() ?: candidates.shuffled(random).firstOrNull()
             
             bossTile?.let {
-                val bossHp = 50 + (floorNumber * 5)
+                val bossHp = 50 + (floorNumber * 10)
                 monsters.add(MonsterState(
                     id = "boss_${floorNumber}",
                     position = Position((it % maze.width) + 0.5f, (it / maze.width) + 0.5f),
                     movementPattern = MovementPattern.BOSS_STALKER,
                     isActive = true,
                     isBoss = true,
-                    bossType = (floorNumber / 10) % 3, // Varia o tipo por bioma
+                    bossType = (floorNumber) % 3, // Varia o tipo por bioma
                     hp = bossHp,
                     maxHp = bossHp
                 ))
@@ -150,8 +150,8 @@ class EntityPlacer(private val random: Random) {
     ): List<ItemState> {
         val items = mutableListOf<ItemState>()
         
-        // Requisito: O power up (Botas) poderá estar em locais aleatórios SOMENTE no mapa onde tem chefão (mapIndex == 2)
-        if (mapIndex == 2) {
+        // Requisito: O power up (Botas) poderá estar em locais aleatórios SOMENTE no mapa onde tem chefão (mapIndex == 6)
+        if (mapIndex == 6) {
             val candidates = getFloorCandidates(maze, criticalPath + occupiedIndices)
             val selected = candidates.shuffled(random).take(1)
             selected.forEachIndexed { i, index ->

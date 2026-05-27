@@ -175,6 +175,24 @@ class GameLogic(private val gameState: GameState) {
             return
         }
 
+        // Se estiver em transição contínua de mapa (Seamless Fade), processa o timer
+        if (gameState.isSeamlessTransition) {
+            val oldTimer = gameState.seamlessTransitionTimerMs
+            gameState.seamlessTransitionTimerMs += (deltaTimeSec * 1000).toLong()
+
+            // Ponto médio (300ms): carrega o novo mapa silenciosamente
+            if (oldTimer < 300 && gameState.seamlessTransitionTimerMs >= 300) {
+                processarTransicaoNivelSeamless(maze)
+            }
+
+            // Fim da transição (600ms): devolve o controle ao herói
+            if (gameState.seamlessTransitionTimerMs >= 600) {
+                gameState.isSeamlessTransition = false
+                gameState.seamlessTransitionTimerMs = 0L
+            }
+            return
+        }
+
         // --- Processar Física Lateral 2D do Herói (T-021) ---
         val foiGrounded = gameState.heroIsGrounded
         PlatformerPhysics.atualizarHero(
@@ -917,6 +935,8 @@ class GameLogic(private val gameState: GameState) {
      * Usa raio de 0 tiles (exato) para evitar término imediato ao nascer perto da saída.
      */
     private fun verificarHeroNoExit(maze: MazeData) {
+        if (gameState.isExiting || gameState.isSeamlessTransition) return
+
         val heroX = gameState.heroPosition.x
         val heroY = gameState.heroPosition.y
         val exitX = maze.exitIndex % maze.width
@@ -927,18 +947,23 @@ class GameLogic(private val gameState: GameState) {
             return // Porta travada enquanto o Boss estiver vivo!
         }
 
-        // O herói deve estar próximo ao tile da saída (placa + escada).
-        // Usamos distância Euclidiana (raio de 0.8 tiles) para que qualquer toque
-        // na placa ou na escada (frente, trás, lados) ative a animação.
+        // O herói deve estar próximo ao tile da saída.
         val dx = (heroX - exitX).toFloat()
         val dy = (heroY - exitY).toFloat()
         val distSq = dx * dx + dy * dy
-        if (distSq > 1.44f) return // Raio de 1.2 tiles (1.2 * 1.2 = 1.44) para cobrir a esfera azul do portal
 
-        // Inicia animação de saída em vez de transição imediata
-        gameState.isExiting = true
-        gameState.exitAnimationTimerMs = 0L
-        gameState.emitEvent(GameEvent.HeroReachedExit)
+        if (gameState.mapIndex == 6) {
+            // No mapa 7/7 (Boss), usa a ativação do portal interdimensional cósmico
+            if (distSq > 1.44f) return // Raio de 1.2 tiles
+            gameState.isExiting = true
+            gameState.exitAnimationTimerMs = 0L
+            gameState.emitEvent(GameEvent.HeroReachedExit)
+        } else {
+            // Nos mapas intermediários 1-6, ativa a transição seamless com Fade
+            if (distSq > 1.0f) return // Raio de 1.0 tile para a passagem livre
+            gameState.isSeamlessTransition = true
+            gameState.seamlessTransitionTimerMs = 0L
+        }
     }
 
     /**
@@ -951,6 +976,9 @@ class GameLogic(private val gameState: GameState) {
      * Também calcula o mundo destino do portal ao entrar em AWAKENING pela primeira vez.
      */
     private fun atualizarPortal(maze: MazeData) {
+        // O portal interdimensional só existe no mapa do Boss (7/7)
+        if (gameState.mapIndex != 6) return
+
         val heroX = gameState.heroPosition.x
         val heroY = gameState.heroPosition.y
         val exitX = (maze.exitIndex % maze.width).toFloat()
@@ -1003,23 +1031,19 @@ class GameLogic(private val gameState: GameState) {
         // Muda a fase para evitar processamento repetido da saída no mesmo frame
         gameState.phase = GamePhase.LOADING
 
-        // Verifica se é o último Map do Floor (2 Maps por Floor)
-        val totalMapsNoFloor = 2
+        // Verifica se é o último Map do Floor (7 Maps por Floor)
+        val totalMapsNoFloor = 7
         if (gameState.mapIndex >= totalMapsNoFloor - 1) {
-            // Completou o Floor — Avança para o próximo Floor automaticamente (até o 120)
-            if (gameState.floorNumber < 120) {
-                gameState.floorNumber++
-                gameState.mapIndex = 0
-                gameState.currentMapClean = true
-                // Emite eventos de conclusão de andar
+            // Completou a Fase (7/7) — Abre a tela de pontuação para a fase atual
+            if (gameState.floorNumber < 11) {
                 gameState.completarAndar(gameState.floorTimerMs)
-                gameState.floorTimerMs = 0 // Reseta o timer para o novo andar
+                gameState.floorTimerMs = 0 // Reseta o timer da fase
+                gameState.phase = GamePhase.SCORE_SCREEN
                 
-                // Notifica o ViewModel para regenerar o mapa para o novo Floor
                 onMapCompleted?.invoke()
                 onHeroReachedExit?.invoke()
             } else {
-                // Chegou ao fim do jogo (Piso 120)
+                // Chegou ao fim do jogo (Fase 11)
                 gameState.completarAndar(gameState.floorTimerMs)
                 gameState.phase = GamePhase.SCORE_SCREEN
                 onMapCompleted?.invoke()
@@ -1033,6 +1057,29 @@ class GameLogic(private val gameState: GameState) {
             onHeroReachedExit?.invoke()
         }
     }
+
+    /**
+     * Processa a transição de mapa contínuo (seamless) para os mapas intermediários 1-6.
+     * Incrementa o índice do mapa e aciona os callbacks para carregar o novo cenário.
+     */
+    private fun processarTransicaoNivelSeamless(maze: MazeData) {
+        if (gameState.currentMapClean) {
+            gameState.incrementComboStreak()
+            gameState.emitEvent(GameEvent.HeroSurpassedObstacle)
+        }
+        
+        gameState.mapSlowdownCount = 0
+        gameState.mapTimerMs = MAP_TIMER_INITIAL_MS
+        gameState.portalState = PortalState.DORMANT
+        gameState.emitEvent(GameEvent.MapCompleted)
+
+        gameState.phase = GamePhase.LOADING
+
+        gameState.mapIndex++
+        gameState.currentMapClean = true
+        onMapCompleted?.invoke()
+        onHeroReachedExit?.invoke()
+    }
     /**
      * Processa o respawn do herói após a animação de morte.
      * Reseta posição, slows e dá 1 vida de volta para continuar.
@@ -1041,17 +1088,11 @@ class GameLogic(private val gameState: GameState) {
         gameState.isRespawning = false
         gameState.respawnTimerMs = 0L
 
-        // Se morrer no boss (andar par, mapa index 1), volta para o mapa 0 do mesmo andar
-        if (gameState.floorNumber % 2 == 0 && gameState.mapIndex == 1) {
-            gameState.mapIndex = 0
-            onMapCompleted?.invoke()
-        } else {
-            // Respawn no início do mapa atual
-            gameState.heroPosition = Position(
-                (maze.startIndex % maze.width) + 0.5f,
-                (maze.startIndex / maze.width) + 0.5f
-            )
-        }
+        // Respawn no início do mapa atual (inclusive na luta contra o Boss no mapa 7/7)
+        gameState.heroPosition = Position(
+            (maze.startIndex % maze.width) + 0.5f,
+            (maze.startIndex / maze.width) + 0.5f
+        )
 
         gameState.heroIsSlowedDown = false
         gameState.heroSlowdownRemainingMs = 0

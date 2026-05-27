@@ -157,12 +157,12 @@ class ScoreActivity : Activity() {
         // Subtítulo
         tinta.color = 0xFF8B6914.toInt()
         tinta.textSize = 50f
-        canvas.drawText("~ Resultado do Andar ~", 540f, 230f, tinta)
+        canvas.drawText("~ Resultado da Fase ~", 540f, 230f, tinta)
 
         // Andar
         tinta.color = Color.WHITE
         tinta.textSize = 80f
-        canvas.drawText("Andar $andar", 540f, 380f, tinta)
+        canvas.drawText("Fase $andar", 540f, 380f, tinta)
 
         // Tempo
         tinta.color = 0xFFAAAAAA.toInt()
@@ -292,7 +292,7 @@ class ScoreActivity : Activity() {
             // Título
             tintaTexto.color = 0xFFD4A017.toInt()
             tintaTexto.textSize = h * 0.10f
-            canvas.drawText("Andar $andar Completo!", w / 2f, h * 0.13f, tintaTexto)
+            canvas.drawText("Fase $andar Completa!", w / 2f, h * 0.13f, tintaTexto)
 
             // Layout em duas colunas: estatísticas à esquerda, botões à direita
             val colunaEsq = w * 0.28f
@@ -360,8 +360,8 @@ class ScoreActivity : Activity() {
             val alturaBotao = h * 0.11f
             val xBotoes = colunaDireita
             val botoesAcao = listOf(
-                "proximoAndar" to "Próximo Andar",
-                "reiniciarAndar" to "Reiniciar Andar",
+                "proximoAndar" to "Próxima Fase",
+                "reiniciarAndar" to "Reiniciar Fase",
                 "salvarESair" to "Salvar e Sair"
             )
             botoesAcao.forEachIndexed { i, (acao, rotulo) ->
@@ -430,7 +430,7 @@ class ScoreActivity : Activity() {
             // Título
             tintaTexto.color = 0xFF5555FF.toInt()
             tintaTexto.textSize = h * 0.09f
-            canvas.drawText("Leaderboard — Andar $andar", w / 2f, h * 0.12f, tintaTexto)
+            canvas.drawText("Leaderboard — Fase $andar", w / 2f, h * 0.12f, tintaTexto)
 
             if (leaderboard.isEmpty()) {
                 tintaTexto.color = 0xFF666666.toInt()

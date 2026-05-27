@@ -387,8 +387,8 @@ class HudRenderer {
         val timerTexto = "TEMPO %d:%02d".format(mSeg / 60, mSeg % 60)
 
         val linhas = listOf(
-            "Andar $andar",
-            "Mapa  $mapa/2",
+            "Fase $andar",
+            "Mapa  $mapa/7",
             nomeBiomaTexto,
             timerTexto
         )
@@ -520,13 +520,13 @@ class HudRenderer {
         val margem = 12f
         val tx = w - margem
 
-        // Linha 1: "A12 · M2/2" — pequena, cinza
+        // Linha 1: "F12 · M7/7" — pequena, cinza
         textPaint.textSize = 11f
         textPaint.textAlign = Paint.Align.RIGHT
         textPaint.color = Color.argb((alpha * 0.6f).toInt(), 200, 200, 180)
-        canvas.drawText("A$andar · M$mapa/2", tx + 1f, 21f, textPaint)
+        canvas.drawText("F$andar · M$mapa/7", tx + 1f, 21f, textPaint)
         textPaint.color = Color.argb(alpha, 200, 200, 180)
-        canvas.drawText("A$andar · M$mapa/2", tx, 20f, textPaint)
+        canvas.drawText("F$andar · M$mapa/7", tx, 20f, textPaint)
 
         // Linha 2: nome do bioma — cor do acento
         textPaint.textSize = 13f

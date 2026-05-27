@@ -139,8 +139,8 @@ class GameViewModel : ViewModel() {
         gameState.survivalElements = mapaGerado.survivalElements
         gameState.currentMapClean = true
 
-        // Reset BossFightState se aplicável (Mapa 2 de Andares Pares)
-        if (gameState.mapIndex == 1 && gameState.floorNumber % 2 == 0) {
+        // Reset BossFightState se aplicável (Mapa 7/7, ou seja, mapIndex == 6)
+        if (gameState.mapIndex == 6) {
             gameState.bossFightState = com.ericleber.joguinho.core.BossFightState(isActive = true)
             gameState.bossAoeZones = emptyList()
         } else {

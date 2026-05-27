@@ -48,6 +48,8 @@ class GameState {
     var phase: GamePhase = GamePhase.MENU
     var exitAnimationTimerMs: Long = 0L // Timer para a animação de subida na escada
     var isExiting: Boolean = false      // Flag para travar movimento durante a animação
+    var isSeamlessTransition: Boolean = false // Flag para travar movimento durante a transição contínua
+    var seamlessTransitionTimerMs: Long = 0L  // Timer para o fade (600ms no total, transição aos 300ms)
 
     // --- Morte e Respawn ---
     var isRespawning: Boolean = false   // Flag para animação de morte

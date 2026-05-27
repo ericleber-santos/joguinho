@@ -158,13 +158,13 @@ enum class BiomeWorld(
     );
 
     val firstFloor: Int
-        get() = ordinal * 2 + 1
+        get() = ordinal + 1
 
     companion object {
-        /** Retorna o BiomeWorld correspondente ao número de andar. Cada andar tem um bioma único, ciclando entre os disponíveis. */
+        /** Retorna o BiomeWorld correspondente ao número de andar/fase. Cada fase tem um bioma único. */
         fun fromFloor(floorNumber: Int): BiomeWorld {
             val worlds = entries
-            return worlds[((floorNumber - 1) % 22) / 2]
+            return worlds[(floorNumber - 1) % worlds.size]
         }
     }
 }

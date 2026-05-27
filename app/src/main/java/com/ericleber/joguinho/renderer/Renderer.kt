@@ -736,7 +736,7 @@ class Renderer(
         }
 
         // Passo FINAL: Portal Interdimensional (substitui placa/escada)
-        if (saidaTx in minX..maxX && saidaTy in minY..maxY) {
+        if (saidaTx in minX..maxX && saidaTy in minY..maxY && gameState.mapIndex == 6) {
             val portalSx = saidaTx * tileW + cameraX + tileW / 2f
             val portalSy = saidaTy * tileH + cameraY + tileH / 2f
             val isLocked = gameState.monsters.any { it.isBoss && it.isActive }
@@ -811,6 +811,18 @@ class Renderer(
 
         // HUD responsivo e Pro Max
         hudRenderer.render(canvas, gameState, screenWidth / density)
+
+        // Overlay de transição seamless de mapa (Fade Out / Fade In)
+        if (gameState.isSeamlessTransition) {
+            val timer = gameState.seamlessTransitionTimerMs
+            val alpha = when {
+                timer < 300 -> (timer / 300f).coerceIn(0f, 1f)
+                else -> ((600f - timer) / 300f).coerceIn(0f, 1f)
+            }
+            bgPaint.color = Color.argb((alpha * 255).toInt(), 0, 0, 0)
+            canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), bgPaint)
+            bgPaint.alpha = 255
+        }
     }
 
     /**

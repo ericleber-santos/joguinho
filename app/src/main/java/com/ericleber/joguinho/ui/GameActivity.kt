@@ -307,11 +307,17 @@ class GameActivity : AppCompatActivity() {
     // Ações de navegação pós-Score
     // =========================================================================
 
-    /** Avança para o próximo andar incrementando floorNumber e reiniciando o loop. */
+    /** Avança para a próxima fase incrementando floorNumber e reiniciando o loop. */
     private fun avancarParaProximoAndar() {
-        viewModel.gameState.floorNumber++
-        viewModel.gameState.mapIndex = 0
-        viewModel.iniciarJogo()
+        if (viewModel.gameState.floorNumber < 11) {
+            viewModel.gameState.floorNumber++
+            viewModel.gameState.mapIndex = 0
+            viewModel.iniciarJogo()
+        } else {
+            viewModel.salvarESair {
+                finish()
+            }
+        }
     }
 
     /** Reinicia o andar atual mantendo o mesmo seed. */
