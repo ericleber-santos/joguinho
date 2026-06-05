@@ -176,6 +176,19 @@ class EntityPlacer(private val random: Random) {
                 ))
             }
         }
+
+        // Spawn de Moedas (ItemType.COIN) em qualquer mapa
+        val coinCount = 8 + random.nextInt(6) // 8 a 13 moedas por mapa
+        val currentOccupiedForCoins = occupiedIndices + items.map { it.position.iy * maze.width + it.position.ix }
+        val coinCandidates = getFloorCandidates(maze, criticalPath + currentOccupiedForCoins)
+        val selectedCoins = coinCandidates.shuffled(random).take(coinCount)
+        selectedCoins.forEachIndexed { i, index ->
+            items.add(ItemState(
+                id = "item_coin_${maze.seed}_$i",
+                position = Position((index % maze.width) + 0.5f, (index / maze.width) + 0.5f),
+                type = ItemType.COIN
+            ))
+        }
         
         return items
     }

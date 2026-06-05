@@ -21,7 +21,7 @@ enum class HeroDirection { N, NE, E, SE, S, SW, W, NW }
 /**
  * Animações disponíveis para o Herói e Cachorro.
  */
-enum class AnimState { IDLE, WALK, RUN }
+enum class AnimState { IDLE, WALK, RUN, CLIMB }
 
 /**
  * Aparência procedural de um Monster.
@@ -142,6 +142,14 @@ class CharacterRenderer {
                 legSwing = phase * 1.5f
                 armSwing = -phase * 1.2f
             }
+
+            AnimState.CLIMB -> {
+                // Bobbing rápido simulando o esforço de subir a parede
+                val phase = sin(t * 14.0).toFloat()
+                bodyBob = phase * u * 0.4f
+                legSwing = phase * 1.2f
+                armSwing = -phase * 1.2f
+            }
         }
 
         // Tintura de status
@@ -223,7 +231,19 @@ class CharacterRenderer {
         )
 
         // --- BRAÇO ESQUERDO (Atrás) ---
-        if (equippedWeapon == WeaponType.NONE) {
+        if (state == AnimState.CLIMB) {
+            // Braço Esquerdo de Escalada (Estendido para cima/frente com oscilação)
+            val lArmX = cx - u * 2f
+            canvas.save()
+            val lPivotX = lArmX + u * 1.1f
+            val lPivotY = armTopY
+            val lClimbAngle = -75f + sin(t * 14.0).toFloat() * 10f
+            canvas.rotate(lClimbAngle, lPivotX, lPivotY)
+            fillRect(canvas, lArmX, armTopY, u * 2.2f, armLen * 1.2f, currentShirt)
+            strokeRect(canvas, lArmX, armTopY, u * 2.2f, armLen * 1.2f, heroOutline, u * 0.5f)
+            fillCircle(canvas, lPivotX, armTopY + armLen * 1.2f, u * 1.3f, heroSkin)
+            canvas.restore()
+        } else if (equippedWeapon == WeaponType.NONE) {
             val lArmX = cx - u * 3.8f
             val lArmSwingPx = armSwing * u * 1.5f
             fillRect(canvas, lArmX, armTopY + lArmSwingPx, u * 2.2f, armLen, currentShirt)
@@ -258,7 +278,19 @@ class CharacterRenderer {
         fillRect(canvas, cx + u * 1.0f, bodyTop + u * 3f, u * 1.2f, u * 1.2f, heroShirtDark)
 
         // --- BRAÇO DIREITO E ARMA ---
-        if (equippedWeapon == WeaponType.NONE) {
+        if (state == AnimState.CLIMB) {
+            // Braço Direito de Escalada (Estendido para cima/frente com oscilação invertida)
+            val rArmX = cx + u * 0.5f
+            canvas.save()
+            val rPivotX = rArmX + u * 1.1f
+            val rPivotY = armTopY
+            val rClimbAngle = -65f - sin(t * 14.0).toFloat() * 10f
+            canvas.rotate(rClimbAngle, rPivotX, rPivotY)
+            fillRect(canvas, rArmX, armTopY, u * 2.2f, armLen * 1.2f, currentShirt)
+            strokeRect(canvas, rArmX, armTopY, u * 2.2f, armLen * 1.2f, heroOutline, u * 0.5f)
+            fillCircle(canvas, rPivotX, armTopY + armLen * 1.2f, u * 1.3f, heroSkin)
+            canvas.restore()
+        } else if (equippedWeapon == WeaponType.NONE) {
             // Braço Direito (Swing normal quando desarmado)
             val rArmX = cx - u * 1.5f
             val rArmSwingPx = -armSwing * u * 1.5f
@@ -483,6 +515,18 @@ class CharacterRenderer {
             }
 
             AnimState.RUN -> {
+                val phase = sin(t * 14.0).toFloat()
+                bodyBob = abs(phase) * u * 1.2f
+                headBob = sin(t * 14.0 + 0.3).toFloat() * u * 0.8f
+                legAnim = phase * 1.8f
+                tailWag = sin(t * 28.0).toFloat() * u * 4f
+                tongueOut = true
+                stretchX = 1.1f + abs(phase) * 0.1f
+                stretchY = 0.9f - abs(phase) * 0.1f
+            }
+
+            AnimState.CLIMB -> {
+                // Cachorro não escala — reusa animação de corrida
                 val phase = sin(t * 14.0).toFloat()
                 bodyBob = abs(phase) * u * 1.2f
                 headBob = sin(t * 14.0 + 0.3).toFloat() * u * 0.8f
@@ -1149,5 +1193,78 @@ class CharacterRenderer {
         streamPaint.color = 0xAAFFFFFF.toInt()
         streamPaint.strokeWidth = tileSize * 0.05f
         canvas.drawPath(streamPath, streamPaint)
+    }
+
+    /**
+     * Desenha o Tether Laser (cabo elástico de neon) entre o Herói e o Spike.
+     * Curva-se suavemente baseado na distância física, vibrando sob alta tensão.
+     */
+    fun drawTether(
+        canvas: Canvas,
+        hx: Float,
+        hy: Float,
+        sx: Float,
+        sy: Float,
+        distTiles: Float,
+        isAnchored: Boolean,
+        isSlinging: Boolean,
+        tileSize: Float
+    ) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+        }
+
+        val path = Path()
+        path.moveTo(hx, hy)
+
+        // Se a distância for pequena, o cabo fica frouxo (curva de gravidade)
+        if (distTiles < 3.5f && !isAnchored && !isSlinging) {
+            val midX = (hx + sx) / 2f
+            // Barriga do cabo para baixo
+            val midY = (hy + sy) / 2f + tileSize * 0.4f
+            path.quadTo(midX, midY, sx, sy)
+        } else {
+            // Teso: linha reta (com pequena vibração senoidal se estiver no limite de tensão)
+            val time = animTick / 1000f
+            val steps = 10
+            val dx = sx - hx
+            val dy = sy - hy
+            for (i in 1..steps) {
+                val t = i.toFloat() / steps
+                val px = hx + dx * t
+                val py = hy + dy * t
+                
+                // Vibração neon sob tensão
+                val vib = if (isSlinging || distTiles > 6.0f) {
+                    sin(t * 15f - time * 30f) * (tileSize * 0.04f)
+                } else 0f
+                
+                // Vetor perpendicular
+                val mag = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
+                val perpX = -dy / mag
+                val perpY = dx / mag
+                
+                path.lineTo(px + perpX * vib, py + perpY * vib)
+            }
+        }
+
+        // Definição de Cores Neon
+        val corCabo = when {
+            isSlinging -> Color.rgb(255, 0, 127)      // Rosa choque
+            isAnchored -> Color.rgb(255, 80, 0)      // Laranja neon
+            distTiles > 5.5f -> Color.rgb(224, 86, 253) // Roxo brilhante tensional
+            else -> Color.rgb(156, 39, 176)          // Roxo padrão
+        }
+        
+        // Camada 1: Brilho translúcido largo
+        paint.color = Color.argb(80, Color.red(corCabo), Color.green(corCabo), Color.blue(corCabo))
+        paint.strokeWidth = tileSize * 0.12f
+        canvas.drawPath(path, paint)
+        
+        // Camada 2: Núcleo neon brilhante
+        paint.color = Color.rgb(240, 220, 255) // Núcleo esbranquiçado
+        paint.strokeWidth = tileSize * 0.035f
+        canvas.drawPath(path, paint)
     }
 }

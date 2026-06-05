@@ -332,7 +332,7 @@ class AudioManager(context: Context) {
      * @param tipo Tipo do efeito sonoro a reproduzir
      */
     fun reproduzirEfeito(tipo: TipoEfeito) {
-        if (!emReproducao) return
+        if (!emReproducao || tipo.duracaoMs <= 0) return
         val volumeFinal = calcularVolumeEfeitoFinal(volumeEfeitos)
         val amostras = if (tipo == TipoEfeito.HERO_DEATH) {
             gerarSomMortePitfall(tipo.duracaoMs)
@@ -354,7 +354,7 @@ class AudioManager(context: Context) {
      * @param distancia Distância em unidades de tile entre o Hero e a fonte sonora
      */
     fun reproduzirEfeitoEspacial(tipo: TipoEfeito, distancia: Float) {
-        if (!emReproducao) return
+        if (!emReproducao || tipo.duracaoMs <= 0) return
         val volumeDistancia = max(0f, 1f - distancia / DISTANCIA_MAXIMA_ESPACIAL)
         val volumeFinal = calcularVolumeEfeitoFinal(volumeEfeitos * volumeDistancia)
         if (volumeFinal <= 0.01f) return // Muito distante para ser audível

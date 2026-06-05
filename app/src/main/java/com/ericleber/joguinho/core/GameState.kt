@@ -18,7 +18,8 @@ enum class GamePhase {
     PAUSED,
     SCORE_SCREEN,
     TRANSITIONING_BIOME,
-    GAME_OVER
+    GAME_OVER,
+    UPGRADE_SELECTION
 }
 
 /**
@@ -86,6 +87,7 @@ class GameState {
     // --- Estado do Hero ---
     var heroIsSlowedDown: Boolean = false
     var heroSlowdownRemainingMs: Long = 0L
+    var heroIsClimbing: Boolean = false // Indica se o herói está escalando a parede
     var heroLives: Int = 3
     var heroLastSlowdownTimeMs: Long = 0L
     var heroInvincibilityTimerMs: Long = 0L // Cooldown de dano em armadilhas de vala
@@ -133,8 +135,14 @@ class GameState {
     /** Tempo acumulado no Floor atual em milissegundos. */
     var floorTimerMs: Long = 0L
     
-    /** Timer regressivo do mapa atual (5 minutos). */
-    var mapTimerMs: Long = 300000L
+    /** Timer regressivo do mapa atual (inicia em 45s, escala com andar). */
+    var mapTimerMs: Long = 45000L
+
+    // --- Câmera e Escala Compartilhados ---
+    var cameraX: Float = 0f
+    var cameraY: Float = 0f
+    var tileW: Float = 0f
+    var tileH: Float = 0f
 
     // --- Score e combo ---
     var accumulatedScore: Float = 0f
@@ -167,6 +175,52 @@ class GameState {
 
     // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---
     var devModeForcedWorld: BiomeWorld? = null
+
+    // --- Variáveis de Runtime do Modo Arena/Tether ---
+    var isSpikeAnchored: Boolean = false
+    var spikeAnchorPosition: Position? = null
+    var spikeSlingActive: Boolean = false
+    var advanceMapPending: Boolean = false
+
+
+    // --- Sistema de Upgrades e Moedas ---
+    var coinsCollected: Int = 0
+    var heroDoubleJumpUnlocked: Boolean = false
+    var heroJumpCount: Int = 0 // Contagem de pulos feitos no ar atual
+    var heroSpeedMultiplier: Float = 1.0f
+    var heroJumpMultiplier: Float = 1.0f
+    var heroWaterCooldownMultiplier: Float = 1.0f
+    var heroWaterRangeMultiplier: Float = 1.0f
+    var heroMaxLives: Int = 3
+    var spikeDamageBonus: Int = 0
+    var spikeAttackCooldownMultiplier: Float = 1.0f
+    var spikeSpeedMultiplier: Float = 1.0f
+    var spikeGoldenSnifferEnabled: Boolean = false
+    
+    // Interface de Seleção de Upgrades
+    var upgradeCardsOptions: List<UpgradeCard> = emptyList()
+    var upgradeSelectionIndex: Int = -1 // Carta focada/selecionada temporariamente (0 a 2 ou -1)
+
+    /**
+     * Aplica o efeito do upgrade selecionado aos multiplicadores do jogo.
+     */
+    fun aplicarUpgrade(card: UpgradeCard) {
+        when (card.type) {
+            UpgradeType.HERO_SPEED -> heroSpeedMultiplier += 0.15f
+            UpgradeType.HERO_JUMP -> heroJumpMultiplier += 0.15f
+            UpgradeType.HERO_DOUBLE_JUMP -> heroDoubleJumpUnlocked = true
+            UpgradeType.HERO_MAX_LIVES -> {
+                heroMaxLives = (heroMaxLives + 1).coerceAtMost(5)
+                heroLives = (heroLives + 1).coerceAtMost(heroMaxLives)
+            }
+            UpgradeType.HERO_WATER_COOLDOWN -> heroWaterCooldownMultiplier *= 0.75f // -25% de intervalo (dano mais rápido)
+            UpgradeType.HERO_WATER_RANGE -> heroWaterRangeMultiplier += 0.25f
+            UpgradeType.SPIKE_DAMAGE -> spikeDamageBonus += 2
+            UpgradeType.SPIKE_COOLDOWN -> spikeAttackCooldownMultiplier *= 0.75f // -25% de cooldown
+            UpgradeType.SPIKE_SPEED -> spikeSpeedMultiplier += 0.20f
+            UpgradeType.SPIKE_GOLDEN_SNIFFER -> spikeGoldenSnifferEnabled = true
+        }
+    }
 
     val currentBiomeWorld: BiomeWorld
         get() = devModeForcedWorld ?: BiomeWorld.fromFloor(floorNumber)
@@ -226,11 +280,22 @@ class GameState {
      * Requisitos: 10.2, 10.3, 10.4
      */
     fun completarAndar(tempoAndarMs: Long) {
+        val floorScore = calculateFloorScore()
+        accumulatedScore += floorScore
+
         statistics = statistics.copy(
             totalMapsCompleted = statistics.totalMapsCompleted + 1,
             totalPlayTimeMs = statistics.totalPlayTimeMs + tempoAndarMs,
             totalMaxComboStreaks = maxOf(statistics.totalMaxComboStreaks, comboStreak)
         )
+
+        // Atualiza recorde pessoal (personal best) para a fase atual
+        val recordeAtual = personalBests[floorNumber]
+        if (recordeAtual == null || tempoAndarMs < recordeAtual) {
+            personalBests[floorNumber] = tempoAndarMs
+            emitEvent(GameEvent.NewRecord(floorNumber, tempoAndarMs))
+        }
+
         emitEvent(GameEvent.FloorCompleted)
         verificarConquistasAndar()
     }
@@ -310,7 +375,18 @@ class GameState {
         personalBests = personalBests.toMap(),
         activeCharacterId = activeCharacterId,
         activeSkinId = activeSkinId,
-        bossesDefeatedCount = bossesDefeatedCount
+        bossesDefeatedCount = bossesDefeatedCount,
+        coinsCollected = coinsCollected,
+        heroDoubleJumpUnlocked = heroDoubleJumpUnlocked,
+        heroSpeedMultiplier = heroSpeedMultiplier,
+        heroJumpMultiplier = heroJumpMultiplier,
+        heroWaterCooldownMultiplier = heroWaterCooldownMultiplier,
+        heroWaterRangeMultiplier = heroWaterRangeMultiplier,
+        heroMaxLives = heroMaxLives,
+        spikeDamageBonus = spikeDamageBonus,
+        spikeAttackCooldownMultiplier = spikeAttackCooldownMultiplier,
+        spikeSpeedMultiplier = spikeSpeedMultiplier,
+        spikeGoldenSnifferEnabled = spikeGoldenSnifferEnabled
     )
 
     /** Restaura o estado a partir de um SaveState. */
@@ -345,6 +421,17 @@ class GameState {
         activeCharacterId = save.activeCharacterId
         activeSkinId = save.activeSkinId
         bossesDefeatedCount = save.bossesDefeatedCount
+        coinsCollected = save.coinsCollected
+        heroDoubleJumpUnlocked = save.heroDoubleJumpUnlocked
+        heroSpeedMultiplier = save.heroSpeedMultiplier
+        heroJumpMultiplier = save.heroJumpMultiplier
+        heroWaterCooldownMultiplier = save.heroWaterCooldownMultiplier
+        heroWaterRangeMultiplier = save.heroWaterRangeMultiplier
+        heroMaxLives = save.heroMaxLives
+        spikeDamageBonus = save.spikeDamageBonus
+        spikeAttackCooldownMultiplier = save.spikeAttackCooldownMultiplier
+        spikeSpeedMultiplier = save.spikeSpeedMultiplier
+        spikeGoldenSnifferEnabled = save.spikeGoldenSnifferEnabled
         phase = GamePhase.PLAYING
     }
 }

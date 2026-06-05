@@ -68,8 +68,8 @@ class GameLogic(private val gameState: GameState) {
         /** Duração da lentidão severa do Boss. */
         private const val SLOWDOWN_BOSS_MS = 3500L
 
-        /** Tempo inicial do mapa (5 minutos). */
-        private const val MAP_TIMER_INITIAL_MS = 300000L
+        /** Tempo inicial do mapa (45 segundos para sobrevivência de arena). */
+        private const val MAP_TIMER_INITIAL_MS = 45000L
 
         /** Duração da animação de morte/respawn em ms. */
         private const val RESPAWN_DURATION_MS = 1500L
@@ -81,6 +81,7 @@ class GameLogic(private val gameState: GameState) {
     private val monsterTimers = mutableMapOf<String, Float>()
 
     // Rastreamento de travamento do Spike (pathfinding melhorado)
+    private val arenaSpawnManager = com.ericleber.joguinho.pcg.ArenaSpawnManager(gameState)
     private var spikeLastPosition: Position? = null
     private var spikeStuckTimerSec = 0f
 
@@ -113,6 +114,29 @@ class GameLogic(private val gameState: GameState) {
     fun update(deltaTimeSec: Float) {
         if (gameState.phase != GamePhase.PLAYING) return
         val maze = gameState.mazeData ?: return
+
+        // 0. Se houver um avanço de mapa pendente (por exemplo, após selecionar um upgrade)
+        if (gameState.advanceMapPending) {
+            gameState.advanceMapPending = false
+            
+            // Avança o Floor (fase atual) e reseta mapIndex
+            gameState.floorNumber++
+            gameState.mapIndex = 0
+            
+            if (gameState.floorNumber > 11) {
+                // Fim do jogo (passou da Fase 11)
+                gameState.completarAndar(gameState.floorTimerMs)
+                gameState.phase = GamePhase.SCORE_SCREEN
+                onMapCompleted?.invoke()
+                onHeroReachedExit?.invoke()
+            } else {
+                // Carrega a próxima fase
+                gameState.completarAndar(gameState.floorTimerMs)
+                onMapCompleted?.invoke()
+                onHeroReachedExit?.invoke()
+            }
+            return
+        }
 
         val deltaMs = (deltaTimeSec * 1000).toLong()
 
@@ -224,19 +248,54 @@ class GameLogic(private val gameState: GameState) {
         atualizarVfx(deltaMs)
         atualizarFeedbackCombate(deltaMs)
         
-        // Atualiza timer do mapa (5 minutos)
+        // Atualiza spawn de monstros se a onda estiver ativa
+        if (gameState.mapTimerMs > 0) {
+            arenaSpawnManager.update(System.currentTimeMillis(), maze)
+        }
+
+        // Atualiza timer do mapa (sobrevivência de arena)
+        val oldTimer = gameState.mapTimerMs
         gameState.mapTimerMs -= deltaMs
         if (gameState.mapTimerMs <= 0) {
             gameState.mapTimerMs = 0
-            // Penalidade por tempo esgotado: Perde uma vida e reseta o timer
-            if (gameState.heroLives > 0) {
-                gameState.heroLives--
-                gameState.mapTimerMs = 300000L // Reseta para 5 min
-                if (gameState.heroLives <= 0) {
-                    gameState.phase = GamePhase.GAME_OVER
-                }
+            if (oldTimer > 0) {
+                // Onda concluída! Explode monstros normais e dropa moedas
+                eliminarMonstrosDaOnda()
+                onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE) // Som de impacto
             }
         }
+    }
+
+    /**
+     * Limpa os monstros comuns restantes na arena ao final da onda de sobrevivência,
+     * transformando-os em moedas e gerando VFX de explosão.
+     */
+    private fun eliminarMonstrosDaOnda() {
+        val novosItens = gameState.items.toMutableList()
+        val novosMonsters = gameState.monsters.map { m ->
+            if (m.isActive && !m.isBoss) {
+                // Adiciona VFX de splash/explosão
+                gameState.vfxList = gameState.vfxList + VfxState(
+                    id = "monster_wave_die_${m.id}_${System.currentTimeMillis()}",
+                    position = m.position.copy(),
+                    type = VfxType.WATER_SPLASH,
+                    createdAtMs = System.currentTimeMillis(),
+                    durationMs = 300L
+                )
+                // Espawna moedas procedurais no lugar deles
+                novosItens.add(ItemState(
+                    id = "coin_drop_${m.id}_${System.currentTimeMillis()}",
+                    position = m.position.copy(),
+                    type = ItemType.COIN,
+                    isActive = true
+                ))
+                m.copy(isActive = false)
+            } else {
+                m
+            }
+        }
+        gameState.monsters = novosMonsters
+        gameState.items = novosItens
     }
 
     // -------------------------------------------------------------------------
@@ -470,8 +529,29 @@ class GameLogic(private val gameState: GameState) {
                         onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
                     }
                     com.ericleber.joguinho.core.ItemType.HEART -> {
-                        gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(3)
+                        gameState.heroLives = (gameState.heroLives + 1).coerceAtMost(gameState.heroMaxLives)
                         onSoundEffectRequested?.invoke(TipoEfeito.POWER_UP_COLETADO)
+                    }
+                    com.ericleber.joguinho.core.ItemType.COIN -> {
+                        var coinVal = 1
+                        if (gameState.spikeGoldenSnifferEnabled && Math.random() < 0.3) {
+                            coinVal += 1
+                        }
+                        gameState.coinsCollected += coinVal
+                        onSoundEffectRequested?.invoke(TipoEfeito.PASSO_PEDRA)
+                        
+                        // Cria popup de score e soma ao score acumulado
+                        val currentTime = System.currentTimeMillis()
+                        val pontosMoeda = 50 * coinVal
+                        gameState.accumulatedScore += pontosMoeda
+                        
+                        val popup = com.ericleber.joguinho.ui.ScorePopupPool.obtain(
+                            id = "coin_${item.id}_${currentTime}",
+                            position = item.position,
+                            score = pontosMoeda,
+                            currentTimeMs = currentTime
+                        )
+                        gameState.scorePopups = gameState.scorePopups + popup
                     }
                 }
                 item.copy(isActive = false)
@@ -764,8 +844,7 @@ class GameLogic(private val gameState: GameState) {
     // -------------------------------------------------------------------------
 
     /**
-     * Move o Spike em direção ao Hero quando a distância excede SPIKE_MAX_DISTANCE.
-     * Pathfinding simples: move um tile por vez na direção do Hero, evitando paredes.
+     * Move o Spike em direção ao Hero, com mecânica de âncora, canhão e sling.
      */
     private fun atualizarMovimentoSpike(deltaTimeSec: Float, maze: MazeData) {
         val heroPos = gameState.heroPosition
@@ -775,104 +854,117 @@ class GameLogic(private val gameState: GameState) {
         val dy = heroPos.y - spikePos.y
         val distancia = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
-        // --- REQUISITO: Spike ataca o Boss (Prioridade) ---
-        val boss = gameState.monsters.find { it.isBoss && it.isActive }
-        if (boss != null) {
-            val distHeroBoss = heroPos.dist(boss.position)
-            val distSpikeBoss = spikePos.dist(boss.position)
+        // --- 1. Lógica de Âncora (Torre de Canhão) ---
+        // Spike se ancora quando o herói está atirando
+        val heroiAtirando = gameState.isShooting
+        if (heroiAtirando && !gameState.isSpikeAnchored) {
+            gameState.isSpikeAnchored = true
+            gameState.spikeAnchorPosition = spikePos.copy()
+            gameState.spikeCompanionState = "ANCORADO"
+        } else if (!heroiAtirando && gameState.isSpikeAnchored) {
+            gameState.isSpikeAnchored = false
+            gameState.spikeAnchorPosition = null
             
-            // Spike ataca se o Boss estiver no alcance
-            if (distHeroBoss < 6.0f && distSpikeBoss < 5.0f) {
-                if (gameState.spikeAttackTimerMs == 0L) {
-                    val cooldownKey = "spike_attack_cooldown"
-                    val lastAttack = monsterTimers[cooldownKey] ?: 0f
-                    if (gameState.floorTimerMs.toFloat() - lastAttack > 1200f) {
-                        gameState.spikeAttackTimerMs = 600L 
-                        monsterTimers[cooldownKey] = gameState.floorTimerMs.toFloat()
+            // Ativa o Sling (estilingue) se a distância ao desancorar for razoável (> 3.0 tiles)
+            if (distancia > 3.0f) {
+                gameState.spikeSlingActive = true
+                onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE) // Som de impacto
+            }
+        }
+
+        // --- 2. Canhão Automático (quando ancorado) ---
+        if (gameState.isSpikeAnchored) {
+            gameState.spikeCompanionState = "ANCORADO"
+            
+            // Encontra inimigo mais próximo em um raio de 6 tiles do Spike
+            val inimigoProximo = gameState.monsters
+                .filter { it.isActive && it.position.dist(spikePos) <= 6.0f }
+                .minByOrNull { it.position.dist(spikePos) }
+                
+            if (inimigoProximo != null) {
+                val cooldownKey = "spike_turret_cooldown"
+                val lastShot = monsterTimers[cooldownKey] ?: 0f
+                val attackCooldown = 800f * gameState.spikeAttackCooldownMultiplier
+                if (gameState.floorTimerMs.toFloat() - lastShot > attackCooldown) {
+                    monsterTimers[cooldownKey] = gameState.floorTimerMs.toFloat()
+                    
+                    // Dispara um projétil de água/gelo do Spike em direção ao inimigo
+                    val dirX = inimigoProximo.position.x - spikePos.x
+                    val dirY = inimigoProximo.position.y - spikePos.y
+                    val distInimigo = sqrt(dirX * dirX + dirY * dirY)
+                    if (distInimigo > 0.1f) {
+                        val projId = "spike_proj_${System.currentTimeMillis()}"
+                        val angle = atan2(dirY, dirX)
+                        val direction = when {
+                            abs(angle) < Math.PI / 8 -> Direction.EAST
+                            angle >= Math.PI / 8 && angle < 3 * Math.PI / 8 -> Direction.SOUTH_EAST
+                            angle >= 3 * Math.PI / 8 && angle < 5 * Math.PI / 8 -> Direction.SOUTH
+                            angle >= 5 * Math.PI / 8 && angle < 7 * Math.PI / 8 -> Direction.SOUTH_WEST
+                            abs(angle) >= 7 * Math.PI / 8 -> Direction.WEST
+                            angle < -Math.PI / 8 && angle >= -3 * Math.PI / 8 -> Direction.NORTH_EAST
+                            angle < -3 * Math.PI / 8 && angle >= -5 * Math.PI / 8 -> Direction.NORTH
+                            else -> Direction.NORTH_WEST
+                        }
                         
-                        // Calcula vetor do bote (Lunge) em direção ao Boss
-                        val dxB = boss.position.x - spikePos.x
-                        val dyB = boss.position.y - spikePos.y
-                        val distB = sqrt(dxB * dxB + dyB * dyB)
-                        if (distB > 0.1f) {
-                            // Ele se projeta 1.5 tiles na direção do Boss
-                            gameState.spikeJumpOffsetX = (dxB / distB) * 1.5f
-                            gameState.spikeJumpOffsetY = (dyB / distB) * 1.5f
-                        }
-                    }
-                }
-            }
-        }
-
-        // Processa animação de pulo (Z e Lunge)
-        if (gameState.spikeAttackTimerMs > 0) {
-            val totalDur = 600f
-            val progress = (totalDur - gameState.spikeAttackTimerMs) / totalDur // 0.0 a 1.0
-            
-            // Parábola Z (Altura)
-            gameState.spikeZ = 4.8f * progress * (1f - progress)
-            
-            // Arco de Lunge (Vai e Volta)
-            // LungeProgress: 0.0 -> 1.0 (no ápice) -> 0.0 (no chão)
-            val lungeProgress = if (progress <= 0.5f) progress * 2f else (1f - progress) * 2f
-            // Aplicamos o offset baseado no vetor capturado no início
-            // (Note: as variáveis offsetX/Y originais guardam o vetor total do bote)
-            
-            // No ápice (progress approx 0.5), aplica o dano e o VFX
-            if (progress >= 0.5f && progress < 0.5f + (deltaTimeSec * 1000 / totalDur)) {
-                boss?.let {
-                    if (it.isActive) {
-                        gameState.vfxList = gameState.vfxList + VfxState(
-                            id = "spike_bite_${System.currentTimeMillis()}",
-                            position = it.position,
-                            type = VfxType.WATER_SPLASH,
-                            createdAtMs = System.currentTimeMillis(),
-                            durationMs = 400L
+                        val newProj = ProjectileState(
+                            id = projId,
+                            position = spikePos.copy(),
+                            direction = direction,
+                            speed = 12f,
+                            isActive = true,
+                            isEnemyProjectile = false // Amigo, não atinge o player
                         )
-                        it.hp = (it.hp - 5).coerceAtLeast(0)
-                        if (it.hp == 0) {
-                            it.isActive = false
-                            gameState.accumulatedScore += 100 
-                        }
-                        onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
+                        gameState.projectiles = gameState.projectiles + newProj
+                        onSoundEffectRequested?.invoke(TipoEfeito.ESGUICHO_AGUA)
                     }
                 }
             }
+        }
 
-            gameState.spikeAttackTimerMs = (gameState.spikeAttackTimerMs - (deltaTimeSec * 1000).toLong()).coerceAtLeast(0)
-            if (gameState.spikeAttackTimerMs == 0L) {
-                gameState.spikeZ = 0f
+        // --- 3. Lógica do Sling (Estilingue de Colisão) ---
+        if (gameState.spikeSlingActive) {
+            gameState.spikeCompanionState = "CORRENDO"
+            
+            // Causa dano massivo a todos os monstros que o Spike tocar
+            gameState.monsters.forEach { m ->
+                if (m.isActive && m.position.dist(spikePos) <= 1.3f) {
+                    val danoSling = 12 + gameState.spikeDamageBonus
+                    m.hp = (m.hp - danoSling).coerceAtLeast(0)
+                    
+                    // VFX e som de colisão
+                    gameState.vfxList = gameState.vfxList + VfxState(
+                        id = "spike_sling_hit_${m.id}_${System.currentTimeMillis()}",
+                        position = m.position.copy(),
+                        type = VfxType.WATER_SPLASH,
+                        createdAtMs = System.currentTimeMillis(),
+                        durationMs = 400L
+                    )
+                    
+                    if (m.hp == 0) {
+                        m.isActive = false
+                        // Adiciona moedas e pontos
+                        gameState.accumulatedScore += 100
+                        val coinItem = ItemState(
+                            id = "coin_${m.id}_${System.currentTimeMillis()}",
+                            position = m.position.copy(),
+                            type = ItemType.COIN,
+                            isActive = true
+                        )
+                        gameState.items = gameState.items + coinItem
+                    }
+                    onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
+                }
             }
-            gameState.spikeCompanionState = "ENTUSIASMADO"
-        } else {
-            gameState.spikeZ = 0f
-            gameState.spikeJumpOffsetX = 0f
-            gameState.spikeJumpOffsetY = 0f
         }
 
-        // Rastreamento de travamento e Estado de Animação (Patas)
-        val movDist = if (spikeLastPosition != null) gameState.spikePosition.dist(spikeLastPosition!!) else 0f
-        if (movDist > 0.01f) {
-            gameState.spikeCompanionState = if (movDist > 0.1f) "CORRENDO" else "ANDANDO"
-        } else if (gameState.spikeAttackTimerMs == 0L) {
-            gameState.spikeCompanionState = "SENTADO"
-        }
-        
-        spikeLastPosition = gameState.spikePosition.copy()
-        if (spikeLastPosition == spikePos) {
-            spikeStuckTimerSec += deltaTimeSec
-        } else {
-            spikeStuckTimerSec = 0f
-            spikeLastPosition = spikePos
-        }
-
-        // Teleporte de emergência: se ficou travado por muito tempo E está longe do Hero
-        if (spikeStuckTimerSec >= SPIKE_STUCK_THRESHOLD_SEC && distancia > SPIKE_TELEPORT_DISTANCE) {
+        // Teleporte de emergência: se ficou muito longe do Hero, traz de volta
+        if (distancia > 15f) {
             val destino = encontrarTileAdjacenteVazio(heroPos, maze)
             if (destino != null) {
                 gameState.spikePosition = destino
                 spikeStuckTimerSec = 0f
-                spikeLastPosition = destino
+                gameState.spikeSlingActive = false
+                gameState.isSpikeAnchored = false
                 gameState.spikeCompanionState = "ENTUSIASMADO"
                 return
             }
@@ -884,24 +976,26 @@ class GameLogic(private val gameState: GameState) {
             abs(dxHeroSpike) > 1.0f -> if (dxHeroSpike > 0f) 1f else -1f
             else -> 0f
         }
-
-        // Spike pula se o Herói pulou ou se está pulando e o herói está mais alto
         val spikeInputPulo = gameState.inputPuloPressionado && (heroPos.y < spikePos.y - 0.5f)
 
-        // Se não estiver atacando (lunge), atualiza física de plataforma do Spike
-        if (gameState.spikeAttackTimerMs <= 0L) {
+        // --- 4. Executa a Física do Spike ---
+        if (!gameState.isSpikeAnchored) {
             PlatformerPhysics.atualizarSpike(
                 deltaTimeSec = deltaTimeSec,
                 gameState = gameState,
-                direcaoX = spikeInputDirecaoX,
+                direcaoX = if (distancia > 2.0f && !gameState.spikeSlingActive) spikeInputDirecaoX else 0f,
                 puloPressionado = spikeInputPulo
             )
         }
 
+        // Define o estado visual para a animação do Spike
         gameState.spikeCompanionState = when {
+            gameState.isSpikeAnchored -> "ANCORADO"
+            gameState.spikeSlingActive -> "CORRENDO"
             gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
             distancia > 5f -> "CHAMANDO"
-            else -> "SEGUINDO"
+            distancia > 2f -> "SEGUINDO"
+            else -> "SENTADO"
         }
     }
 
@@ -932,10 +1026,15 @@ class GameLogic(private val gameState: GameState) {
 
     /**
      * Verifica se o Hero chegou ao tile de saída do labirinto.
-     * Usa raio de 0 tiles (exato) para evitar término imediato ao nascer perto da saída.
+     * Bloqueia a saída até que o cronômetro de sobrevivência (mapTimerMs) atinja zero.
      */
     private fun verificarHeroNoExit(maze: MazeData) {
         if (gameState.isExiting || gameState.isSeamlessTransition) return
+
+        // Bloqueia a saída se o cronômetro de sobrevivência ainda estiver ativo
+        if (gameState.mapTimerMs > 0) {
+            return
+        }
 
         val heroX = gameState.heroPosition.x
         val heroY = gameState.heroPosition.y
@@ -947,23 +1046,16 @@ class GameLogic(private val gameState: GameState) {
             return // Porta travada enquanto o Boss estiver vivo!
         }
 
-        // O herói deve estar próximo ao tile da saída.
+        // O herói deve estar próximo ao tile da saída (portal central).
         val dx = (heroX - exitX).toFloat()
         val dy = (heroY - exitY).toFloat()
         val distSq = dx * dx + dy * dy
 
-        if (gameState.mapIndex == 6) {
-            // No mapa 7/7 (Boss), usa a ativação do portal interdimensional cósmico
-            if (distSq > 1.44f) return // Raio de 1.2 tiles
-            gameState.isExiting = true
-            gameState.exitAnimationTimerMs = 0L
-            gameState.emitEvent(GameEvent.HeroReachedExit)
-        } else {
-            // Nos mapas intermediários 1-6, ativa a transição seamless com Fade
-            if (distSq > 1.0f) return // Raio de 1.0 tile para a passagem livre
-            gameState.isSeamlessTransition = true
-            gameState.seamlessTransitionTimerMs = 0L
-        }
+        // Sempre ativa a animação de saída pelo portal interdimensional cósmico
+        if (distSq > 1.44f) return // Raio de 1.2 tiles
+        gameState.isExiting = true
+        gameState.exitAnimationTimerMs = 0L
+        gameState.emitEvent(GameEvent.HeroReachedExit)
     }
 
     /**
@@ -976,8 +1068,11 @@ class GameLogic(private val gameState: GameState) {
      * Também calcula o mundo destino do portal ao entrar em AWAKENING pela primeira vez.
      */
     private fun atualizarPortal(maze: MazeData) {
-        // O portal interdimensional só existe no mapa do Boss (7/7)
-        if (gameState.mapIndex != 6) return
+        // O portal interdimensional só ativa quando o tempo de sobrevivência zerar
+        if (gameState.mapTimerMs > 0) {
+            gameState.portalState = PortalState.DORMANT
+            return
+        }
 
         val heroX = gameState.heroPosition.x
         val heroY = gameState.heroPosition.y
@@ -1019,8 +1114,7 @@ class GameLogic(private val gameState: GameState) {
         // Reseta contador de lentidões para o próximo mapa
         gameState.mapSlowdownCount = 0
         
-        // Reseta o timer de sobrevivência do mapa para 5 minutos
-        gameState.mapTimerMs = MAP_TIMER_INITIAL_MS
+        // Timer será reiniciado por gerarMapa() com a escala dinâmica correta
 
         // Reseta o portal para o próximo mapa (começa DORMANT)
         gameState.portalState = PortalState.DORMANT
@@ -1028,34 +1122,14 @@ class GameLogic(private val gameState: GameState) {
         // Emite evento de conclusão de mapa
         gameState.emitEvent(GameEvent.MapCompleted)
 
-        // Muda a fase para evitar processamento repetido da saída no mesmo frame
-        gameState.phase = GamePhase.LOADING
-
-        // Verifica se é o último Map do Floor (7 Maps por Floor)
-        val totalMapsNoFloor = 7
-        if (gameState.mapIndex >= totalMapsNoFloor - 1) {
-            // Completou a Fase (7/7) — Abre a tela de pontuação para a fase atual
-            if (gameState.floorNumber < 11) {
-                gameState.completarAndar(gameState.floorTimerMs)
-                gameState.floorTimerMs = 0 // Reseta o timer da fase
-                gameState.phase = GamePhase.SCORE_SCREEN
-                
-                onMapCompleted?.invoke()
-                onHeroReachedExit?.invoke()
-            } else {
-                // Chegou ao fim do jogo (Fase 11)
-                gameState.completarAndar(gameState.floorTimerMs)
-                gameState.phase = GamePhase.SCORE_SCREEN
-                onMapCompleted?.invoke()
-                onHeroReachedExit?.invoke()
-            }
-        } else {
-            // Avança para o próximo Map do mesmo Floor
-            gameState.mapIndex++
-            gameState.currentMapClean = true
-            onMapCompleted?.invoke()
-            onHeroReachedExit?.invoke()
-        }
+        // Pausa o jogo na tela de escolha de upgrades
+        gameState.upgradeCardsOptions = com.ericleber.joguinho.core.UpgradeCard.generateRandomOptions(
+            java.util.Random(),
+            gameState.heroDoubleJumpUnlocked
+        )
+        gameState.upgradeSelectionIndex = -1
+        gameState.phase = GamePhase.UPGRADE_SELECTION
+        gameState.advanceMapPending = true
     }
 
     /**
@@ -1069,16 +1143,17 @@ class GameLogic(private val gameState: GameState) {
         }
         
         gameState.mapSlowdownCount = 0
-        gameState.mapTimerMs = MAP_TIMER_INITIAL_MS
         gameState.portalState = PortalState.DORMANT
         gameState.emitEvent(GameEvent.MapCompleted)
 
-        gameState.phase = GamePhase.LOADING
-
-        gameState.mapIndex++
-        gameState.currentMapClean = true
-        onMapCompleted?.invoke()
-        onHeroReachedExit?.invoke()
+        // Pausa o jogo na tela de escolha de upgrades
+        gameState.upgradeCardsOptions = com.ericleber.joguinho.core.UpgradeCard.generateRandomOptions(
+            java.util.Random(),
+            gameState.heroDoubleJumpUnlocked
+        )
+        gameState.upgradeSelectionIndex = -1
+        gameState.phase = GamePhase.UPGRADE_SELECTION
+        gameState.advanceMapPending = true
     }
     /**
      * Processa o respawn do herói após a animação de morte.
@@ -1164,7 +1239,7 @@ class GameLogic(private val gameState: GameState) {
         }
 
         // --- Raycasting para o Esguicho (Twin-Stick) ---
-        val maxDistance = 7.0f // Distância máxima do esguicho
+        val maxDistance = 7.0f * gameState.heroWaterRangeMultiplier // Distância máxima do esguicho
         val step = 0.2f // Precisão do raio
         
         // --- Cálculo Preciso da Origem (Ponta da Arma) ---
@@ -1263,7 +1338,8 @@ class GameLogic(private val gameState: GameState) {
         // --- Dano Contínuo (apenas se o jato visual atingiu o alvo) ---
         if (hitMonsterId != null && gameState.waterStreamVisualDistance >= currentDist - 0.1f) {
             damageAccumulatorMs += (deltaTimeSec * 1000).toLong()
-            if (damageAccumulatorMs >= 150) {
+            val shootInterval = (150 * gameState.heroWaterCooldownMultiplier).toLong()
+            if (damageAccumulatorMs >= shootInterval) {
                 damageAccumulatorMs = 0
                 gameState.monsters.forEach { m ->
                     if (m.id == hitMonsterId && m.isActive) {

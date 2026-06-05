@@ -114,7 +114,7 @@ class PCGEngine {
             if (current == maze.exitIndex) break
 
             for (neighbor in getNeighbors(current, maze)) {
-                if (!visited[neighbor] && maze.tiles[neighbor] == HybridMapGenerator.TILE_FLOOR) {
+                if (!visited[neighbor] && maze.tiles[neighbor] != HybridMapGenerator.TILE_WALL) {
                     visited[neighbor] = true
                     prev[neighbor] = current
                     queue.add(neighbor)

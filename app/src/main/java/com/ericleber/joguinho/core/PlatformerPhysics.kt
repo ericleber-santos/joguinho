@@ -90,6 +90,7 @@ object PlatformerPhysics {
         // 1. Atualizar Timers de Usabilidade de Salto
         if (gameState.heroIsGrounded) {
             gameState.heroCoyoteTimerMs = 100L // coyote time de 100ms
+            gameState.heroJumpCount = 0 // Reseta pulo duplo ao tocar o chão
         } else {
             gameState.heroCoyoteTimerMs = (gameState.heroCoyoteTimerMs - deltaMs).coerceAtLeast(0L)
         }
@@ -113,7 +114,7 @@ object PlatformerPhysics {
         val isIce = world == BiomeWorld.ABISMOS_AQUATICOS
         val isForest = world == BiomeWorld.FLORESTA_DE_ARVORES
 
-        var velMaxX = VEL_MAX_X
+        var velMaxX = VEL_MAX_X * gameState.heroSpeedMultiplier
         if (gameState.heroIsSlowedDown) velMaxX *= 0.4f
         if (gameState.heroHasSpeedBuff) velMaxX *= 1.5f
         if (isForest) velMaxX *= 0.65f // Penalidade de mata fechada
@@ -138,6 +139,7 @@ object PlatformerPhysics {
         val encostaEsquerda = !gameState.heroIsGrounded && checkColisaoMapa(heroPos.x - 0.06f, heroPos.y, HERO_LARGURA, HERO_ALTURA, gameState)
         val encostaDireita = !gameState.heroIsGrounded && checkColisaoMapa(heroPos.x + 0.06f, heroPos.y, HERO_LARGURA, HERO_ALTURA, gameState)
         val isClimbing = encostaEsquerda || encostaDireita
+        gameState.heroIsClimbing = isClimbing
         val wallDir = if (encostaEsquerda) -1 else if (encostaDireita) 1 else 0
 
         if (isClimbing) {
@@ -156,11 +158,12 @@ object PlatformerPhysics {
             }
             // Wall Jump: pula na diagonal oposta
             if (gameState.heroJumpBufferTimerMs > 0L) {
-                vy = -FORCA_PULO * 0.92f
+                vy = -FORCA_PULO * 0.92f * gameState.heroJumpMultiplier
                 vx = -wallDir * VEL_MAX_X * 0.9f
                 gameState.heroIsGrounded = false
                 gameState.heroCoyoteTimerMs = 0L
                 gameState.heroJumpBufferTimerMs = 0L
+                gameState.heroJumpCount = 1
             }
         }
 
@@ -176,12 +179,32 @@ object PlatformerPhysics {
             vy = VELOCIDADE_TERMINAL
         }
 
-        // 4. Lógica de Pulo (Coyote Time + Jump Buffering)
-        if (gameState.heroJumpBufferTimerMs > 0L && gameState.heroCoyoteTimerMs > 0L) {
-            vy = -FORCA_PULO
-            gameState.heroIsGrounded = false
-            gameState.heroCoyoteTimerMs = 0L
-            gameState.heroJumpBufferTimerMs = 0L
+        // 4. Lógica de Pulo (Coyote Time + Jump Buffering + Double Jump)
+        if (gameState.heroJumpBufferTimerMs > 0L) {
+            if (gameState.heroCoyoteTimerMs > 0L) {
+                vy = -FORCA_PULO * gameState.heroJumpMultiplier
+                gameState.heroIsGrounded = false
+                gameState.heroCoyoteTimerMs = 0L
+                gameState.heroJumpBufferTimerMs = 0L
+                gameState.heroJumpCount = 1
+            } else if (gameState.heroDoubleJumpUnlocked && gameState.heroJumpCount < 2) {
+                // Pulo duplo no ar
+                vy = -FORCA_PULO * 0.95f * gameState.heroJumpMultiplier
+                gameState.heroIsGrounded = false
+                gameState.heroJumpBufferTimerMs = 0L
+                gameState.heroJumpCount = 2
+                
+                // VFX sob os pés do herói para feedback visual
+                val currentTime = System.currentTimeMillis()
+                val doubleJumpVfx = VfxState(
+                    id = "double_jump_vfx_${currentTime}",
+                    position = Position(gameState.heroPosition.x, gameState.heroPosition.y + HERO_ALTURA / 2f),
+                    type = VfxType.WATER_SPLASH,
+                    createdAtMs = currentTime,
+                    durationMs = 250L
+                )
+                gameState.vfxList = gameState.vfxList + doubleJumpVfx
+            }
         }
 
         // 5. Integração e Resolução AABB Separada em 2 Passos (Eixo X depois Eixo Y)
@@ -236,41 +259,82 @@ object PlatformerPhysics {
     }
 
     /**
-     * Atualiza a simulação física do Spike de forma paralela ao Hero, com gravidade e pulos inteligentes.
+     * Atualiza a simulação física do Spike de forma paralela ao Hero, integrando a física de Tether (cabo elástico).
+     * O cabo funciona como uma mola com atração proporcional à distância (Lei de Hooke).
      */
     fun atualizarSpike(deltaTimeSec: Float, gameState: GameState, direcaoX: Float, puloPressionado: Boolean) {
         val maze = gameState.mazeData ?: return
 
+        // Se Spike estiver ancorado como canhão, ele fica imóvel e não sofre gravidade
+        if (gameState.isSpikeAnchored) {
+            gameState.spikeVelocityX = 0f
+            gameState.spikeVelocityY = 0f
+            return
+        }
+
+        val heroPos = gameState.heroPosition
+        val spikePos = gameState.spikePosition
+        val dx = heroPos.x - spikePos.x
+        val dy = heroPos.y - spikePos.y
+        val dist = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+
         var vx = gameState.spikeVelocityX
         var vy = gameState.spikeVelocityY
 
-        // 1. Aceleração horizontal em direção ao movimento
-        val velMaxSpike = if (gameState.spikeIsSlowedDown) VEL_MAX_SPIKE * 0.4f else VEL_MAX_SPIKE
-        if (direcaoX != 0f) {
-            vx += direcaoX * ACEL_CHAO * deltaTimeSec
-            vx = vx.coerceIn(-velMaxSpike, velMaxSpike)
+        // Constantes elásticas do cabo
+        val comprimentoRepouso = 2.0f
+        val k = if (gameState.spikeSlingActive) 38f else 12f // Constante de mola muito maior no sling
+        val amortecimento = if (gameState.spikeSlingActive) 1.5f else 5.0f // Amortece menos durante o sling
+
+        // 1. Aplica força elástica se a distância for maior que o repouso
+        if (dist > comprimentoRepouso) {
+            val forcaMola = k * (dist - comprimentoRepouso)
+            val ax = (dx / dist) * forcaMola
+            val ay = (dy / dist) * forcaMola
+            vx += ax * deltaTimeSec
+            vy += ay * deltaTimeSec
+
+            // Aplica atrito/amortecimento do cabo elástico
+            vx -= vx * amortecimento * deltaTimeSec
+            vy -= vy * amortecimento * deltaTimeSec
         } else {
-            // Desaceleração gradual
-            val sinal = Math.signum(vx)
-            vx -= sinal * ATRITO_CHAO * deltaTimeSec
-            if (Math.signum(vx) != sinal) {
-                vx = 0f
+            // Se chegou perto do Hero no meio do Sling, encerra o Sling de alta velocidade
+            if (gameState.spikeSlingActive && dist < 1.2f) {
+                gameState.spikeSlingActive = false
+            }
+
+            // Aceleração horizontal normal no chão se não estiver no sling
+            if (!gameState.spikeSlingActive) {
+                val velMaxSpike = if (gameState.spikeIsSlowedDown) VEL_MAX_SPIKE * 0.4f else VEL_MAX_SPIKE * gameState.spikeSpeedMultiplier
+                if (direcaoX != 0f) {
+                    vx += direcaoX * ACEL_CHAO * deltaTimeSec
+                    vx = vx.coerceIn(-velMaxSpike, velMaxSpike)
+                } else {
+                    // Desaceleração gradual
+                    val sinal = Math.signum(vx)
+                    vx -= sinal * ATRITO_CHAO * deltaTimeSec
+                    if (Math.signum(vx) != sinal) {
+                        vx = 0f
+                    }
+                }
             }
         }
 
-        // 2. Gravidade
-        vy += GRAVIDADE * deltaTimeSec
-        if (vy > VELOCIDADE_TERMINAL) {
-            vy = VELOCIDADE_TERMINAL
+        // 2. Gravidade normal se não estiver no sling de alta velocidade
+        if (!gameState.spikeSlingActive) {
+            vy += GRAVIDADE * deltaTimeSec
+            if (vy > VELOCIDADE_TERMINAL) {
+                vy = VELOCIDADE_TERMINAL
+            }
+
+            // Pulo físico do Spike
+            if (puloPressionado && gameState.spikeIsGrounded) {
+                vy = -FORCA_PULO * 0.95f
+                gameState.spikeIsGrounded = false
+            }
         }
 
-        // 3. Pulo físico do Spike (salta quando o Hero pula ou se encontrar um obstáculo no chão)
-        if (puloPressionado && gameState.spikeIsGrounded) {
-            vy = -FORCA_PULO * 0.95f // Pulo um pouco menor que o Hero
-            gameState.spikeIsGrounded = false
-        }
-
-        // 4. Integração e Resolução AABB Separada em 2 Passos
+        // 3. Integração e Resolução AABB Separada em 2 Passos
         var pos = gameState.spikePosition
 
         // --- Passo X ---
@@ -278,8 +342,8 @@ object PlatformerPhysics {
         if (!checkColisaoMapa(proxX, pos.y, SPIKE_LARGURA, SPIKE_ALTURA, gameState)) {
             pos = Position(proxX, pos.y)
         } else {
-            // Se bater numa parede lateral caminhando, Spike tenta pular se estiver no chão!
-            if (gameState.spikeIsGrounded && vx != 0f) {
+            // Se bater numa parede lateral caminhando, Spike tenta pular se estiver no chão
+            if (gameState.spikeIsGrounded && vx != 0f && !gameState.spikeSlingActive) {
                 vy = -FORCA_PULO * 0.85f
                 gameState.spikeIsGrounded = false
             }

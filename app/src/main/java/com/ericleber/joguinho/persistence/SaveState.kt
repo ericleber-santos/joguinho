@@ -29,5 +29,17 @@ data class SaveState(
     // Extensibility fields (Requisitos 24.6, 24.8)
     val activeCharacterId: String = "hero",
     val activeSkinId: String = "default",
-    val bossesDefeatedCount: Int = 0
+    val bossesDefeatedCount: Int = 0,
+    val coinsCollected: Int = 0,
+    val heroDoubleJumpUnlocked: Boolean = false,
+    val heroSpeedMultiplier: Float = 1.0f,
+    val heroJumpMultiplier: Float = 1.0f,
+    val heroWaterCooldownMultiplier: Float = 1.0f,
+    val heroWaterRangeMultiplier: Float = 1.0f,
+    val heroMaxLives: Int = 3,
+    val spikeDamageBonus: Int = 0,
+    val spikeAttackCooldownMultiplier: Float = 1.0f,
+    val spikeSpeedMultiplier: Float = 1.0f,
+    val spikeGoldenSnifferEnabled: Boolean = false,
+    val activeUpgrades: List<UpgradeCard> = emptyList()
 )

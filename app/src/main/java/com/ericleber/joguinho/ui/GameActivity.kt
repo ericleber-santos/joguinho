@@ -312,7 +312,16 @@ class GameActivity : AppCompatActivity() {
         if (viewModel.gameState.floorNumber < 11) {
             viewModel.gameState.floorNumber++
             viewModel.gameState.mapIndex = 0
+            viewModel.gameState.floorTimerMs = 0L // Limpa o cronômetro da fase anterior
             viewModel.iniciarJogo()
+            
+            // Intercepta para exibir a interface de Upgrades antes do gameplay começar
+            viewModel.gameState.upgradeCardsOptions = com.ericleber.joguinho.core.UpgradeCard.generateRandomOptions(
+                java.util.Random(),
+                viewModel.gameState.heroDoubleJumpUnlocked
+            )
+            viewModel.gameState.upgradeSelectionIndex = -1
+            viewModel.gameState.phase = com.ericleber.joguinho.core.GamePhase.UPGRADE_SELECTION
         } else {
             viewModel.salvarESair {
                 finish()
@@ -323,6 +332,7 @@ class GameActivity : AppCompatActivity() {
     /** Reinicia o andar atual mantendo o mesmo seed. */
     private fun reiniciarAndarAtual() {
         viewModel.gameState.mapIndex = 0
+        viewModel.gameState.floorTimerMs = 0L // Limpa o cronômetro para a nova tentativa
         viewModel.iniciarJogo()
     }
 

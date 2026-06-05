@@ -10,9 +10,12 @@ import android.graphics.RectF
 import com.ericleber.joguinho.biome.BIOME_PALETTES
 import com.ericleber.joguinho.biome.BiomePalette
 import com.ericleber.joguinho.biome.BiomeWorld
+import com.ericleber.joguinho.core.GamePhase
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.Position
+import com.ericleber.joguinho.core.UpgradeRarity
+import com.ericleber.joguinho.core.UpgradeType
 import kotlin.math.sin
 
 /**
@@ -336,8 +339,8 @@ class Renderer(
                 val sx = tx * tileW + cameraX
                 val sy = ty * tileH + cameraY
                 
-                // Desenha chão básico de pedra por padrão
-                tileRenderer.renderFloorTile(canvas, sx, sy, tileW, tileH, palette, tx, ty)
+                // Desenha chão básico de pedra por padrão (com sobreposição de 0.5f para evitar tile bleeding)
+                tileRenderer.renderFloorTile(canvas, sx, sy, tileW + 0.5f, tileH + 0.5f, palette, tx, ty)
                 
                 // Se for armadilha de vala, desenha o visual dinâmico correspondente (Ponto 4)
                 when (mazeData.tiles[idx]) {
@@ -373,7 +376,7 @@ class Renderer(
                         }, tileW.toInt(), tileH.toInt(), palette, world = gameState.currentBiomeWorld
                     )
                 }
-                canvas.drawBitmap(decorBitmap, sx, sy, null)
+                canvas.drawBitmap(decorBitmap, null, RectF(sx, sy, sx + tileW + 0.5f, sy + tileH + 0.5f), null)
             }
         }
 
@@ -428,9 +431,9 @@ class Renderer(
                         // Desenha o bitmap (árvores são desenhadas um pouco acima para parecerem altas)
                         val drawY = if (isForest) sy - tileH * 0.8f else sy
                         if (isForest) {
-                            c.drawBitmap(wallBitmap, sx, drawY, null)
+                            c.drawBitmap(wallBitmap, null, RectF(sx, drawY, sx + tileW + 0.5f, drawY + tileH * 2.2f + 0.5f), null)
                         } else {
-                            c.drawBitmap(wallBitmap, sx - 16f, drawY - 16f, null)
+                            c.drawBitmap(wallBitmap, null, RectF(sx - 16f, drawY - 16f, sx - 16f + wallBitmap.width + 0.5f, drawY - 16f + wallBitmap.height + 0.5f), null)
                         }
                         
                         // --- Detalhes de Paredes Procedurais por WallDetailType ---
@@ -453,10 +456,16 @@ class Renderer(
             renderList.add(object : Renderable {
                 override val ySort: Float = item.position.y + 0.4f // Levemente atrás do pé
                 override fun render(c: Canvas) {
-                    if (item.type == com.ericleber.joguinho.core.ItemType.HEART) {
-                        characterRenderer.renderHeart(c, sx, sy, heroAnimFrame, tileW)
-                    } else {
-                        characterRenderer.renderBanana(c, sx, sy, heroAnimFrame, tileW)
+                    when (item.type) {
+                        com.ericleber.joguinho.core.ItemType.HEART -> {
+                            characterRenderer.renderHeart(c, sx, sy, heroAnimFrame, tileW)
+                        }
+                        com.ericleber.joguinho.core.ItemType.COIN -> {
+                            renderMoeda(c, sx, sy, tileW)
+                        }
+                        else -> {
+                            characterRenderer.renderBanana(c, sx, sy, heroAnimFrame, tileW)
+                        }
                     }
                 }
             })
@@ -822,6 +831,271 @@ class Renderer(
             bgPaint.color = Color.argb((alpha * 255).toInt(), 0, 0, 0)
             canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), bgPaint)
             bgPaint.alpha = 255
+        }
+
+        // --- SISTEMA DE UPGRADES E INTERFACE DE CARTAS ---
+        if (gameState.phase == GamePhase.UPGRADE_SELECTION) {
+            renderUpgradeSelectionOverlay(canvas, gameState)
+        }
+    }
+
+    private val coinPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    private val coinBorderPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+    }
+
+    private fun renderMoeda(canvas: Canvas, sx: Float, sy: Float, tileW: Float) {
+        val time = System.currentTimeMillis()
+        val offset = Math.sin((time % 800) / 800f * 2.0 * Math.PI).toFloat() * 4f
+        
+        val cx = sx + tileW / 2f
+        val cy = sy + tileW / 2f + offset
+        val radius = tileW * 0.20f
+        
+        // Brilho de fundo
+        coinPaint.color = Color.argb(60, 255, 235, 59)
+        canvas.drawCircle(cx, cy, radius * 1.4f, coinPaint)
+        
+        // Corpo da moeda
+        coinPaint.color = Color.rgb(255, 215, 0)
+        canvas.drawCircle(cx, cy, radius, coinPaint)
+        
+        // Borda
+        coinBorderPaint.color = Color.rgb(218, 165, 32)
+        coinBorderPaint.strokeWidth = tileW * 0.05f
+        canvas.drawCircle(cx, cy, radius, coinBorderPaint)
+        
+        // Brilho central
+        coinPaint.color = Color.argb(180, 255, 255, 255)
+        canvas.drawCircle(cx - radius * 0.3f, cy - radius * 0.3f, radius * 0.2f, coinPaint)
+    }
+
+    private val overlayPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    
+    private val cardTextPaint = Paint().apply {
+        isAntiAlias = true
+    }
+
+    private fun renderUpgradeSelectionOverlay(canvas: Canvas, gameState: GameState) {
+        val w = screenWidth.toFloat()
+        val h = screenHeight.toFloat()
+        
+        // 1. Fundo escuro semi-transparente
+        overlayPaint.color = Color.argb(205, 10, 10, 18)
+        canvas.drawRect(0f, 0f, w, h, overlayPaint)
+        
+        // 2. Título principal centralizado
+        cardTextPaint.color = Color.rgb(255, 235, 59) // Neon amarelo
+        cardTextPaint.textSize = 24f * density
+        cardTextPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        cardTextPaint.textAlign = Paint.Align.CENTER
+        cardTextPaint.setShadowLayer(8f * density, 0f, 0f, Color.rgb(255, 140, 0))
+        canvas.drawText("ESCOLHA UM UPGRADE", w / 2f, h * 0.16f, cardTextPaint)
+        cardTextPaint.clearShadowLayer()
+        
+        // 3. Saldo de Moedas
+        cardTextPaint.color = Color.rgb(255, 215, 0)
+        cardTextPaint.textSize = 14f * density
+        cardTextPaint.textAlign = Paint.Align.RIGHT
+        canvas.drawText("Moedas: ${gameState.coinsCollected} 🪙", w - 24f * density, 32f * density, cardTextPaint)
+        
+        // 4. Desenha as 3 Cartas
+        val cardWidth = 175f * density
+        val cardHeight = 250f * density
+        val gap = 24f * density
+        val startX = w / 2f - (cardWidth * 1.5f + gap)
+        val cardY = h * 0.25f
+        
+        val options = gameState.upgradeCardsOptions
+        
+        for (i in 0 until minOf(3, options.size)) {
+            val card = options[i]
+            val cx = startX + i * (cardWidth + gap)
+            
+            val isSelected = gameState.upgradeSelectionIndex == i
+            
+            canvas.save()
+            
+            if (isSelected) {
+                canvas.translate(cx + cardWidth / 2f, cardY + cardHeight / 2f)
+                canvas.scale(1.05f, 1.05f)
+                canvas.translate(-(cx + cardWidth / 2f), -(cardY + cardHeight / 2f))
+            }
+            
+            val rect = RectF(cx, cardY, cx + cardWidth, cardY + cardHeight)
+            
+            // Fundo da carta (Vidro fosco escuro)
+            overlayPaint.color = Color.argb(215, 20, 20, 32)
+            canvas.drawRoundRect(rect, 12f * density, 12f * density, overlayPaint)
+            
+            val rarityColor = when (card.rarity) {
+                UpgradeRarity.COMMON -> Color.rgb(0, 229, 255)     // Ciano
+                UpgradeRarity.RARE -> Color.rgb(186, 104, 200)     // Roxo
+                UpgradeRarity.EPIC -> Color.rgb(255, 179, 0)       // Ouro
+                UpgradeRarity.LEGENDARY -> Color.rgb(245, 0, 87)   // Magenta
+            }
+            
+            // Borda Neon
+            overlayPaint.style = Paint.Style.STROKE
+            overlayPaint.strokeWidth = if (isSelected) 3.5f * density else 2f * density
+            overlayPaint.color = rarityColor
+            if (isSelected) {
+                overlayPaint.setShadowLayer(10f * density, 0f, 0f, rarityColor)
+            }
+            canvas.drawRoundRect(rect, 12f * density, 12f * density, overlayPaint)
+            overlayPaint.clearShadowLayer()
+            overlayPaint.style = Paint.Style.FILL
+            
+            // Raridade texto
+            cardTextPaint.textSize = 9f * density
+            cardTextPaint.color = rarityColor
+            cardTextPaint.textAlign = Paint.Align.CENTER
+            cardTextPaint.typeface = android.graphics.Typeface.DEFAULT
+            canvas.drawText(card.rarity.name, cx + cardWidth / 2f, cardY + 20f * density, cardTextPaint)
+            
+            // Ícone Procedural no Centro
+            val iconY = cardY + cardHeight * 0.35f
+            drawUpgradeIcon(canvas, cx + cardWidth / 2f, iconY, cardWidth * 0.28f, card.type, rarityColor)
+            
+            // Título
+            cardTextPaint.textSize = 13f * density
+            cardTextPaint.color = Color.WHITE
+            cardTextPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+            canvas.drawText(card.title, cx + cardWidth / 2f, cardY + cardHeight * 0.65f, cardTextPaint)
+            
+            // Descrição (Quebra de linha simples)
+            cardTextPaint.textSize = 10f * density
+            cardTextPaint.color = Color.rgb(190, 190, 190)
+            cardTextPaint.typeface = android.graphics.Typeface.DEFAULT
+            
+            val desc = card.description
+            if (desc.length > 20) {
+                val words = desc.split(" ")
+                var line1 = ""
+                var line2 = ""
+                for (word in words) {
+                    if ((line1 + word).length <= 18) {
+                        line1 += "$word "
+                    } else {
+                        line2 += "$word "
+                    }
+                }
+                canvas.drawText(line1.trim(), cx + cardWidth / 2f, cardY + cardHeight * 0.76f, cardTextPaint)
+                canvas.drawText(line2.trim(), cx + cardWidth / 2f, cardY + cardHeight * 0.83f, cardTextPaint)
+            } else {
+                canvas.drawText(desc, cx + cardWidth / 2f, cardY + cardHeight * 0.80f, cardTextPaint)
+            }
+            
+            canvas.restore()
+        }
+        
+        // 5. Botão de Reroll na base
+        val buttonWidth = 220f * density
+        val buttonHeight = 38f * density
+        val buttonX = w / 2f - buttonWidth / 2f
+        val buttonY = h * 0.81f
+        val buttonRect = RectF(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight)
+        
+        val canReroll = gameState.coinsCollected >= 5
+        
+        // Fundo do botão Reroll
+        overlayPaint.color = if (canReroll) Color.argb(200, 30, 48, 30) else Color.argb(120, 42, 42, 42)
+        canvas.drawRoundRect(buttonRect, 8f * density, 8f * density, overlayPaint)
+        
+        // Borda do botão
+        overlayPaint.style = Paint.Style.STROKE
+        overlayPaint.strokeWidth = 1.8f * density
+        overlayPaint.color = if (canReroll) Color.rgb(46, 204, 113) else Color.rgb(90, 90, 90)
+        canvas.drawRoundRect(buttonRect, 8f * density, 8f * density, overlayPaint)
+        overlayPaint.style = Paint.Style.FILL
+        
+        // Texto do botão Reroll
+        cardTextPaint.textSize = 11.5f * density
+        cardTextPaint.color = if (canReroll) Color.WHITE else Color.rgb(150, 150, 150)
+        cardTextPaint.textAlign = Paint.Align.CENTER
+        cardTextPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        canvas.drawText("RE-ROLAR CARTAS (Custo: 5 Moedas 🪙)", w / 2f, buttonY + buttonHeight * 0.58f, cardTextPaint)
+        
+        // Mensagem de Reroll indisponível
+        if (!canReroll) {
+            cardTextPaint.textSize = 9f * density
+            cardTextPaint.color = Color.rgb(231, 76, 60)
+            canvas.drawText("Colete moedas nas fases para poder re-rolar!", w / 2f, buttonY + buttonHeight + 12f * density, cardTextPaint)
+        }
+    }
+
+    private fun drawUpgradeIcon(canvas: Canvas, cx: Float, cy: Float, size: Float, type: UpgradeType, color: Int) {
+        val paint = Paint().apply {
+            isAntiAlias = true
+            this.color = color
+            style = Paint.Style.FILL
+        }
+        val strokePaint = Paint().apply {
+            isAntiAlias = true
+            this.color = color
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * density
+        }
+        
+        when (type) {
+            UpgradeType.HERO_SPEED -> {
+                val path = Path().apply {
+                    moveTo(cx - size * 0.4f, cy + size * 0.3f)
+                    lineTo(cx + size * 0.3f, cy - size * 0.2f)
+                    lineTo(cx - size * 0.1f, cy - size * 0.2f)
+                    lineTo(cx + size * 0.4f, cy - size * 0.5f)
+                    lineTo(cx - size * 0.3f, cy + size * 0.1f)
+                    close()
+                }
+                canvas.drawPath(path, paint)
+            }
+            UpgradeType.HERO_JUMP -> {
+                val path = Path().apply {
+                    moveTo(cx - size * 0.3f, cy + size * 0.3f)
+                    lineTo(cx + size * 0.3f, cy + size * 0.1f)
+                    lineTo(cx - size * 0.3f, cy - size * 0.1f)
+                    lineTo(cx + size * 0.3f, cy - size * 0.3f)
+                }
+                canvas.drawPath(path, strokePaint)
+            }
+            UpgradeType.HERO_DOUBLE_JUMP -> {
+                val path = Path().apply {
+                    moveTo(cx, cy + size * 0.2f)
+                    cubicTo(cx - size * 0.5f, cy - size * 0.4f, cx - size * 0.8f, cy - size * 0.1f, cx - size * 0.3f, cy + size * 0.3f)
+                    moveTo(cx, cy + size * 0.2f)
+                    cubicTo(cx + size * 0.5f, cy - size * 0.4f, cx + size * 0.8f, cy - size * 0.1f, cx + size * 0.3f, cy + size * 0.3f)
+                }
+                canvas.drawPath(path, strokePaint)
+            }
+            UpgradeType.HERO_MAX_LIVES -> {
+                val path = Path().apply {
+                    moveTo(cx, cy - size * 0.25f)
+                    cubicTo(cx - size * 0.45f, cy - size * 0.6f, cx - size * 0.8f, cy - size * 0.1f, cx, cy + size * 0.45f)
+                    cubicTo(cx + size * 0.8f, cy - size * 0.1f, cx + size * 0.45f, cy - size * 0.6f, cx, cy - size * 0.25f)
+                }
+                canvas.drawPath(path, paint)
+            }
+            UpgradeType.HERO_WATER_COOLDOWN, UpgradeType.HERO_WATER_RANGE -> {
+                val path = Path().apply {
+                    moveTo(cx, cy - size * 0.4f)
+                    cubicTo(cx - size * 0.35f, cy, cx - size * 0.35f, cy + size * 0.35f, cx, cy + size * 0.35f)
+                    cubicTo(cx + size * 0.35f, cy + size * 0.35f, cx + size * 0.35f, cy, cx, cy - size * 0.4f)
+                }
+                canvas.drawPath(path, paint)
+            }
+            UpgradeType.SPIKE_DAMAGE, UpgradeType.SPIKE_COOLDOWN, UpgradeType.SPIKE_SPEED, UpgradeType.SPIKE_GOLDEN_SNIFFER -> {
+                canvas.drawCircle(cx, cy + size * 0.1f, size * 0.25f, paint)
+                canvas.drawCircle(cx - size * 0.25f, cy - size * 0.18f, size * 0.11f, paint)
+                canvas.drawCircle(cx, cy - size * 0.28f, size * 0.12f, paint)
+                canvas.drawCircle(cx + size * 0.25f, cy - size * 0.18f, size * 0.11f, paint)
+            }
         }
     }
 

@@ -138,6 +138,8 @@ class GameViewModel : ViewModel() {
         gameState.items = mapaGerado.items
         gameState.survivalElements = mapaGerado.survivalElements
         gameState.currentMapClean = true
+        // Reinicia o timer de sobrevivência: 45s base + 3s por andar, máximo 90s
+        gameState.mapTimerMs = (45000L + (gameState.floorNumber - 1).coerceAtMost(15) * 3000L).coerceAtMost(90000L)
 
         // Reset BossFightState se aplicável (Mapa 7/7, ou seja, mapIndex == 6)
         if (gameState.mapIndex == 6) {

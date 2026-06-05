@@ -44,6 +44,8 @@ class InputController(
 
     // Limite da metade esquerda da tela para o joystick (em pixels)
     private var screenHalfWidth = 0f
+    private var screenWidth = 0f
+    private var screenHeight = 0f
 
     // Botões físicos virtuais no canto inferior direito
     private var buttonA_X = 0f
@@ -84,6 +86,8 @@ class InputController(
      * Configura o layout dos botões A/B e o limite esquerdo/direito.
      */
     fun onSizeChanged(width: Float, height: Float) {
+        screenWidth = width
+        screenHeight = height
         screenHalfWidth = width / 2f
         
         val ctx = contextRef.get()
@@ -108,6 +112,9 @@ class InputController(
     // -------------------------------------------------------------------------
 
     fun onTouchEvent(event: MotionEvent): Boolean {
+        if (gameState.phase == com.ericleber.joguinho.core.GamePhase.UPGRADE_SELECTION) {
+            return handleUpgradeSelectionTouch(event)
+        }
         val action = event.actionMasked
         val pointerIndex = event.actionIndex
         val pointerId = event.getPointerId(pointerIndex)
@@ -314,5 +321,78 @@ class InputController(
         val textY = cy - (fm.ascent + fm.descent) / 2f
         canvas.drawText(label, cx, textY, buttonTextPaint)
         buttonTextPaint.clearShadowLayer()
+    }
+
+    private fun handleUpgradeSelectionTouch(event: MotionEvent): Boolean {
+        val action = event.actionMasked
+        val pointerIndex = event.actionIndex
+        val x = event.getX(pointerIndex)
+        val y = event.getY(pointerIndex)
+        
+        val ctx = contextRef.get()
+        val density = ctx?.resources?.displayMetrics?.density ?: 2f
+        
+        val w = screenWidth
+        val h = screenHeight
+        
+        val cardWidth = 175f * density
+        val cardHeight = 250f * density
+        val gap = 24f * density
+        val startX = w / 2f - (cardWidth * 1.5f + gap)
+        val cardY = h * 0.25f
+        
+        val buttonWidth = 220f * density
+        val buttonHeight = 38f * density
+        val buttonX = w / 2f - buttonWidth / 2f
+        val buttonY = h * 0.81f
+        
+        val options = gameState.upgradeCardsOptions
+        
+        when (action) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                var found = -1
+                for (i in 0 until minOf(3, options.size)) {
+                    val cx = startX + i * (cardWidth + gap)
+                    if (x >= cx && x <= cx + cardWidth && y >= cardY && y <= cardY + cardHeight) {
+                        found = i
+                        break
+                    }
+                }
+                gameState.upgradeSelectionIndex = found
+            }
+            MotionEvent.ACTION_UP -> {
+                var selectedSlot = -1
+                for (i in 0 until minOf(3, options.size)) {
+                    val cx = startX + i * (cardWidth + gap)
+                    if (x >= cx && x <= cx + cardWidth && y >= cardY && y <= cardY + cardHeight) {
+                        selectedSlot = i
+                        break
+                    }
+                }
+                
+                if (selectedSlot != -1 && selectedSlot < options.size) {
+                    val card = options[selectedSlot]
+                    gameState.aplicarUpgrade(card)
+                    gameState.upgradeSelectionIndex = -1
+                    gameState.upgradeCardsOptions = emptyList()
+                    gameState.phase = com.ericleber.joguinho.core.GamePhase.PLAYING
+                } else if (x >= buttonX && x <= buttonX + buttonWidth && y >= buttonY && y <= buttonY + buttonHeight) {
+                    if (gameState.coinsCollected >= 5) {
+                        gameState.coinsCollected -= 5
+                        gameState.upgradeCardsOptions = com.ericleber.joguinho.core.UpgradeCard.generateRandomOptions(
+                            java.util.Random(),
+                            gameState.heroDoubleJumpUnlocked
+                        )
+                        gameState.upgradeSelectionIndex = -1
+                    }
+                } else {
+                    gameState.upgradeSelectionIndex = -1
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                gameState.upgradeSelectionIndex = -1
+            }
+        }
+        return true
     }
 }

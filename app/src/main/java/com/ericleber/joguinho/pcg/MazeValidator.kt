@@ -31,7 +31,7 @@ object MazeValidator {
             if (current == maze.exitIndex) return true
 
             for (neighbor in getNeighbors(current, maze)) {
-                if (!visited[neighbor] && maze.tiles[neighbor] == BSPMazeGenerator.TILE_FLOOR) {
+                if (!visited[neighbor] && maze.tiles[neighbor] != BSPMazeGenerator.TILE_WALL) {
                     visited[neighbor] = true
                     queue.add(neighbor)
                 }
