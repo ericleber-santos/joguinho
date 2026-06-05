@@ -69,10 +69,9 @@ class HybridMapGenerator(private val random: Random) {
             val platX = generateUniqueX(width, platLen, usedXPositions)
             if (platX < 0) continue
 
-            // Altura: entre 30% e 70% da arena (evita teto e chão)
-            val minY = (height * 0.3f).toInt().coerceAtLeast(2)
-            val maxY = (height * 0.7f).toInt().coerceAtMost(height - 3)
-            val platY = random.nextInt(minY, maxY + 1)
+            // Altura: 2 a 4 tiles acima do chão (alcançável com pulo duplo)
+            val groundY = height - 2
+            val platY = random.nextInt(groundY - 4, groundY - 1).coerceAtLeast(3)
 
             for (px in platX until (platX + platLen).coerceAtMost(width - 1)) {
                 tiles[platY * width + px] = TILE_WALL
@@ -82,25 +81,19 @@ class HybridMapGenerator(private val random: Random) {
             for (px in (platX - 2) until (platX + platLen + 2)) {
                 usedXPositions.add(px)
             }
-
-            // 4a. Pequena chance de uma segunda fileira (plataforma de 2 tiles de altura, tipo "degrau")
-            if (random.nextFloat() < 0.25f && platY - 1 >= 2) {
-                val extraY = platY - 1
-                for (px in platX until (platX + platLen).coerceAtMost(width - 1)) {
-                    tiles[extraY * width + px] = TILE_WALL
-                }
-            }
         }
 
-        // 5. Start e Exit no centro da arena
-        val centerX = width / 2
-        val centerY = height / 2
+        // 5. Start à esquerda, Exit (portal) à direita, ambos no chão
+        val groundY = height - 2
+        val startX = 2
+        val exitX = width - 3
 
-        val startIndex = centerY * width + centerX
-        val exitIndex = startIndex // mesmo lugar — o portal aparece após sobreviver
+        val startIndex = groundY * width + startX
+        val exitIndex = groundY * width + exitX
 
-        // Garante que o centro está livre
+        // Garante que estão livres
         tiles[startIndex] = TILE_FLOOR
+        tiles[exitIndex] = TILE_FLOOR
 
         return MazeData(
             width = width,

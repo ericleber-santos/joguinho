@@ -91,11 +91,11 @@ class ArenaSpawnManager(private val gameState: GameState) {
 
         val pos = Position(targetX + 0.5f, targetY + 0.5f)
 
-        // Escolhe o padrão de movimento
-        val pattern = when (random.nextInt(4)) {
-            0 -> MovementPattern.CHASE
-            1 -> MovementPattern.PATROL_HORIZONTAL
-            2 -> MovementPattern.RANDOM
+        // Escolhe o padrão de movimento — maioria CHASE para ir ao encontro do player
+        val pattern = when (random.nextInt(5)) {
+            0, 1 -> MovementPattern.CHASE
+            2    -> MovementPattern.PATROL_HORIZONTAL
+            3    -> MovementPattern.RANDOM
             else -> MovementPattern.ZONING_DEFENDER
         }
 

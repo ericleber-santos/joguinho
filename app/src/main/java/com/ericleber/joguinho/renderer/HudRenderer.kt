@@ -160,6 +160,18 @@ class HudRenderer {
             renderBossHealthBar(canvas, gameState, w.toFloat())
         }
 
+        // Portal Aberto — mensagem central pulsante quando o timer zerou
+        if (gameState.mapTimerMs <= 0) {
+            val pulse = ((System.currentTimeMillis() % 800) / 800f) * 0.5f + 0.5f
+            textPaint.textSize = w * 0.08f
+            textPaint.color = Color.argb((pulse * 255).toInt(), 0, 255, 120)
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.setShadowLayer(12f, 0f, 6f, Color.argb(180, 0, 200, 80))
+            canvas.drawText("PORTAL ABERTO!", w / 2f, h * 0.50f, textPaint)
+            textPaint.clearShadowLayer()
+            textPaint.textAlign = Paint.Align.LEFT
+        }
+
     }
 
     /**
@@ -288,6 +300,18 @@ class HudRenderer {
         // Timer de Sobrevivência do Boss removido (vitoria por combate)
         if (gameState.bossFightState.isActive) {
             renderBossHealthBar(canvas, gameState, w.toFloat())
+        }
+
+        // Portal Aberto — mensagem central pulsante quando o timer zerou
+        if (gameState.mapTimerMs <= 0) {
+            val pulse = ((System.currentTimeMillis() % 800) / 800f) * 0.5f + 0.5f
+            textPaint.textSize = w * 0.06f
+            textPaint.color = Color.argb((pulse * 255).toInt(), 0, 255, 120)
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.setShadowLayer(12f, 0f, 6f, Color.argb(180, 0, 200, 80))
+            canvas.drawText("PORTAL ABERTO!", w / 2f, h * 0.50f, textPaint)
+            textPaint.clearShadowLayer()
+            textPaint.textAlign = Paint.Align.LEFT
         }
 
     }

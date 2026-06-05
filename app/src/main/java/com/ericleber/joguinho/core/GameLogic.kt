@@ -248,54 +248,17 @@ class GameLogic(private val gameState: GameState) {
         atualizarVfx(deltaMs)
         atualizarFeedbackCombate(deltaMs)
         
-        // Atualiza spawn de monstros se a onda estiver ativa
-        if (gameState.mapTimerMs > 0) {
+        // Atualiza spawn de monstros — continua por 5s após o timer zerar (grace period)
+        val graceMs = 5000L
+        if (gameState.mapTimerMs > 0 || gameState.mapTimerMs + graceMs > 0) {
             arenaSpawnManager.update(System.currentTimeMillis(), maze)
         }
 
         // Atualiza timer do mapa (sobrevivência de arena)
-        val oldTimer = gameState.mapTimerMs
         gameState.mapTimerMs -= deltaMs
-        if (gameState.mapTimerMs <= 0) {
-            gameState.mapTimerMs = 0
-            if (oldTimer > 0) {
-                // Onda concluída! Explode monstros normais e dropa moedas
-                eliminarMonstrosDaOnda()
-                onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE) // Som de impacto
-            }
+        if (gameState.mapTimerMs < -graceMs) {
+            gameState.mapTimerMs = -graceMs // não deixa o timer ficar muito negativo
         }
-    }
-
-    /**
-     * Limpa os monstros comuns restantes na arena ao final da onda de sobrevivência,
-     * transformando-os em moedas e gerando VFX de explosão.
-     */
-    private fun eliminarMonstrosDaOnda() {
-        val novosItens = gameState.items.toMutableList()
-        val novosMonsters = gameState.monsters.map { m ->
-            if (m.isActive && !m.isBoss) {
-                // Adiciona VFX de splash/explosão
-                gameState.vfxList = gameState.vfxList + VfxState(
-                    id = "monster_wave_die_${m.id}_${System.currentTimeMillis()}",
-                    position = m.position.copy(),
-                    type = VfxType.WATER_SPLASH,
-                    createdAtMs = System.currentTimeMillis(),
-                    durationMs = 300L
-                )
-                // Espawna moedas procedurais no lugar deles
-                novosItens.add(ItemState(
-                    id = "coin_drop_${m.id}_${System.currentTimeMillis()}",
-                    position = m.position.copy(),
-                    type = ItemType.COIN,
-                    isActive = true
-                ))
-                m.copy(isActive = false)
-            } else {
-                m
-            }
-        }
-        gameState.monsters = novosMonsters
-        gameState.items = novosItens
     }
 
     // -------------------------------------------------------------------------
@@ -1052,9 +1015,12 @@ class GameLogic(private val gameState: GameState) {
         val distSq = dx * dx + dy * dy
 
         // Sempre ativa a animação de saída pelo portal interdimensional cósmico
-        if (distSq > 1.44f) return // Raio de 1.2 tiles
+        if (distSq > 4.0f) return // Raio de 2 tiles (era 1.2)
         gameState.isExiting = true
         gameState.exitAnimationTimerMs = 0L
+
+        // Recompensa ao entrar no portal: moedas por tempo restante de onda
+        gameState.accumulatedScore += 500f
         gameState.emitEvent(GameEvent.HeroReachedExit)
     }
 
@@ -1068,9 +1034,13 @@ class GameLogic(private val gameState: GameState) {
      * Também calcula o mundo destino do portal ao entrar em AWAKENING pela primeira vez.
      */
     private fun atualizarPortal(maze: MazeData) {
-        // O portal interdimensional só ativa quando o tempo de sobrevivência zerar
+        // Portal fica visível (AWAKENING) desde o início mas só abre quando o timer zerar
         if (gameState.mapTimerMs > 0) {
-            gameState.portalState = PortalState.DORMANT
+            // Garante que fica visível mesmo antes do timer acabar
+            if (gameState.portalState != PortalState.DORMANT) return
+            val nextFloor = gameState.floorNumber + 1
+            gameState.portalDestWorld = BiomeWorld.fromFloor(nextFloor.coerceAtMost(120))
+            gameState.portalState = PortalState.AWAKENING
             return
         }
 
@@ -1083,10 +1053,10 @@ class GameLogic(private val gameState: GameState) {
         val dy = heroY - exitY
         val dist = sqrt(dx * dx + dy * dy)
 
+        // Timer zerou: portal fica visível (AWAKENING) mesmo de longe
         val newState = when {
             dist <= 2.5f -> PortalState.OPEN
-            dist <= 5.0f -> PortalState.AWAKENING
-            else         -> PortalState.DORMANT
+            else         -> PortalState.AWAKENING
         }
 
         // Calcula mundo destino quando o portal acorda pela primeira vez
