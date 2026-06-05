@@ -291,8 +291,8 @@ class InputController(
     ) {
         if (radius <= 0f) return
 
-        val alphaBase = if (isPressed) 150 else 60
-        val alphaBorder = if (isPressed) 220 else 100
+        val alphaBase = if (isPressed) 100 else 35
+        val alphaBorder = if (isPressed) 150 else 65
 
         // Preenchimento circular translúcido
         buttonPaint.color = Color.argb(
