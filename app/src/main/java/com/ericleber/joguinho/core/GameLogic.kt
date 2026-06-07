@@ -1296,7 +1296,10 @@ class GameLogic(private val gameState: GameState) {
                 
                 val idx = ty * maze.width + tx
                 // Se for uma "Parede" em mundo aberto, pode ser um mímico
-                if (maze.tiles[idx] == 1) {
+                // Mas NÃO destrói muros estruturais (bordas do mapa)
+                if (maze.tiles[idx] == 1 &&
+                    ty != maze.height - 1 && ty != 0 &&
+                    tx != 0 && tx != maze.width - 1) {
                     val rng = java.util.Random((tx * 31 + ty * 17 + gameState.floorSeed).toLong())
                     if (rng.nextFloat() > 0.995f) { // Chance rara por frame
                         despertarMimico(tx, ty, maze)

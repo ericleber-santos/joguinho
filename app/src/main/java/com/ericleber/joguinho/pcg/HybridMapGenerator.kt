@@ -59,46 +59,48 @@ class HybridMapGenerator(private val random: Random) {
             tiles[y * width + (width - 1)] = TILE_WALL
         }
 
-        // 4. Plataformas flutuantes finas (1 tile de espessura)
-        // Posicionadas em alturas variadas para servir de pontos táticos (pulo/perspectiva)
-        val numPlatforms = random.nextInt(2, MAX_PLATFORMS + 1)
+        // 4. Plataformas flutuantes — regras de geração:
+        //    - Baixa: 1 tile acima do chão (alcançável com pulo simples)
+        //    - Alta: 3 tiles acima do chão (só existe se houver uma baixa embaixo)
+        //    - Máx 2 baixas, máx 1 alta
+        val groundY = height - 2
         val usedXPositions = mutableSetOf<Int>()
 
-        for (i in 0 until numPlatforms) {
+        // 4a. Plataformas baixas (0 a 2)
+        val numLowPlats = random.nextInt(0, 3) // 0, 1 ou 2
+        val lowPlats = mutableListOf<Pair<Int, Int>>() // (platX, platLen)
+        for (i in 0 until numLowPlats) {
             val platLen = random.nextInt(PLAT_MIN_LEN, PLAT_MAX_LEN + 1)
             val platX = generateUniqueX(width, platLen, usedXPositions)
             if (platX < 0) continue
-
-            // Altura: 2 a 4 tiles acima do chão (alcançável com pulo duplo)
-            val groundY = height - 2
-            val platY = random.nextInt(groundY - 4, groundY - 1).coerceAtLeast(3)
-
+            val platY = groundY - 1 // 1 tile acima do chão
             for (px in platX until (platX + platLen).coerceAtMost(width - 1)) {
                 tiles[platY * width + px] = TILE_WALL
             }
-
-            // Se a plataforma estiver a mais de 3 tiles do chão, coloca degraus embaixo
-            val alturaPlat = groundY - platY
-            if (alturaPlat > 3) {
-                val numDegraus = (alturaPlat - 2).coerceIn(1, 3)
-                // Centro da plataforma para alinhar os degraus
-                val centroX = platX + platLen / 2
-                for (d in 1..numDegraus) {
-                    val dy = groundY - d
-                    if (dy > platY) {
-                        tiles[dy * width + centroX] = TILE_WALL
-                    }
-                }
-            }
-
-            // Marca as posições X usadas para evitar sobreposição
+            lowPlats.add(platX to platLen)
             for (px in (platX - 2) until (platX + platLen + 2)) {
                 usedXPositions.add(px)
             }
         }
 
-        // 5. Start à esquerda, Exit (portal) à direita, ambos no chão
-        val groundY = height - 2
+        // 4b. Plataforma alta (0 ou 1) — só se existir pelo menos 1 baixa
+        if (lowPlats.isNotEmpty() && random.nextFloat() < 0.5f) {
+            val (platX, platLen) = lowPlats.random(random)
+            val platY = groundY - 3 // 3 tiles acima do chão
+            // Posiciona acima da plataforma baixa escolhida
+            val highX = (platX + platLen / 2).coerceIn(1, width - 2 - 1)
+            for (px in highX until (highX + 1).coerceAtMost(width - 1)) {
+                tiles[platY * width + px] = TILE_WALL
+            }
+            // Degraus para alcançar a plataforma alta (alturaPlat = 3)
+            val centroX = highX
+            for (d in 1..2) {
+                val dy = groundY - d
+                if (dy > platY) {
+                    tiles[dy * width + centroX] = TILE_WALL
+                }
+            }
+        }
         val startX = 2
         val exitX = width - 3
 
