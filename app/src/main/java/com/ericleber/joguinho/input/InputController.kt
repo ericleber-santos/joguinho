@@ -92,8 +92,8 @@ class InputController(
 
         buttonA_Radius = 44f * density
 
-        // Botão A (PULO) fica bem no canto inferior direito (confortável para o polegar)
-        buttonA_X = width - 80f * density
+        // Botão A (PULO) — posicionado onde o herói fica na tela (centro-direita, não na borda)
+        buttonA_X = width - 200f * density
         buttonA_Y = height - 80f * density
 
         buttonBorderPaint.strokeWidth = 3f * density

@@ -74,12 +74,12 @@ class HudRenderer {
         val barY = h - barH
 
         // Fundo inferior removido para dar lugar ao Fullscreen Immersive.
-        // O Score vai para o canto superior direito.
+        // O Score vai para o topo centralizado
         textPaint.textSize = w * 0.05f
         textPaint.color = Color.rgb(220, 220, 200)
-        textPaint.textAlign = Paint.Align.RIGHT
+        textPaint.textAlign = Paint.Align.CENTER
         textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
-        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w - padding, h * 0.08f, textPaint)
+        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w / 2f, h * 0.08f, textPaint)
 
         // Combo — topo direita (só se ativo)
         if (gameState.comboStreak > 0) {
@@ -89,6 +89,8 @@ class HudRenderer {
                 else -> Color.rgb(255, 220, 80)
             }
             textPaint.color = comboColor
+            textPaint.textAlign = Paint.Align.RIGHT
+            textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
             canvas.drawText("x${gameState.comboStreak}", w - padding, h * 0.08f + textPaint.textSize * 1.2f, textPaint)
         }
         textPaint.clearShadowLayer()
@@ -183,12 +185,12 @@ class HudRenderer {
         val padding = w * 0.03f
         val barY = h - barH
 
-        // Score e Combo para o topo direito
+        // Score e Combo para o topo centralizado
         textPaint.textSize = w * 0.03f
         textPaint.color = Color.rgb(220, 220, 200)
-        textPaint.textAlign = Paint.Align.RIGHT
+        textPaint.textAlign = Paint.Align.CENTER
         textPaint.setShadowLayer(6f, 0f, 3f, Color.BLACK)
-        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w - padding, h * 0.08f, textPaint)
+        canvas.drawText("SCORE: ${gameState.accumulatedScore.toInt()}", w / 2f, h * 0.08f, textPaint)
 
         // Combo
         if (gameState.comboStreak > 0) {
@@ -198,6 +200,7 @@ class HudRenderer {
                 else -> Color.rgb(255, 220, 80)
             }
             textPaint.color = comboColor
+            textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText("x${gameState.comboStreak}", w - padding, h * 0.08f + textPaint.textSize * 1.2f, textPaint)
         }
         textPaint.clearShadowLayer()

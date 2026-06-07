@@ -1271,44 +1271,8 @@ class GameLogic(private val gameState: GameState) {
     private var ambushCooldownMs = 0L
 
     private fun atualizarSistemaAmbush(deltaTimeSec: Float, maze: MazeData) {
-        if (gameState.phase != GamePhase.PLAYING) return
-        val currentTime = System.currentTimeMillis()
-        val world = gameState.currentBiomeWorld
-        
-        // Só ocorre em mundos perigosos (ex: Floresta, Abismo, Base Lunar)
-        if (world != BiomeWorld.FLORESTA_DE_ARVORES && world != BiomeWorld.ABISMO_DO_VAZIO && world != BiomeWorld.BASE_LUNAR) return
-
-        if (ambushCooldownMs > 0) {
-            ambushCooldownMs -= (deltaTimeSec * 1000).toLong()
-            return
-        }
-
-        val heroPos = gameState.heroPosition
-        
-        // 1. Emboscada por Proximidade (Mímica)
-        // Checa tiles ao redor do herói
-        val radius = 2
-        for (dy in -radius..radius) {
-            for (dx in -radius..radius) {
-                val tx = (heroPos.x + dx).toInt()
-                val ty = (heroPos.y + dy).toInt()
-                if (tx < 0 || ty < 0 || tx >= maze.width || ty >= maze.height) continue
-                
-                val idx = ty * maze.width + tx
-                // Se for uma "Parede" em mundo aberto, pode ser um mímico
-                // Mas NÃO destrói muros estruturais (bordas do mapa)
-                if (maze.tiles[idx] == 1 &&
-                    ty != maze.height - 1 && ty != 0 &&
-                    tx != 0 && tx != maze.width - 1) {
-                    val rng = java.util.Random((tx * 31 + ty * 17 + gameState.floorSeed).toLong())
-                    if (rng.nextFloat() > 0.995f) { // Chance rara por frame
-                        despertarMimico(tx, ty, maze)
-                        ambushCooldownMs = 5000L // Cooldown global de emboscada
-                        return
-                    }
-                }
-            }
-        }
+        // Desabilitado — construção dinâmica de plataformas e armadilhas removida
+        return
     }
 
     private fun despertarMimico(tx: Int, ty: Int, maze: MazeData) {
