@@ -454,7 +454,7 @@ class Renderer(
             val sx = item.position.x * tileW + cameraX
             val sy = item.position.y * tileH + cameraY
             renderList.add(object : Renderable {
-                override val ySort: Float = item.position.y + 0.4f // Levemente atrás do pé
+                override val ySort: Float = item.position.y + 0.5f // Mesma camada do herói
                 override fun render(c: Canvas) {
                     when (item.type) {
                         com.ericleber.joguinho.core.ItemType.HEART -> {
@@ -657,7 +657,30 @@ class Renderer(
             }
         })
 
-        // 7. Projéteis (Legado removido)
+        // 7. Projéteis (inimigos vermelhos, aliados azuis)
+        for (proj in gameState.projectiles) {
+            if (!proj.isActive) continue
+            val px = proj.position.x * tileW + cameraX
+            val py = proj.position.y * tileH + cameraY
+            renderList.add(object : Renderable {
+                override val ySort: Float = proj.position.y + 0.55f
+                override fun render(c: Canvas) {
+                    if (proj.isEnemyProjectile) {
+                        // Projétil inimigo: vermelho/magenta com glow
+                        coinPaint.color = Color.argb(60, 255, 50, 80)
+                        c.drawCircle(px, py, tileW * 0.22f, coinPaint)
+                        coinPaint.color = Color.rgb(255, 60, 90)
+                        c.drawCircle(px, py, tileW * 0.12f, coinPaint)
+                    } else {
+                        // Projétil aliado (Spike): azul
+                        coinPaint.color = Color.argb(60, 80, 180, 255)
+                        c.drawCircle(px, py, tileW * 0.18f, coinPaint)
+                        coinPaint.color = Color.rgb(100, 180, 255)
+                        c.drawCircle(px, py, tileW * 0.10f, coinPaint)
+                    }
+                }
+            })
+        }
 
         // 8. Water Stream (Esguicho Contínuo)
         if (gameState.isShooting && gameState.waterStreamImpactPos != null) {

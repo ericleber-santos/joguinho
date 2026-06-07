@@ -484,7 +484,7 @@ class GameLogic(private val gameState: GameState) {
     private fun verificarColisaoItens() {
         val heroPos = gameState.heroPosition
         gameState.items = gameState.items.map { item ->
-            if (item.isActive && item.position.dist(heroPos) < 0.6f) {
+            if (item.isActive && item.position.dist(heroPos) < 1.0f) {
                 when (item.type) {
                     com.ericleber.joguinho.core.ItemType.SPEED_BOOTS -> {
                         gameState.heroHasSpeedBuff = true
@@ -1305,8 +1305,8 @@ class GameLogic(private val gameState: GameState) {
         val visualImpactY = origin.y + dy * gameState.waterStreamVisualDistance
         gameState.waterStreamImpactPos = Position(visualImpactX, visualImpactY)
 
-        // --- Dano Contínuo (apenas se o jato visual atingiu o alvo) ---
-        if (hitMonsterId != null && gameState.waterStreamVisualDistance >= currentDist - 0.1f) {
+        // --- Dano Contínuo (independe da distância visual) ---
+        if (hitMonsterId != null) {
             damageAccumulatorMs += (deltaTimeSec * 1000).toLong()
             val shootInterval = (150 * gameState.heroWaterCooldownMultiplier).toLong()
             if (damageAccumulatorMs >= shootInterval) {

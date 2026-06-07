@@ -77,6 +77,20 @@ class HybridMapGenerator(private val random: Random) {
                 tiles[platY * width + px] = TILE_WALL
             }
 
+            // Se a plataforma estiver a mais de 3 tiles do chão, coloca degraus embaixo
+            val alturaPlat = groundY - platY
+            if (alturaPlat > 3) {
+                val numDegraus = (alturaPlat - 2).coerceIn(1, 3)
+                // Centro da plataforma para alinhar os degraus
+                val centroX = platX + platLen / 2
+                for (d in 1..numDegraus) {
+                    val dy = groundY - d
+                    if (dy > platY) {
+                        tiles[dy * width + centroX] = TILE_WALL
+                    }
+                }
+            }
+
             // Marca as posições X usadas para evitar sobreposição
             for (px in (platX - 2) until (platX + platLen + 2)) {
                 usedXPositions.add(px)

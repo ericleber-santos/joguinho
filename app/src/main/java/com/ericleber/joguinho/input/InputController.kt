@@ -222,12 +222,26 @@ class InputController(
                 gameState.heroDirection = Direction.EAST
             }
 
-            // Define o ângulo de tiro de acordo com o lado que o herói está olhando
+            // Define o ângulo de tiro: auto-aim respeitando a direção do olhar
             if (isButtonBPressed) {
-                gameState.shootingAngle = if (gameState.heroDirection == Direction.WEST) {
-                    Math.PI.toFloat()
+                val facingLeft = gameState.heroDirection == Direction.WEST
+                val targets = gameState.monsters.filter { m ->
+                    m.isActive && !m.isBoss &&
+                        (if (facingLeft) m.position.x < gameState.heroPosition.x
+                         else m.position.x > gameState.heroPosition.x)
+                }
+                val nearestMonster = targets.minByOrNull { it.position.dist(gameState.heroPosition) }
+                if (nearestMonster != null) {
+                    val dx = nearestMonster.position.x - gameState.heroPosition.x
+                    val dy = nearestMonster.position.y - gameState.heroPosition.y
+                    gameState.shootingAngle = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
                 } else {
-                    0f
+                    // Fallback: mantém direção visual do herói
+                    gameState.shootingAngle = if (gameState.heroDirection == Direction.WEST) {
+                        Math.PI.toFloat()
+                    } else {
+                        0f
+                    }
                 }
             }
 
