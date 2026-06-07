@@ -1209,7 +1209,7 @@ class GameLogic(private val gameState: GameState) {
         }
 
         // --- Raycasting para o Esguicho (Twin-Stick) ---
-        val maxDistance = 7.0f * gameState.heroWaterRangeMultiplier // Distância máxima do esguicho
+        val maxDistance = 2.8f * gameState.heroWaterRangeMultiplier // Distância máxima do esguicho (60% menor)
         val step = 0.2f // Precisão do raio
         
         // --- Cálculo Preciso da Origem (Ponta da Arma) ---

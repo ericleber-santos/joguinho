@@ -19,12 +19,12 @@ import kotlin.math.atan2
 import kotlin.math.hypot
 
 /**
- * Orquestrador de input adaptado para Platformer Arcade Side-Scrolling 2D (T-023).
+ * Orquestrador de input adaptado para Arena Survivor Twin-Stick.
  *
  * Responsabilidades:
  * - Capturar MotionEvents e roteá-los de forma ergonômica com suporte real a multi-touch
- * - Metade Esquerda: Joystick/D-pad invisível suave flutuante que controla a velocidade em X
- * - Metade Direita: Dois botões virtuais fixos dedicados (Botão A para Pulo, Botão B para Tiro)
+ * - Metade Esquerda: Joystick flutuante para movimento
+ * - Metade Direita: Joystick flutuante para mira/tiro (twin-stick 360°) + Botão A para Pulo
  * - Garantir latência de toque máxima de 16ms
  * - Estética visual Premium de Neon Glassmorphism translúcido desenhado diretamente no Canvas
  */
@@ -42,23 +42,20 @@ class InputController(
     // Joystick flutuante da metade esquerda (D-pad suave)
     val moveJoystick = FloatingJoystick()
 
+    // Joystick de mira na metade direita (twin-stick)
+    val aimJoystick = FloatingJoystick()
+
     // Limite da metade esquerda da tela para o joystick (em pixels)
     private var screenHalfWidth = 0f
     private var screenWidth = 0f
     private var screenHeight = 0f
 
-    // Botões físicos virtuais no canto inferior direito
+    // Botão de pulo no canto inferior direito
     private var buttonA_X = 0f
     private var buttonA_Y = 0f
     private var buttonA_Radius = 0f
     private var isButtonAPressed = false
     private var buttonAPointerId = -1
-
-    private var buttonB_X = 0f
-    private var buttonB_Y = 0f
-    private var buttonB_Radius = 0f
-    private var isButtonBPressed = false
-    private var buttonBPointerId = -1
 
     // Rastreamento de movimento para SpikeAI
     var heroMoved: Boolean = false
@@ -94,15 +91,10 @@ class InputController(
         val density = ctx?.resources?.displayMetrics?.density ?: 2f
 
         buttonA_Radius = 44f * density
-        buttonB_Radius = 38f * density
 
         // Botão A (PULO) fica bem no canto inferior direito (confortável para o polegar)
         buttonA_X = width - 80f * density
         buttonA_Y = height - 80f * density
-
-        // Botão B (TIRO) fica ligeiramente acima e à esquerda de A
-        buttonB_X = width - 175f * density
-        buttonB_Y = height - 125f * density
 
         buttonBorderPaint.strokeWidth = 3f * density
     }
@@ -145,16 +137,14 @@ class InputController(
             // Metade esquerda: ativa o D-pad/Joystick flutuante suave
             moveJoystick.onTouchDown(x, y, id)
         } else {
-            // Metade direita: verifica colisão circular com as hitboxes físicas dos botões
+            // Metade direita: verifica se é o botão de pulo ou o joystick de mira
             val distA = hypot(x - buttonA_X, y - buttonA_Y)
-            val distB = hypot(x - buttonB_X, y - buttonB_Y)
 
             if (distA <= buttonA_Radius) {
                 isButtonAPressed = true
                 buttonAPointerId = id
-            } else if (distB <= buttonB_Radius) {
-                isButtonBPressed = true
-                buttonBPointerId = id
+            } else {
+                aimJoystick.onTouchDown(x, y, id)
             }
         }
     }
@@ -164,30 +154,25 @@ class InputController(
             // Movimento na esquerda: repassa para o joystick correspondente
             moveJoystick.onTouchMove(x, y, id)
         } else {
-            // Se o dedo que moveu era o ativado em um dos botões, re-valida colisão
+            // Se o dedo que moveu era o do pulo, re-valida colisão
             if (id == buttonAPointerId) {
                 val dist = hypot(x - buttonA_X, y - buttonA_Y)
-                // Se saiu do raio de toque por muito, cancela
                 isButtonAPressed = dist <= buttonA_Radius * 1.5f
-            } else if (id == buttonBPointerId) {
-                val dist = hypot(x - buttonB_X, y - buttonB_Y)
-                isButtonBPressed = dist <= buttonB_Radius * 1.5f
+            } else {
+                aimJoystick.onTouchMove(x, y, id)
             }
         }
     }
 
     private fun handleTouchUp(x: Float, y: Float, id: Int) {
-        // Libera joystick se o dedo levantado for o dono dele
+        // Libera joysticks se o dedo levantado for o dono deles
         moveJoystick.onTouchUp(id)
+        aimJoystick.onTouchUp(id)
 
-        // Libera os botões físicos correspondentes
+        // Libera o botão de pulo
         if (id == buttonAPointerId) {
             isButtonAPressed = false
             buttonAPointerId = -1
-        }
-        if (id == buttonBPointerId) {
-            isButtonBPressed = false
-            buttonBPointerId = -1
         }
     }
 
@@ -212,36 +197,31 @@ class InputController(
         gameState.inputDirecaoX = inputVx
         gameState.inputDirecaoY = inputVy
         gameState.inputPuloPressionado = jumpPressed
-        gameState.isShooting = isButtonBPressed
+
+        // Joystick de mira (twin-stick): direção do tiro em 360°
+        if (aimJoystick.isActive) {
+            gameState.isShooting = true
+            gameState.shootingAngle = kotlin.math.atan2(
+                aimJoystick.directionY.toDouble(),
+                aimJoystick.directionX.toDouble()
+            ).toFloat()
+            // Atualiza direção visual do herói para acompanhar a mira ao atirar
+            gameState.heroDirection = when {
+                aimJoystick.directionX < -0.1f -> Direction.WEST
+                aimJoystick.directionX > 0.1f -> Direction.EAST
+                else -> gameState.heroDirection
+            }
+        } else {
+            gameState.isShooting = false
+        }
 
         if (mazeData != null) {
-            // Sincroniza a direção visual para as animações de sprites (WEST/EAST)
-            if (inputVx < -0.1f) {
-                gameState.heroDirection = Direction.WEST
-            } else if (inputVx > 0.1f) {
-                gameState.heroDirection = Direction.EAST
-            }
-
-            // Define o ângulo de tiro: auto-aim respeitando a direção do olhar
-            if (isButtonBPressed) {
-                val facingLeft = gameState.heroDirection == Direction.WEST
-                val targets = gameState.monsters.filter { m ->
-                    m.isActive && !m.isBoss &&
-                        (if (facingLeft) m.position.x < gameState.heroPosition.x
-                         else m.position.x > gameState.heroPosition.x)
-                }
-                val nearestMonster = targets.minByOrNull { it.position.dist(gameState.heroPosition) }
-                if (nearestMonster != null) {
-                    val dx = nearestMonster.position.x - gameState.heroPosition.x
-                    val dy = nearestMonster.position.y - gameState.heroPosition.y
-                    gameState.shootingAngle = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
-                } else {
-                    // Fallback: mantém direção visual do herói
-                    gameState.shootingAngle = if (gameState.heroDirection == Direction.WEST) {
-                        Math.PI.toFloat()
-                    } else {
-                        0f
-                    }
+            // Sincroniza a direção visual (apenas quando não está atirando — twin-stick)
+            if (!gameState.isShooting) {
+                if (inputVx < -0.1f) {
+                    gameState.heroDirection = Direction.WEST
+                } else if (inputVx > 0.1f) {
+                    gameState.heroDirection = Direction.EAST
                 }
             }
 
@@ -282,16 +262,8 @@ class InputController(
             isButtonAPressed
         )
 
-        // 3. Botão B (TIRO - Rubi Translúcido)
-        drawVirtualButton(
-            canvas,
-            buttonB_X,
-            buttonB_Y,
-            buttonB_Radius,
-            "B",
-            Color.rgb(231, 76, 60),
-            isButtonBPressed
-        )
+        // 3. Joystick de Mira (Azul Água, com ícone de gota)
+        aimJoystick.draw(canvas, accentColor = Color.rgb(80, 180, 255), drawWaterIcon = true)
     }
 
     private fun drawVirtualButton(
