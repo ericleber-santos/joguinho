@@ -155,6 +155,13 @@ class GameViewModel : ViewModel() {
         val startY = maze.startIndex / maze.width
         gameState.heroPosition = Position(startX + 0.5f, startY + 0.5f)
         gameState.spikePosition = Position((startX + 1).coerceAtMost(maze.width - 1) + 0.5f, startY + 0.5f)
+
+        // Spike corre para o portal (exit) e fica lá esperando abrir
+        val exitX = maze.exitIndex % maze.width
+        val exitY = maze.exitIndex / maze.width
+        gameState.spikeDestination = Position(exitX + 0.5f, exitY + 0.5f)
+        gameState.spikeArrivedAtPortal = false
+        gameState.spikeCompanionState = "CORRENDO"
         
         val currentBiomeWorld = gameState.currentBiomeWorld
         onMapGenerated?.invoke(maze, currentBiomeWorld, 0f)

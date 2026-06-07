@@ -172,6 +172,8 @@ class GameState {
     var spikeJumpOffsetX: Float = 0f // Deslocamento X durante o bote
     var spikeJumpOffsetY: Float = 0f // Deslocamento Y durante o bote
     var spikeAttackTimerMs: Long = 0L // Timer para o ciclo do pulo de ataque
+    var spikeDestination: Position? = null // Destino para onde Spike deve correr
+    var spikeArrivedAtPortal: Boolean = false // Spike chegou no portal?
 
     // --- Bioma atual (Suporte a Modo DEV e Renderizadores) ---
     var devModeForcedWorld: BiomeWorld? = null

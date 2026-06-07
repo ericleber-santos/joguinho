@@ -59,6 +59,7 @@ class ArenaSpawnManager(private val gameState: GameState) {
 
         // Procura um tile de chão (FLOOR = 0) na coluna targetX de baixo para cima
         var targetY = -1
+        val groundRow = maze.height - 2
         for (y in (maze.height - 2) downTo 3) {
             val idx = y * maze.width + targetX
             val belowIdx = (y + 1) * maze.width + targetX
@@ -68,21 +69,30 @@ class ArenaSpawnManager(private val gameState: GameState) {
             }
         }
 
+        // Só spawna na linha do chão (groundRow) — nunca em plataformas
+        if (targetY != groundRow) {
+            // Tenta a coluna exata com groundRow
+            val gndIdx = groundRow * maze.width + targetX
+            val gndBelow = (groundRow + 1) * maze.width + targetX
+            if (maze.tiles[gndIdx] == 0 && maze.tiles[gndBelow] == 1) {
+                targetY = groundRow
+            } else {
+                targetY = -1
+            }
+        }
+
         // Se não achou chão estável naquela coluna, procura a primeira coluna vizinha disponível
         if (targetY == -1) {
             val offsets = listOf(-2, -1, 1, 2)
             for (off in offsets) {
                 val altX = (targetX + off).coerceIn(1, maze.width - 2)
-                for (y in (maze.height - 2) downTo 3) {
-                    val idx = y * maze.width + altX
-                    val belowIdx = (y + 1) * maze.width + altX
-                    if (maze.tiles[idx] == 0 && maze.tiles[belowIdx] == 1) {
-                        targetX = altX
-                        targetY = y
-                        break
-                    }
+                val gndIdx = groundRow * maze.width + altX
+                val gndBelow = (groundRow + 1) * maze.width + altX
+                if (maze.tiles[gndIdx] == 0 && maze.tiles[gndBelow] == 1) {
+                    targetX = altX
+                    targetY = groundRow
+                    break
                 }
-                if (targetY != -1) break
             }
         }
 

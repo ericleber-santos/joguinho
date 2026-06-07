@@ -539,14 +539,9 @@ class Renderer(
                     }
                 }
                 
-                // 2. Lógica de Combate (Lunge/Bote)
-                val jumpProgress = if (gameState.spikeAttackTimerMs > 0) {
-                    (600f - gameState.spikeAttackTimerMs) / 600f
-                } else 0f
-                val lungeProgress = if (jumpProgress <= 0.5f) jumpProgress * 2f else (1f - jumpProgress) * 2f
-                
-                val finalSx = renderSx + (gameState.spikeJumpOffsetX * lungeProgress * tileW)
-                val finalSy = renderSy + (gameState.spikeJumpOffsetY * lungeProgress * tileH)
+                // 2. Deslocamento visual (pulinhos entusiasmados do Spike)
+                val finalSx = renderSx + gameState.spikeJumpOffsetX * tileW
+                val finalSy = renderSy + gameState.spikeJumpOffsetY * tileH
                 val zOffset = gameState.spikeZ * tileH
                 
                 val facingLeft = when (gameState.heroDirection) {

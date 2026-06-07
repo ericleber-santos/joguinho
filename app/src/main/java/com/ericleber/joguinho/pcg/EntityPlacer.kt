@@ -189,37 +189,7 @@ class EntityPlacer(private val random: Random) {
                 type = ItemType.COIN
             ))
         }
-
-        // Moedas bônus em cima de plataformas (incentiva escalada)
-        val platOccupied = occupiedIndices + items.map { it.position.iy * maze.width + it.position.ix }
-        items.addAll(placePlatformRewards(maze, platOccupied))
         
-        return items
-    }
-
-    /**
-     * Posiciona moedas bônus no topo de plataformas (incentiva exploração vertical).
-     * Cada plataforma (TILE_WALL não-borda com FLOOR acima) ganha 1 moeda.
-     */
-    private fun placePlatformRewards(maze: MazeData, occupied: Set<Int>): List<ItemState> {
-        val items = mutableListOf<ItemState>()
-        var coinIdx = 0
-        for (y in 2 until maze.height - 2) {
-            for (x in 1 until maze.width - 1) {
-                val idx = y * maze.width + x
-                if (maze.tiles[idx] == HybridMapGenerator.TILE_WALL &&
-                    maze.tiles[idx - maze.width] == HybridMapGenerator.TILE_FLOOR) {
-                    val aboveIdx = idx - maze.width
-                    if (aboveIdx !in occupied) {
-                        items.add(ItemState(
-                            id = "plat_coin_${maze.seed}_${coinIdx++}",
-                            position = Position(x + 0.5f, (aboveIdx / maze.width) + 0.5f),
-                            type = ItemType.COIN
-                        ))
-                    }
-                }
-            }
-        }
         return items
     }
 
@@ -268,10 +238,12 @@ class EntityPlacer(private val random: Random) {
     private fun getFloorCandidates(maze: MazeData, excluded: Set<Int>): List<Int> {
         val startX = maze.startIndex % maze.width
         val startY = maze.startIndex / maze.width
+        val groundRow = maze.height - 2
 
         return maze.tiles.indices.filter { index ->
-            // Deve ser ar livre (TILE_FLOOR)
-            maze.tiles[index] == BSPMazeGenerator.TILE_FLOOR &&
+            // Deve ser na linha do chão (groundRow) para não ficar atrás de plataformas
+            index / maze.width == groundRow &&
+                maze.tiles[index] == BSPMazeGenerator.TILE_FLOOR &&
                 index !in excluded &&
                 index != maze.startIndex &&
                 index != maze.exitIndex &&

@@ -807,159 +807,61 @@ class GameLogic(private val gameState: GameState) {
     // -------------------------------------------------------------------------
 
     /**
-     * Move o Spike em direção ao Hero, com mecânica de âncora, canhão e sling.
+     * Move o Spike em direção ao portal quando a fase começa.
+     * Quando o portal abre (timer <= 0), Spike fica entusiasmado (pulinhos, giros).
+     * Spike não ataca, não toma dano — só guia o jogador.
      */
     private fun atualizarMovimentoSpike(deltaTimeSec: Float, maze: MazeData) {
-        val heroPos = gameState.heroPosition
         val spikePos = gameState.spikePosition
 
-        val dx = heroPos.x - spikePos.x
-        val dy = heroPos.y - spikePos.y
-        val distancia = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
-
-        // --- 1. Lógica de Âncora (Torre de Canhão) ---
-        // Spike se ancora quando o herói está atirando
-        val heroiAtirando = gameState.isShooting
-        if (heroiAtirando && !gameState.isSpikeAnchored) {
-            gameState.isSpikeAnchored = true
-            gameState.spikeAnchorPosition = spikePos.copy()
-            gameState.spikeCompanionState = "ANCORADO"
-        } else if (!heroiAtirando && gameState.isSpikeAnchored) {
-            gameState.isSpikeAnchored = false
-            gameState.spikeAnchorPosition = null
-            
-            // Ativa o Sling (estilingue) se a distância ao desancorar for razoável (> 3.0 tiles)
-            if (distancia > 3.0f) {
-                gameState.spikeSlingActive = true
-                onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE) // Som de impacto
+        // --- Comportamento: correr para o destino (portal) ---
+        val dest = gameState.spikeDestination
+        if (dest != null) {
+            val dx = dest.x - spikePos.x
+            val dy = dest.y - spikePos.y
+            val dist = sqrt(dx * dx + dy * dy).toFloat()
+            if (dist > 0.5f) {
+                // Corre em linha reta até o destino
+                val speed = 4.0f * deltaTimeSec
+                gameState.spikePosition = Position(
+                    spikePos.x + (dx / dist) * speed,
+                    spikePos.y + (dy / dist) * speed
+                )
+                gameState.spikeCompanionState = "CORRENDO"
+            } else {
+                // Chegou no portal
+                gameState.spikeDestination = null
+                gameState.spikeArrivedAtPortal = true
+                gameState.spikeCompanionState = "NO_PORTAL"
             }
+            return
         }
 
-        // --- 2. Canhão Automático (quando ancorado) ---
-        if (gameState.isSpikeAnchored) {
-            gameState.spikeCompanionState = "ANCORADO"
-            
-            // Encontra inimigo mais próximo em um raio de 6 tiles do Spike
-            val inimigoProximo = gameState.monsters
-                .filter { it.isActive && it.position.dist(spikePos) <= 6.0f }
-                .minByOrNull { it.position.dist(spikePos) }
-                
-            if (inimigoProximo != null) {
-                val cooldownKey = "spike_turret_cooldown"
-                val lastShot = monsterTimers[cooldownKey] ?: 0f
-                val attackCooldown = 800f * gameState.spikeAttackCooldownMultiplier
-                if (gameState.floorTimerMs.toFloat() - lastShot > attackCooldown) {
-                    monsterTimers[cooldownKey] = gameState.floorTimerMs.toFloat()
-                    
-                    // Dispara um projétil de água/gelo do Spike em direção ao inimigo
-                    val dirX = inimigoProximo.position.x - spikePos.x
-                    val dirY = inimigoProximo.position.y - spikePos.y
-                    val distInimigo = sqrt(dirX * dirX + dirY * dirY)
-                    if (distInimigo > 0.1f) {
-                        val projId = "spike_proj_${System.currentTimeMillis()}"
-                        val angle = atan2(dirY, dirX)
-                        val direction = when {
-                            abs(angle) < Math.PI / 8 -> Direction.EAST
-                            angle >= Math.PI / 8 && angle < 3 * Math.PI / 8 -> Direction.SOUTH_EAST
-                            angle >= 3 * Math.PI / 8 && angle < 5 * Math.PI / 8 -> Direction.SOUTH
-                            angle >= 5 * Math.PI / 8 && angle < 7 * Math.PI / 8 -> Direction.SOUTH_WEST
-                            abs(angle) >= 7 * Math.PI / 8 -> Direction.WEST
-                            angle < -Math.PI / 8 && angle >= -3 * Math.PI / 8 -> Direction.NORTH_EAST
-                            angle < -3 * Math.PI / 8 && angle >= -5 * Math.PI / 8 -> Direction.NORTH
-                            else -> Direction.NORTH_WEST
-                        }
-                        
-                        val newProj = ProjectileState(
-                            id = projId,
-                            position = spikePos.copy(),
-                            direction = direction,
-                            speed = 12f,
-                            isActive = true,
-                            isEnemyProjectile = false // Amigo, não atinge o player
-                        )
-                        gameState.projectiles = gameState.projectiles + newProj
-                        onSoundEffectRequested?.invoke(TipoEfeito.ESGUICHO_AGUA)
-                    }
-                }
-            }
-        }
-
-        // --- 3. Lógica do Sling (Estilingue de Colisão) ---
-        if (gameState.spikeSlingActive) {
-            gameState.spikeCompanionState = "CORRENDO"
-            
-            // Causa dano massivo a todos os monstros que o Spike tocar
-            gameState.monsters.forEach { m ->
-                if (m.isActive && m.position.dist(spikePos) <= 1.3f) {
-                    val danoSling = 12 + gameState.spikeDamageBonus
-                    m.hp = (m.hp - danoSling).coerceAtLeast(0)
-                    
-                    // VFX e som de colisão
-                    gameState.vfxList = gameState.vfxList + VfxState(
-                        id = "spike_sling_hit_${m.id}_${System.currentTimeMillis()}",
-                        position = m.position.copy(),
-                        type = VfxType.WATER_SPLASH,
-                        createdAtMs = System.currentTimeMillis(),
-                        durationMs = 400L
-                    )
-                    
-                    if (m.hp == 0) {
-                        m.isActive = false
-                        // Adiciona moedas e pontos
-                        gameState.accumulatedScore += 100
-                        val coinItem = ItemState(
-                            id = "coin_${m.id}_${System.currentTimeMillis()}",
-                            position = m.position.copy(),
-                            type = ItemType.COIN,
-                            isActive = true
-                        )
-                        gameState.items = gameState.items + coinItem
-                    }
-                    onSoundEffectRequested?.invoke(TipoEfeito.SPIKE_BITE)
-                }
-            }
-        }
-
-        // Teleporte de emergência: se ficou muito longe do Hero, traz de volta
-        if (distancia > 15f) {
-            val destino = encontrarTileAdjacenteVazio(heroPos, maze)
-            if (destino != null) {
-                gameState.spikePosition = destino
-                spikeStuckTimerSec = 0f
-                gameState.spikeSlingActive = false
-                gameState.isSpikeAnchored = false
+        // --- Comportamento: esperando ou entusiasmado no portal ---
+        if (gameState.spikeArrivedAtPortal) {
+            if (gameState.mapTimerMs <= 0) {
+                // Portal aberto! Spike fica entusiasmado: pulinhos e giros
                 gameState.spikeCompanionState = "ENTUSIASMADO"
-                return
+                val time = System.currentTimeMillis()
+                // Pulinhos suaves (0.8 tile de altura)
+                gameState.spikeZ = kotlin.math.abs(
+                    kotlin.math.sin((time % 500) / 500f * Math.PI).toFloat()
+                ) * 0.8f
+                // Pequeno deslocamento lateral (girinhos)
+                val giro = kotlin.math.sin((time % 800) / 800f * 2.0 * Math.PI).toFloat()
+                gameState.spikeJumpOffsetX = giro * 0.3f
+            } else {
+                // Aguardando o portal abrir — sentado quieto
+                gameState.spikeCompanionState = "NO_PORTAL"
+                gameState.spikeZ = 0f
+                gameState.spikeJumpOffsetX = 0f
             }
+            return
         }
 
-        // Rastreamento de direção para o Spike seguir o Herói
-        val dxHeroSpike = heroPos.x - spikePos.x
-        val spikeInputDirecaoX = when {
-            abs(dxHeroSpike) > 1.0f -> if (dxHeroSpike > 0f) 1f else -1f
-            else -> 0f
-        }
-        val spikeInputPulo = gameState.inputPuloPressionado && (heroPos.y < spikePos.y - 0.5f)
-
-        // --- 4. Executa a Física do Spike ---
-        if (!gameState.isSpikeAnchored) {
-            PlatformerPhysics.atualizarSpike(
-                deltaTimeSec = deltaTimeSec,
-                gameState = gameState,
-                direcaoX = if (distancia > 2.0f && !gameState.spikeSlingActive) spikeInputDirecaoX else 0f,
-                puloPressionado = spikeInputPulo
-            )
-        }
-
-        // Define o estado visual para a animação do Spike
-        gameState.spikeCompanionState = when {
-            gameState.isSpikeAnchored -> "ANCORADO"
-            gameState.spikeSlingActive -> "CORRENDO"
-            gameState.spikeIsSlowedDown -> "SLOWDOWN_PROPRIO"
-            distancia > 5f -> "CHAMANDO"
-            distancia > 2f -> "SEGUINDO"
-            else -> "SENTADO"
-        }
+        // Fallback: se não tem destino nem está no portal, fica onde está
+        gameState.spikeCompanionState = "SENTADO"
+        gameState.spikeZ = 0f
     }
 
     /**
