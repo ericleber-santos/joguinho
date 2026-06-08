@@ -16,7 +16,6 @@ import androidx.work.WorkManager
 import com.ericleber.joguinho.audio.AudioManager
 import com.ericleber.joguinho.character.Spike
 import com.ericleber.joguinho.character.SpikeAI
-import com.ericleber.joguinho.core.GameLogic
 import com.ericleber.joguinho.core.GameLoop
 import com.ericleber.joguinho.core.Logger
 import com.ericleber.joguinho.input.InputController
@@ -61,6 +60,17 @@ class GameActivity : AppCompatActivity() {
     // Ciclo de vida
     // =========================================================================
 
+    private fun entrarModoImersivo() {
+        window.decorView.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+            android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -68,6 +78,9 @@ class GameActivity : AppCompatActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Modo Imersivo: esconde barras de status e navegação
+        entrarModoImersivo()
 
         // Instanciar dependências
         gerenciadorAudio = AudioManager(this)
@@ -214,6 +227,8 @@ class GameActivity : AppCompatActivity() {
         
         viewModel.retomarJogo()
         cancelarNotificacaoReengajamento()
+        // Re-aplica modo imersivo (pode ter sido perdido ao voltar de outra activity)
+        entrarModoImersivo()
     }
 
     /**

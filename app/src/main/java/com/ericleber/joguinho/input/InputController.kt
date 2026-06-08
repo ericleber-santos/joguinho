@@ -4,18 +4,12 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PointF
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.MotionEvent
 import com.ericleber.joguinho.core.Direction
 import com.ericleber.joguinho.core.GameState
 import com.ericleber.joguinho.core.MazeData
 import com.ericleber.joguinho.core.Position
 import java.lang.ref.WeakReference
-import kotlin.math.atan2
 import kotlin.math.hypot
 
 /**
